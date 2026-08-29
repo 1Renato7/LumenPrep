@@ -90,8 +90,50 @@ def validate_seams() -> list[str]:
     return errors
 
 
+def validate_incident_matrix() -> list[str]:
+    """TASK-ROGERIO-005: matriz SUPPORTED|INCONCLUSIVE x MATCH_FOUND|NO_PRECEDENT|MEMORY_UNAVAILABLE.
+    Prova que memory_status nunca vaza pra root_cause.status, usando build_incident_response real
+    (app/api/incidents.py, Bloco 2) contra as fixtures — sem editar aquele módulo."""
+    from app.api.incidents import _fixture_records, build_incident_response
+
+    def fx(name: str) -> dict:
+        return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+
+    records = _fixture_records()
+    supported = records["inc_current_mastercard_001"]
+    inconclusive = records["inc_current_mastercard_uncertain_002"]
+
+    cases = [
+        (supported, "SUPPORTED", "similar-incidents.json", "MATCH_FOUND", "explanation-bundle.json"),
+        (supported, "SUPPORTED", "similar-incidents-empty.json", "NO_PRECEDENT", "explanation-bundle-no-precedent.json"),
+        (supported, "SUPPORTED", "similar-incidents-unavailable.json", "MEMORY_UNAVAILABLE", "explanation-bundle-no-precedent.json"),
+        (inconclusive, "INCONCLUSIVE", "similar-incidents-inconclusive-current.json", "MATCH_FOUND", "explanation-bundle-inconclusive-with-precedent.json"),
+        (inconclusive, "INCONCLUSIVE", "similar-incidents-empty.json", "NO_PRECEDENT", "explanation-bundle-no-precedent.json"),
+        (inconclusive, "INCONCLUSIVE", "similar-incidents-unavailable.json", "MEMORY_UNAVAILABLE", "explanation-bundle-no-precedent.json"),
+    ]
+
+    errors: list[str] = []
+    for incident, expected_status, memory_file, expected_memory_status, explanation_file in cases:
+        label = f"{incident['incident_id']} x {memory_file}"
+        try:
+            response = build_incident_response(incident, fx(memory_file), fx(explanation_file))
+        except ValueError as exc:
+            errors.append(f"{label}: build_incident_response raised {exc}")
+            continue
+        if response["incident"]["root_cause"]["status"] != expected_status:
+            errors.append(f"{label}: root_cause.status changed to {response['incident']['root_cause']['status']!r}, expected {expected_status!r}")
+        if response["memory"]["memory_status"] != expected_memory_status:
+            errors.append(f"{label}: memory_status is {response['memory']['memory_status']!r}, expected {expected_memory_status!r}")
+        has_matches = bool(response["memory"]["matches"])
+        if expected_memory_status == "MATCH_FOUND" and not has_matches:
+            errors.append(f"{label}: MATCH_FOUND but matches is empty")
+        if expected_memory_status != "MATCH_FOUND" and has_matches:
+            errors.append(f"{label}: {expected_memory_status} but matches is non-empty")
+    return errors
+
+
 def main() -> int:
-    errors = validate_fixtures() + validate_openapi() + validate_seams()
+    errors = validate_fixtures() + validate_openapi() + validate_seams() + validate_incident_matrix()
     if errors:
         print(f"FAIL — {len(errors)} contract violation(s):")
         for e in errors:
