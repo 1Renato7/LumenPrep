@@ -878,7 +878,41 @@ _Nenhuma decisão registrada._
 
 <!-- ALTOE: faça append de novas entradas imediatamente antes da próxima seção. -->
 
-_Nenhuma decisão registrada._
+### FL-20260829-ALTOE-001 — Usar recuperação estruturada precision-first antes do rerank vetorial
+
+- **Timestamp:** 2026-08-29T17:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Categoria:** AI/RAG | quality | architecture
+- **Escopo:** TASK-MEM-005, TASK-MEM-006, CTR-MEM-001 v1.1
+
+#### Contexto e pergunta
+
+A memória precisa reconhecer a recorrência Mastercard sem apresentar um precedente apenas porque alguns sinais genéricos coincidem. Embeddings ainda são opcionais e não podem ser a base inicial da demonstração.
+
+#### Decisão
+
+Implementar primeiro recuperação determinística: somente incidentes HUMAN_CONFIRMED, janela inicial de 30 dias, ao menos uma dimensão de escopo compartilhada e score estruturado de escopo, decline profile e forma temporal. O threshold inicial é 0,80 e o desempate é por score, recência e ID. Rerank vetorial continua posterior e opcional.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Threshold baixo e recall amplo | mais matches aparentes | falso precedente e ancoragem indevida | rejeitada |
+| Vector-first | semântica flexível | dependência externa e menor rastreabilidade | adiada |
+| Score estruturado precision-first | resultado rastreável e fallback local | pode perder match parcial | escolhida |
+
+#### Evidência, hipóteses e limitações
+
+- **TEST:** 15 testes unitários passaram: D-2 top-1, idempotência, candidatos não confirmados, recência, escopo, desempate, auto-match, falhas e fallback.
+- **ASSUMPTION:** 30 dias e 0,80 são baseline adequados até os evals; não constituem threshold final.
+- **UNKNOWN:** recall de recorrências parciais no holdout.
+- **Limitação:** não houve teste de aplicação integrada, Neo4j real ou embedding real nesta etapa.
+
+#### Consequências e gatilhos de revisão
+
+A memória retorna NO_PRECEDENT em vez de forçar um match e nunca muda a causa atual. Recalibrar pesos ou threshold somente após os evals de TASK-MEM-008; queda de precision@1 ou perda de recurrence válida dispara revisão.
+
 
 ## Rogério
 
