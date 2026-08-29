@@ -15,8 +15,7 @@ _CONSTRAINTS_FILE = _ROOT / "graph" / "constraints.cypher"
 
 def _statements(cypher_file: Path | str = _CONSTRAINTS_FILE) -> tuple[str, ...]:
     """Return executable Cypher statements, ignoring comments and blank lines."""
-    content = "
-".join(
+    content = "\n".join(
         line
         for line in Path(cypher_file).read_text(encoding="utf-8").splitlines()
         if not line.strip().startswith("//")
