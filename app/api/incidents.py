@@ -2,8 +2,6 @@
 
 TODO(TASK-RCA-002): replace the fixture repository with RCA-produced Incident
 records when real correlator output exists.
-TODO(TASK-EXP-003): bind confirmed public functions from app.memory and
-app.explanation; their signatures remain unconfirmed by their owner.
 """
 
 from __future__ import annotations
@@ -15,8 +13,15 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from app.explanation import GroundedExplainer
+from app.memory import Incident, IncidentMemoryService, InMemoryIncidentRepository
+from app.memory.seed import seed_mastercard_d2
+
 router = APIRouter()
 _FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
+_REAL_ENRICHMENT_INCIDENT_IDS = frozenset(
+    {"inc_current_mastercard_001", "inc_current_mastercard_uncertain_002"}
+)
 
 
 def _fixture(name: str) -> dict[str, Any]:
@@ -85,14 +90,19 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
     }
 
 
-def _fixture_memory_and_explanation(incident_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    if incident_id == "inc_current_mastercard_001":
-        return _fixture("similar-incidents.json"), _fixture("explanation-bundle.json")
-    if incident_id == "inc_current_mastercard_uncertain_002":
-        return _fixture("similar-incidents-inconclusive-current.json"), _fixture("explanation-bundle-inconclusive-with-precedent.json")
-    if incident_id == "inc_new_provider_country_001":
-        return _fixture("similar-incidents-empty.json"), _fixture("explanation-bundle-no-precedent.json")
-    raise KeyError(incident_id)
+def _memory_and_explanation(incident_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    incident_id = str(incident_payload["incident_id"])
+    if incident_id not in _REAL_ENRICHMENT_INCIDENT_IDS:
+        if incident_id == "inc_new_provider_country_001":
+            return _fixture("similar-incidents-empty.json"), _fixture("explanation-bundle-no-precedent.json")
+        raise KeyError(incident_id)
+
+    incident = Incident.from_contract(incident_payload)
+    repository = InMemoryIncidentRepository()
+    seed_mastercard_d2(repository, now=incident.detected_at)
+    memory = IncidentMemoryService(repository).retrieve(incident)
+    explanation = GroundedExplainer(()).explain(incident, memory)
+    return memory.to_contract(), explanation.to_contract()
 
 
 def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], explanation: dict[str, Any]) -> dict[str, Any]:
@@ -122,5 +132,5 @@ def get_incident(incident_id: str) -> dict[str, Any]:
     incident = _fixture_records().get(incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
-    memory, explanation = _fixture_memory_and_explanation(incident_id)
+    memory, explanation = _memory_and_explanation(incident)
     return build_incident_response(incident, memory, explanation)
