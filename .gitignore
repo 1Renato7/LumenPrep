@@ -1,8 +1,13 @@
 .DS_Store
 .linear-team.json
 .venv/
+.python-runtime/
 __pycache__/
-*.pyc
+*.py[cod]
 *.duckdb
 .env
+.pytest_cache/
+.coverage
+build/
+dist/
 *.egg-info/
