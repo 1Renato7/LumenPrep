@@ -21,10 +21,16 @@ Push-Location $projectRoot
 try {
     if ($Stop) {
         docker compose --env-file .env.docker -f compose.yaml down
+        if ($LASTEXITCODE -ne 0) {
+            throw "Docker Compose failed while stopping (exit code $LASTEXITCODE)."
+        }
         return
     }
 
     docker compose --env-file .env.docker -f compose.yaml up -d --wait
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker Compose failed while starting (exit code $LASTEXITCODE)."
+    }
     Write-Host 'Neo4j is ready at http://localhost:7474 (user: neo4j).'
 
     if ($Bootstrap) {
@@ -41,6 +47,9 @@ try {
             throw 'Python was not found. Install Python 3.14.4 and run: python -m pip install -r requirements-neo4j.txt; python -m app.memory.neo4j_bootstrap'
         }
         & $pythonCommand.Source -m app.memory.neo4j_bootstrap
+        if ($LASTEXITCODE -ne 0) {
+            throw "Neo4j bootstrap failed (exit code $LASTEXITCODE)."
+        }
     }
 }
 finally {
