@@ -1,2 +1,1 @@
 """Lumen application package."""
-
