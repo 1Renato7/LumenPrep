@@ -1,0 +1,9 @@
+[project]
+name = "lumen-prep"
+version = "0.1.0"
+description = "Synthetic payment monitoring demo for the Lumen hackathon"
+requires-python = "==3.14.4"
+dependencies = []
+
+[tool.unittest]
+start-directory = "tests"
