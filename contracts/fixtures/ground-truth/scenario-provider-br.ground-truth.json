@@ -1,0 +1,6 @@
+{
+  "scenario_id": "scenario_provider_br",
+  "root_cause": "PROVIDER_DEGRADATION",
+  "expected_scope": {"provider_id": ["stripe"], "country": ["BR"]},
+  "visibility": "EVALUATION_ONLY"
+}

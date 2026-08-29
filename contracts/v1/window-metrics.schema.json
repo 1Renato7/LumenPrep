@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/window-metrics.schema.json",
+  "title": "CTR-AGG-001 Window Metrics v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "window_start", "window_end", "dimensions", "eligible_attempts", "approved_attempts", "unique_payments", "approved_payments", "amount_minor", "currency", "approval_rate", "payment_conversion", "latency_p50_ms", "latency_p95_ms", "timeout_rate", "decline_counts", "data_quality", "window_revision", "correlation_id"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "window_start": {"type": "string", "format": "date-time"},
+    "window_end": {"type": "string", "format": "date-time"},
+    "dimensions": {"type": "object", "additionalProperties": {"type": "string"}},
+    "eligible_attempts": {"type": "integer", "minimum": 0},
+    "approved_attempts": {"type": "integer", "minimum": 0},
+    "unique_payments": {"type": "integer", "minimum": 0},
+    "approved_payments": {"type": "integer", "minimum": 0},
+    "amount_minor": {"type": "integer", "minimum": 0},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "approval_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "payment_conversion": {"type": "number", "minimum": 0, "maximum": 1},
+    "latency_p50_ms": {"type": "number", "minimum": 0},
+    "latency_p95_ms": {"type": "number", "minimum": 0},
+    "timeout_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "decline_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "data_quality": {"type": "number", "minimum": 0, "maximum": 1},
+    "window_revision": {"type": "integer", "minimum": 1},
+    "correlation_id": {"type": "string", "minLength": 1}
+  }
+}

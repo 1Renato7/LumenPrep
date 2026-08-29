@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/anomaly-candidate.schema.json",
+  "title": "CTR-DET-001 Anomaly Candidate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "candidate_id", "window", "slice", "metric", "observed", "expected", "sample_size", "effect_absolute", "effect_relative", "statistical_strength", "lost_approvals", "loss_coverage", "temporal_consistency", "data_quality", "evidence_refs", "detector_version", "correlation_id"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "candidate_id": {"type": "string"},
+    "window": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "string", "format": "date-time"}, "end": {"type": "string", "format": "date-time"}}},
+    "slice": {"type": "object", "additionalProperties": {"type": "string"}},
+    "metric": {"enum": ["APPROVAL_RATE", "LATENCY_P95", "TIMEOUT_RATE"]},
+    "observed": {"type": "number"},
+    "expected": {"type": "number"},
+    "sample_size": {"type": "integer", "minimum": 0},
+    "effect_absolute": {"type": "number"},
+    "effect_relative": {"type": "number"},
+    "statistical_strength": {"type": "number", "minimum": 0, "maximum": 1},
+    "lost_approvals": {"type": "number", "minimum": 0},
+    "loss_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "temporal_consistency": {"type": "number", "minimum": 0, "maximum": 1},
+    "data_quality": {"type": "number", "minimum": 0, "maximum": 1},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+    "detector_version": {"type": "string"},
+    "correlation_id": {"type": "string"}
+  }
+}

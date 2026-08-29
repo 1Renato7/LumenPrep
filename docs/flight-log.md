@@ -27,6 +27,7 @@ _Consolidar no modo `FINALIZE`; as entradas originais permanecem nas lanes._
 | --- | --- | --- | --- | --- | --- |
 | 2026-08-29T11:56:33-03:00 | FL-20260829-TEAM-001 | Adotar um Flight Log Markdown, append-only e dividido por lanes | André | VALIDATED | Três skills validadas e checagens Git aprovadas |
 | 2026-08-29T12:08:01-03:00 | FL-20260829-TEAM-002 | Separar avaliação viva do histórico de decisões | André | VALIDATED | `avaliacao.md` aponta para o Flight Log canônico |
+| 2026-08-29T15:42:08-03:00 | FL-20260829-TEAM-009 | Publicar plano no Linear correto com quatro owners | André | VALIDATED | 54 issues e 50 relações auditadas sem divergência |
 
 ## Decisões do time
 
@@ -171,6 +172,490 @@ Exigência oficial de nome/localização, conflitos recorrentes, backlinks quebr
 #### Adendos
 
 - Nenhum.
+
+### FL-20260829-TEAM-003 — Colocar precisão causal e memória recorrente no núcleo do MVP
+
+- **Timestamp:** 2026-08-29T15:31:16-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André, em nome do time solicitante
+- **Participantes:** André; recomendações arquiteturais do Codex; validação futura por Altoé, Rogério e Renato
+- **Categoria:** product | scope | data | demo
+- **Escopo:** MVP, métricas, identidade de pagamentos e trial by fire
+- **Links:** DEC-001, DEC-002, CTR-EVT-001, CTR-INC-001, `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A banca prioriza causa raiz e indicou fortemente memória de recorrência. O prazo permite muitas ideias, mas não profundidade em todas. Também era necessário escolher o denominador de conversão sem confundir retries.
+
+#### Decisão
+
+O MVP deve detectar e localizar a causa, separar incidentes, recuperar um precedente humano confirmado — incluindo o caso Mastercard de dois dias antes — e explicar a recorrência por evidências. Modelar `Payment`, `Attempt` e `Event`; usar approval por attempt como métrica primária de provider e payment conversion como métrica secundária.
+
+#### Critérios e por que agora
+
+Precisão top-1, aderência ao enunciado, robustez ao trial by fire e clareza de denominador dominam quantidade de features.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| MVP sem memória | Menor escopo | perde bônus explicitamente valorizado | FACT: juiz indicou memória fortemente | não atende a decisão do usuário |
+| Uma métrica “conversão” única | UI simples | retries distorcem provider e payment | FACT: múltiplos attempts podem pertencer ao mesmo payment | ambígua e difícil de defender |
+| Approval por attempt + conversion por payment | preserva duas leituras | schema e UI um pouco maiores | INFERENCE do lifecycle de pagamento | melhor precisão sem ocultar recovery |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** nova combinação usa o mesmo schema e pode alterar múltiplas métricas.
+- **TEST:** NOT RUN; validar nos casos holdout.
+- **ASSUMPTION:** incidente histórico confirmado pode ser seed sintético, desde que claramente rotulado.
+- **UNKNOWN:** volume exato do laptop; benchmark em H2.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** profundidade causal, memória demonstrável e métricas não ambíguas.
+- **Abrimos mão de:** antifraude, RL e remediation no MVP.
+- **Dívida/limitação:** memória inicial usa incidentes sintéticos confirmados.
+- **Risco residual:** similaridade pode ser confundida com identidade causal; UI deve dizer “recorrência provável”.
+
+#### Consequências e propagação
+
+- **Produto/demo:** recurrence, simultaneous e inconclusive são casos obrigatórios.
+- **Arquitetura/contratos:** CTR-EVT-001 e CTR-INC-001 congelam identidades/denominadores.
+- **Pessoas/branches:** todos consomem esses nomes sem redefinição.
+- **Plano/Linear:** plano geral e quatro planos sincronizados; Linear não autorizado.
+- **Testes/observabilidade:** top-1 accuracy e exact scope são métricas principais.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** nova combinação é localizada sem hardcode.
+- **Caminho feliz:** provider BR e recurrence Mastercard.
+- **Caso difícil/adverso:** dois incidentes e baixa evidência.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** memória estruturada sem embedding; nunca cortar RCA.
+
+#### Gatilhos de revisão
+
+Revisar se a fatia ponta a ponta não estiver funcionando em H4 ou se holdout mostrar confusão entre attempts e payments.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-TEAM-004 — Adotar modular monolith Python com DuckDB/Parquet, Neo4j e Streamlit
+
+- **Timestamp:** 2026-08-29T15:31:17-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team
+- **Participantes:** André e Codex; revisão pendente dos demais
+- **Categoria:** architecture | operations | Git/integration
+- **Escopo:** DEC-003 e componentes CMP-*
+- **Links:** DEC-003, `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Em 19 horas, serviços distribuídos aumentariam setup, contratos de rede e falhas operacionais. Ainda é necessário suportar analytics local volumoso, grafo e UI.
+
+#### Decisão
+
+Usar modular monolith Python: FastAPI como fronteira, DuckDB/Parquet para fatos/agregados, Neo4j para memória e Streamlit para UI. Interfaces internas permanecem tipadas e versionadas.
+
+#### Critérios e por que agora
+
+Velocidade de integração, execução local, fallback e coerência de linguagem venceram escalabilidade de produção.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Kafka + microservices + Postgres | arquitetura de produção | setup e debugging excessivos | ASSUMPTION: nenhuma infra pronta | incompatível com 19h |
+| tudo em Neo4j | uma tecnologia | inadequado para raw/time-series scans | FACT: grafo é bônus de memória | uso errado do grafo |
+| monolith modular | integra cedo e mantém boundaries | menor escala operacional | FACT: demo local | melhor risco/valor |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** DuckDB consulta Parquet diretamente; Neo4j possui driver/GraphRAG oficial.
+- **TEST:** NOT RUN; health check em H1.
+- **ASSUMPTION:** Docker/Python disponíveis; fallback local.
+- **UNKNOWN:** Neo4j Aura ou local; adapter esconde a escolha.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** menos infraestrutura e fatia H4.
+- **Abrimos mão de:** streaming distribuído e deploy production-grade.
+- **Dívida/limitação:** processos locais não representam escala da Yuno.
+- **Risco residual:** Streamlit/FastAPI podem divergir; fixture e OpenAPI mitigam.
+
+#### Consequências e propagação
+
+- **Produto/demo:** demo local com fallback explícito.
+- **Arquitetura/contratos:** CTR-API-001 é a única fronteira da UI.
+- **Pessoas/branches:** Rogério coordena package/schema; André não acessa DB.
+- **Plano/Linear:** ownership sincronizado.
+- **Testes/observabilidade:** `/health` por dependência.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** todos os módulos integram sem deploy externo obrigatório.
+- **Caminho feliz:** fixture percorre API/UI.
+- **Caso difícil/adverso:** Neo4j/OpenAI offline.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** adapters in-memory e template.
+
+#### Gatilhos de revisão
+
+Falha do health check H1 ou impossibilidade de consulta dentro do orçamento da demo.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-TEAM-005 — Gerar três meses por código vetorizado, não por linhas de LLM
+
+- **Timestamp:** 2026-08-29T15:31:18-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team
+- **Participantes:** André e Codex; Renato revisará o benchmark
+- **Categoria:** data | AI/RAG | quality
+- **Escopo:** DEC-004, CMP-DATA-001, CTR-SCN-001
+- **Links:** DEC-004, CTR-SCN-001, TASK-RENATO-001
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O juiz pediu muita data e sugeriu LLM, mas gerar milhões de rows por tokens seria lento, caro, não reproduzível e estatisticamente incoerente.
+
+#### Decisão
+
+NumPy/Polars geram pelo menos 90 dias, seed fixa, sazonalidade e relações condicionais; Parquet persiste. A LLM pode propor ScenarioDefinition/narrativas, nunca fabricar o dataset linha a linha. Ground truth fica separado.
+
+#### Critérios e por que agora
+
+Reprodutibilidade, volume, controle causal e holdout dominam variedade textual.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| LLM por row | aparente diversidade | custo, baixa escala, inconsistência | INFERENCE técnica | não atende volume/controle |
+| biblioteca tabular treinada | realismo potencial | não há dataset real para aprender | FACT: só existe enunciado | não há base |
+| gerador probabilístico vetorizado | rápido, reprodutível, causal | requer modelar distribuições | ASSUMPTION validada em H2 | melhor para trial by fire |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** não há input real e o schema é conhecido.
+- **TEST:** NOT RUN; meta default >=1M attempts em <=60s, ajustável após benchmark.
+- **ASSUMPTION:** esse volume é suficiente para demo estatística.
+- **UNKNOWN:** hardware final.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** ground truth exato e geração rápida.
+- **Abrimos mão de:** realismo aprendido de tráfego Yuno real.
+- **Dívida/limitação:** distribuições são hipóteses sintéticas.
+- **Risco residual:** cenário fácil demais; holdout e mix-shift mitigam.
+
+#### Consequências e propagação
+
+- **Produto/demo:** jurado injeta qualquer filtro conhecido por JSON.
+- **Arquitetura/contratos:** CTR-SCN-001 congelado.
+- **Pessoas/branches:** Renato owns dados; detector não lê ground truth.
+- **Plano/Linear:** TASK-RENATO-001/002.
+- **Testes/observabilidade:** seed, row count e distribution checks.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** nova combinação é gerada sem mudança de código.
+- **Caminho feliz:** provider-country.
+- **Caso difícil/adverso:** efeitos múltiplos e simultâneos.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** menos raw rows e mesmos aggregates de 90 dias.
+
+#### Gatilhos de revisão
+
+Benchmark H2, distribuição degenerada ou leakage de ground truth.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-TEAM-006 — Usar detector estatístico hierárquico em vez de agentes por dimensão
+
+- **Timestamp:** 2026-08-29T15:31:19-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team
+- **Participantes:** André e Codex; Renato valida em evals
+- **Categoria:** architecture | quality | data
+- **Escopo:** DEC-005, CMP-DET-001, CMP-RCA-001
+- **Links:** DEC-005, CTR-DET-001, OBJ-RENATO-001
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Covariância e um agente por dimensão foram considerados, mas o domínio mistura resultado binomial, latência robusta, categorias de alta cardinalidade, baixa amostra e incidentes simultâneos.
+
+#### Decisão
+
+Usar baseline sazonal, Beta-Binomial/Wilson para approval, MAD/quantis para latência, volume/persistência mínimos e RCA por beam search/contribuição até depth 3. Agentes não detectam; covariância fica pós-MVP.
+
+#### Critérios e por que agora
+
+Precisão, calibragem, explicabilidade e capacidade de testar contra ground truth.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| seis agentes | narrativa modular | inconsistência e ausência de teste estatístico | INFERENCE | complexidade sem ganho medido |
+| covariância como núcleo | relações numéricas | fraca para categorias/denominadores | FACT do tipo dos dados | complementar apenas |
+| detector hierárquico | evidência reproduzível | thresholds exigem calibração | ASSUMPTION: evals suficientes | alinha à métrica principal |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** precisão causal é critério principal escolhido.
+- **TEST:** NOT RUN; holdout em H12–H15.
+- **ASSUMPTION:** depth 3 cobre casos da banca sem explosão.
+- **UNKNOWN:** thresholds finais.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** scores recalculáveis e no-answer objetivo.
+- **Abrimos mão de:** exploração irrestrita de todas as combinações.
+- **Dívida/limitação:** pode perder causa de depth >3.
+- **Risco residual:** overfitting de threshold; holdout separado.
+
+#### Consequências e propagação
+
+- **Produto/demo:** UI mostra coverage/confidence factors.
+- **Arquitetura/contratos:** CTR-DET-001 não contém narrativa.
+- **Pessoas/branches:** Renato owns algoritmo; Rogério correlaciona candidates.
+- **Plano/Linear:** eval dataset obrigatório.
+- **Testes/observabilidade:** top1, exact scope e false incidents.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** holdout novo mantém top-1 correto.
+- **Caminho feliz:** provider BR.
+- **Caso difícil/adverso:** Simpson/mix shift e baixa amostra.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** reduzir top-k/depth sem mudar contrato.
+
+#### Gatilhos de revisão
+
+Baixa accuracy, muitos falsos positivos ou latência incompatível com demo.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-TEAM-007 — Usar memória Graph RAG híbrida e um explicador read-only grounded
+
+- **Timestamp:** 2026-08-29T15:31:20-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team
+- **Participantes:** André e Codex; Altoé é owner de validação
+- **Categoria:** AI/RAG | architecture | payments | security
+- **Escopo:** DEC-006, DEC-007, CMP-MEM-001, CMP-EXP-001
+- **Links:** CTR-MEM-001, CTR-LLM-001, OBJ-ALTOE-001
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O juiz valorizou Neo4j/agentic RAG, mas memória sem grounding pode transformar coincidência em causa e um LLM autônomo pode inventar métricas ou ações.
+
+#### Decisão
+
+Neo4j guarda incidentes/entidades, Cypher faz prefilter, score estruturado ranqueia e embedding opcional reranqueia. Somente causas humanas confirmadas são precedentes. Um agente read-only usa Responses API Structured Output para explicar e escolher playbook; código calcula todos os fatos. Sem tools financeiras.
+
+#### Critérios e por que agora
+
+Originalidade, explicabilidade, no-answer, segurança e fallback determinístico.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| vector-only RAG | simples | perde relações e explicação de match | FACT: dados são altamente estruturados | insuficiente para evidência |
+| agentic loop livre | flexível | custo, latência e hallucination | INFERENCE | incompatível com autoridade read-only |
+| hybrid read-only | grafo + semântica + trace | mais componentes | FACT: juiz indicou Neo4j | benefício demonstrável com fallback |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Neo4j oferece driver/GraphRAG; OpenAI suporta Structured Outputs.
+- **TEST:** NOT RUN; evals de recurrence/no-answer em H12.
+- **ASSUMPTION:** credenciais disponíveis até H1; fallback local.
+- **UNKNOWN:** ganho real do embedding; será medido e pode ser cortado.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** memória auditável e narrativa grounded.
+- **Abrimos mão de:** autonomia ampla e armazenamento de raw no grafo.
+- **Dívida/limitação:** seed histórico sintético.
+- **Risco residual:** false recurrence; fatores diferentes e thresholds explícitos mitigam.
+
+#### Consequências e propagação
+
+- **Produto/demo:** “recorrência provável” com evidência e precedente confirmado.
+- **Arquitetura/contratos:** CTR-MEM-001 trace obrigatório; CTR-LLM-001 evidence IDs.
+- **Pessoas/branches:** Altoé owns memória/prompt; André somente renderiza.
+- **Plano/Linear:** memory é MVP; vector/web são cortáveis.
+- **Testes/observabilidade:** precision@1, no-answer e citation coverage.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** Mastercard histórico retorna top-1 e caso sem par retorna vazio.
+- **Caminho feliz:** incidente de dois dias antes.
+- **Caso difícil/adverso:** precedente conflitante/não confirmado e prompt injection.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** Cypher + template determinístico.
+
+#### Gatilhos de revisão
+
+Neo4j/API indisponível, embedding sem ganho ou evidence coverage abaixo de 100%.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-TEAM-008 — Proteger quatro horas finais e distribuir ownership pelas especialidades
+
+- **Timestamp:** 2026-08-29T15:31:21-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André, em nome do time solicitante
+- **Participantes:** André e Codex; confirmação de carga em H0:30
+- **Categoria:** scope | operations | Git/integration | demo
+- **Escopo:** DEC-008, DEC-009 e quatro planos individuais
+- **Links:** `docs/plans/people/`, `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O juiz mencionou 15 horas para construir e o time possui 19 horas totais. Uma pessoa precisa de menor carga para frontend/pitch. Especialidades: Altoé em RAG/banco, Rogério em backend e Renato em computação.
+
+#### Decisão
+
+Tratar H0–H15 como construção e H15–H19 como integração, acceptance, ensaio e pitch. André assume UI/pitch com 6–7h de implementação; Altoé memória/RAG; Rogério backend/contratos/integration coordinator; Renato dados/detector/RCA.
+
+#### Critérios e por que agora
+
+Caminho crítico, especialidade, ownership único e working demo prevalecem sobre igualdade no número de tarefas.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| todos codificam 19h | mais features | nenhuma integração/ensaio | FACT: pitch/frontend exigem tempo | risco alto de demo quebrada |
+| André também no backend crítico | mais capacidade central | pitch vira atividade residual | ASSUMPTION: André é owner adequado de UI/pitch | conflita com restrição |
+| 15h + 4h protegidas | integra/testa/ensaia | menor feature throughput | FACT: 19h total | maximiza evidência funcional |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** usuário definiu especialidades e uma pessoa com menos tarefas.
+- **TEST:** NOT RUN; forward simulation documentada no plano.
+- **ASSUMPTION:** André é a pessoa de frontend/pitch; validar H0:30.
+- **UNKNOWN:** preferências adicionais do time.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** integração coordenada, pitch e demo ensaiada.
+- **Abrimos mão de:** quatro horas de feature building e distribuição numérica igual.
+- **Dívida/limitação:** Rogério concentra hotspots; checkpoints mitigam.
+- **Risco residual:** carga pesada de Renato; cortes de depth/top-k previstos.
+
+#### Consequências e propagação
+
+- **Produto/demo:** code freeze H15.
+- **Arquitetura/contratos:** owners fixos na matriz.
+- **Pessoas/branches:** planos individuais criados.
+- **Plano/Linear:** Linear permanece não autorizado.
+- **Testes/observabilidade:** gates H4/H8/H13/H15–H17.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** fatia H4 e demo completa H15.
+- **Caminho feliz:** merges na ordem planejada.
+- **Caso difícil/adverso:** dependência externa falha antes do pitch.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** cortar web/vector/polimento, preservar vertical e memory estruturada.
+
+#### Gatilhos de revisão
+
+Fatia H4 falha, owner indisponível, carga crítica desequilibrada ou nova regra do evento.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-TEAM-009 — Publicar o plano no Linear do workspace Lumen com quatro owners confirmados
+
+- **Timestamp:** 2026-08-29T15:42:08-03:00
+- **Status:** VALIDATED
+- **Decision owner:** André
+- **Participantes:** André; Gabriel Altoé Batista; Renato Bello; Rogério; Codex como recorder
+- **Categoria:** operations | ownership | Git/integration
+- **Escopo:** Linear, hierarquia de issues e sincronização dos planos
+- **Links:** `docs/plans/linear-preview.md`, [projeto Linear](https://linear.app/lumenhack/project/lumen-yuno-hackathon-fd0533f171d5), LUM2-4, LUM2-5, LUM2-6, LUM2-7
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O primeiro conector apontava para um workspace antigo e não resolvia Altoé/Renato. Após reconectar o MCP oficial, o workspace `Lumen`, o team `LUMEN HACKATHON` e os quatro e-mails foram confirmados. Era necessário escolher destino, hierarquia, estado e política de criação sem duplicar trabalho.
+
+#### Decisão
+
+Criar o projeto `Lumen — Yuno Hackathon` no team `LUMEN HACKATHON`, sem ciclo, com estado inicial `Todo` e label existente `Feature`. Criar quatro parent issues por `OBJ-*`, 50 microtarefas com assignee único e relações em uma segunda passagem. André recebe carga menor para frontend/pitch.
+
+#### Critérios e por que agora
+
+Os usuários foram confirmados por e-mail no MCP correto e o usuário autorizou explicitamente terminar o planejamento e publicar tudo no Linear.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Usar workspace antigo | conector já respondia | usuários/time incorretos | TEST: Altoé e Renato não resolviam | risco de atribuição errada |
+| Criar sem projeto | menos uma entidade | perde visão do hackathon | FACT: nenhum projeto existe no team novo | projeto melhora agrupamento |
+| Projeto + parents + sub-issues | contexto e ownership claros | 54 issues e segunda passagem | FACT: preview aprovado | melhor rastreabilidade |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** MCP retorna os quatro usuários ativos e team correto.
+- **TEST:** leitura de workspace, teams, users, statuses, labels e issues; zero issues existentes.
+- **ASSUMPTION:** ausência de ciclo é intencional para evento de 19h.
+- **UNKNOWN:** convenção de estimativas; campos de estimate ficarão vazios.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** microtarefas executáveis, dependências reais e owner único.
+- **Abrimos mão de:** estimativas nativas do Linear e ciclo.
+- **Dívida/limitação:** 50 microtarefas exigem verificação pós-criação.
+- **Risco residual:** falha parcial; protocolo manda parar e inventariar.
+
+#### Consequências e propagação
+
+- **Produto/demo:** trabalho alinhado aos checkpoints H4/H8/H15.
+- **Arquitetura/contratos:** descriptions repetem CTR/DEC relevantes.
+- **Pessoas/branches:** assignments usam e-mails confirmados.
+- **Plano/Linear:** backlinks escritos no plano geral, quatro planos individuais e preview.
+- **Testes/observabilidade:** verificar contagem, parents, assignees, estados e relações.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** todo executor encontra contexto, contrato, aceite, teste e handoff na issue.
+- **Caminho feliz:** 4 parents + 50 children, todos atribuídos.
+- **Caso difícil/adverso:** falha após criação parcial.
+- **Resultado observado:** PASS — 54/54 issues no team/project corretos; owner counts 8/13/17/16 incluindo parents; child counts 7/12/16/15; 50 microtarefas e zero divergências nas relações `blockedBy`.
+- **Fallback:** parar na primeira falha, reler estado e não repetir cegamente.
+
+#### Gatilhos de revisão
+
+Mudança de time, assignee, plano, contrato, caminho crítico ou falha parcial no Linear.
+
+#### Adendos
+
+- **2026-08-29T16:01:00-03:00:** projeto criado em `Lumen`; parents `LUM2-4`–`LUM2-7`; microtarefas `LUM2-8`–`LUM2-57`. Releitura completa confirmou estado `Todo`, label `Feature`, assignees exatos, descrições com ID estável e 48 tarefas bloqueadas pelas relações previstas; `TASK-CORE-001` e `TASK-CON-001` são as duas raízes intencionais. Nenhuma escrita parcial falhou.
+- **2026-08-29T16:06:00-03:00:** o preflight de `integration-contract-guardian` encontrou aliases não canônicos em 21 descrições do Linear. `CTR-TXN-001`, `CTR-WIN-001` e `CTR-ANM-001` foram substituídos respectivamente pelos IDs congelados `CTR-EVT-001`, `CTR-AGG-001` e `CTR-DET-001`; releitura das 21 issues confirmou zero alias restante. Os schemas não foram renomeados.
 
 ## André
 

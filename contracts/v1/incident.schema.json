@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/incident.schema.json",
+  "title": "CTR-INC-001 Incident v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "incident_id", "state", "detected_at", "estimated_started_at", "title", "scope", "metrics", "root_cause", "impact", "evidence", "recommendations", "limitations", "correlation_id"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "incident_id": {"type": "string", "minLength": 1},
+    "state": {"enum": ["DETECTED", "INVESTIGATING", "SUPPORTED", "INCONCLUSIVE", "RECOVERED", "HUMAN_CONFIRMED", "CLOSED"]},
+    "detected_at": {"type": "string", "format": "date-time"},
+    "estimated_started_at": {"type": "string", "format": "date-time"},
+    "title": {"type": "string", "minLength": 1},
+    "scope": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
+    "metrics": {"type": "object", "additionalProperties": {"type": ["number", "integer", "string", "null"]}},
+    "root_cause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "category", "confidence", "confidence_factors"],
+      "properties": {
+        "status": {"enum": ["SUPPORTED", "INCONCLUSIVE"]},
+        "category": {"type": ["string", "null"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "confidence_factors": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}}
+      }
+    },
+    "impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "amount_minor", "currency", "method"],
+      "properties": {
+        "metric": {"const": "GMV_AT_RISK"},
+        "amount_minor": {"type": "integer", "minimum": 0},
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+        "method": {"const": "EXPECTED_APPROVAL_SHORTFALL"},
+        "lower_bound_minor": {"type": ["integer", "null"], "minimum": 0},
+        "upper_bound_minor": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["evidence_id", "kind", "statement", "source_ref"],
+        "properties": {
+          "evidence_id": {"type": "string"},
+          "kind": {"type": "string"},
+          "statement": {"type": "string"},
+          "source_ref": {"type": "string"}
+        }
+      }
+    },
+    "memory_matches": {"type": "array", "items": {"type": "object"}},
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["playbook_id", "action", "execution", "rationale_evidence_ids"],
+        "properties": {
+          "playbook_id": {"type": "string"},
+          "action": {"type": "string"},
+          "execution": {"const": "HUMAN_ONLY"},
+          "rationale_evidence_ids": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "correlation_id": {"type": "string", "minLength": 1}
+  }
+}

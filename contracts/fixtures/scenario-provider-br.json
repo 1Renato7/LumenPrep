@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "scenario_provider_br",
+  "seed": 29082026,
+  "start_at": "2026-08-29T14:03:00Z",
+  "duration_seconds": 180,
+  "filters": {"provider_id": ["stripe"], "country": ["BR"]},
+  "effects": {"approval_rate_multiplier": 0.55, "latency_p95_multiplier": 4.0, "timeout_rate": 0.28, "decline_code_distribution": {"PROVIDER_TIMEOUT": 0.7, "PROVIDER_INTERNAL_ERROR": 0.3}}
+}

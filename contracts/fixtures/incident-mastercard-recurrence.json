@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "incident_id": "inc_current_mastercard_001",
+  "state": "SUPPORTED",
+  "detected_at": "2026-08-29T14:06:00Z",
+  "estimated_started_at": "2026-08-29T14:03:00Z",
+  "title": "Queda de aprovação Mastercard no provider Stripe no Brasil",
+  "scope": {"provider_id": ["stripe"], "country": ["BR"], "card_brand": ["MASTERCARD"]},
+  "metrics": {"eligible_attempts": 492, "approval_rate_observed": 0.51, "approval_rate_expected": 0.84, "provider_latency_p95_ms_observed": 4100, "provider_latency_p95_ms_expected": 820, "lost_approvals": 162},
+  "root_cause": {"status": "SUPPORTED", "category": "PROVIDER_DEGRADATION", "confidence": 0.93, "confidence_factors": {"statistical_strength": 0.97, "loss_coverage": 0.91, "temporal_consistency": 0.94, "data_quality": 0.9}},
+  "impact": {"metric": "GMV_AT_RISK", "amount_minor": 2419000, "currency": "BRL", "method": "EXPECTED_APPROVAL_SHORTFALL", "lower_bound_minor": 1920000, "upper_bound_minor": 2890000},
+  "evidence": [
+    {"evidence_id": "evd_current_rate", "kind": "METRIC_SHIFT", "statement": "Approval rate caiu de 84% para 51% em 492 attempts.", "source_ref": "duckdb://window/current"},
+    {"evidence_id": "evd_current_scope", "kind": "LOSS_COVERAGE", "statement": "O slice Stripe × BR × Mastercard explica 91% das aprovações perdidas.", "source_ref": "rca://candidate/1"},
+    {"evidence_id": "evd_prior_confirmed", "kind": "PAST_INCIDENT", "statement": "INC-HIST-002D-MASTERCARD foi confirmado por humano dois dias antes com a mesma assinatura principal.", "source_ref": "neo4j://incident/INC-HIST-002D-MASTERCARD"}
+  ],
+  "memory_matches": [{"incident_id": "INC-HIST-002D-MASTERCARD", "occurred_at": "2026-08-27T14:02:00Z", "confirmation": "HUMAN_CONFIRMED", "structured_score": 0.96, "semantic_score": 0.91, "matching_factors": ["provider_id", "country", "card_brand", "decline_profile", "latency_shape"], "different_factors": ["merchant_scope"]}],
+  "recommendations": [{"playbook_id": "PB-PROVIDER-DEGRADATION-001", "action": "Validar a saúde da conexão Stripe no Brasil e preparar rerouting humano para uma conexão alternativa.", "execution": "HUMAN_ONLY", "rationale_evidence_ids": ["evd_current_rate", "evd_current_scope", "evd_prior_confirmed"]}],
+  "limitations": ["A recorrência é provável; a identidade causal depende da evidência corrente e de confirmação humana."],
+  "correlation_id": "corr_inc_001"
+}

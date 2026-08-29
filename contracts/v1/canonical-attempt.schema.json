@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/canonical-attempt.schema.json",
+  "title": "CTR-EVT-001 Canonical Payment Attempt Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "event_type", "event_time", "received_at", "payment_id", "attempt_id", "attempt_sequence", "merchant_id", "provider_id", "country", "currency", "amount_minor", "payment_method_category", "status", "timing", "correlation_id", "is_test"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "event_id": {"type": "string", "minLength": 1},
+    "event_type": {"enum": ["PAYMENT_ATTEMPT_CREATED", "PAYMENT_ATTEMPT_UPDATED"]},
+    "event_time": {"type": "string", "format": "date-time"},
+    "received_at": {"type": "string", "format": "date-time"},
+    "payment_id": {"type": "string", "minLength": 1},
+    "attempt_id": {"type": "string", "minLength": 1},
+    "attempt_sequence": {"type": "integer", "minimum": 1},
+    "merchant_id": {"type": "string", "minLength": 1},
+    "provider_id": {"type": "string", "minLength": 1},
+    "provider_connection_id": {"type": ["string", "null"]},
+    "country": {"type": "string", "pattern": "^[A-Z]{2}$"},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "amount_minor": {"type": "integer", "minimum": 0},
+    "payment_method_category": {"enum": ["CARD", "BANK_TRANSFER", "REAL_TIME_PAYMENT", "WALLET", "CASH", "BNPL"]},
+    "payment_method_type": {"type": ["string", "null"]},
+    "card": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "brand": {"type": ["string", "null"]},
+        "type": {"enum": ["CREDIT", "DEBIT", "PREPAID", "CHARGE", "UNKNOWN", null]},
+        "issuer_bank_id": {"type": ["string", "null"]},
+        "issuer_country": {"type": ["string", "null"], "pattern": "^[A-Z]{2}$"},
+        "bin_prefix": {"type": ["string", "null"], "pattern": "^[0-9]{6,8}$"}
+      }
+    },
+    "status": {"enum": ["RECEIVED", "PROCESSING", "PENDING", "SUCCEEDED", "DECLINED", "ERROR", "TIMEOUT", "CANCELLED", "UNKNOWN"]},
+    "decline": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "normalized_code": {"type": ["string", "null"]},
+        "category": {"enum": ["CUSTOMER", "ISSUER", "PROVIDER", "NETWORK", "FRAUD", "MERCHANT", "TECHNICAL", "UNKNOWN", null]},
+        "retryability": {"enum": ["DO_NOT_RETRY", "RETRY_LATER", "RETRY_WITH_CHANGES", "UNKNOWN", null]},
+        "raw_code": {"type": ["string", "null"]},
+        "raw_message": {"type": ["string", "null"]},
+        "mapping_version": {"type": ["string", "null"]}
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_latency_ms", "total_latency_ms"],
+      "properties": {
+        "orchestrator_latency_ms": {"type": ["integer", "null"], "minimum": 0},
+        "provider_latency_ms": {"type": "integer", "minimum": 0},
+        "total_latency_ms": {"type": "integer", "minimum": 0}
+      }
+    },
+    "raw_event_id": {"type": ["string", "null"]},
+    "normalization_version": {"type": ["string", "null"]},
+    "correlation_id": {"type": "string", "minLength": 1},
+    "is_test": {"type": "boolean"}
+  }
+}

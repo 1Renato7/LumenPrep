@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/explanation-bundle.schema.json",
+  "title": "CTR-LLM-001 Explanation Bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "incident_id", "executive_summary", "operations_summary", "what_happened", "where_and_why", "recurrence_statement", "evidence_ids", "playbook_id", "recommended_action", "execution", "limitations", "model_version"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "incident_id": {"type": "string"},
+    "executive_summary": {"type": "string"},
+    "operations_summary": {"type": "string"},
+    "what_happened": {"type": "string"},
+    "where_and_why": {"type": "string"},
+    "recurrence_statement": {"type": ["string", "null"]},
+    "evidence_ids": {"type": "array", "items": {"type": "string"}},
+    "playbook_id": {"type": "string"},
+    "recommended_action": {"type": "string"},
+    "execution": {"const": "HUMAN_ONLY"},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "model_version": {"type": "string"}
+  }
+}

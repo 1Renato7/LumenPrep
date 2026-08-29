@@ -1,0 +1,34 @@
+openapi: 3.1.0
+info:
+  title: CTR-API-001 Lumen Read API
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8000
+paths:
+  /health:
+    get:
+      responses:
+        "200": {description: Dependency health}
+  /metrics/current:
+    get:
+      responses:
+        "200": {description: Current and baseline metrics}
+  /incidents:
+    get:
+      responses:
+        "200": {description: Incident list}
+  /incidents/{incident_id}:
+    get:
+      parameters:
+        - {name: incident_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: Incident plus explanation}
+        "404": {description: INCIDENT_NOT_FOUND}
+  /demo/scenarios/{scenario_id}/inject:
+    post:
+      parameters:
+        - {name: scenario_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "202": {description: Scenario accepted in demo mode}
+        "403": {description: DEMO_MODE_REQUIRED}
+        "404": {description: SCENARIO_NOT_FOUND}
