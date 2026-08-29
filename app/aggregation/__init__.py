@@ -1,4 +1,4 @@
-"""CMP-AGG-001 — expõe get_current_metrics, WindowMetrics. Stub TASK-CORE-001; real impl TASK-AGG-001/002."""
+"""CMP-AGG-001 — expõe get_current_metrics, WindowMetrics. TASK-AGG-001..002."""
 
 from pydantic import BaseModel
 
@@ -25,28 +25,13 @@ class WindowMetrics(BaseModel):
     correlation_id: str
 
 
-_STUB = WindowMetrics(
-    window_start="2026-08-29T14:00:00Z",
-    window_end="2026-08-29T14:05:00Z",
-    dimensions={"provider_id": "stripe", "country": "BR"},
-    eligible_attempts=492,
-    approved_attempts=251,
-    unique_payments=470,
-    approved_payments=258,
-    amount_minor=7342000,
-    currency="BRL",
-    approval_rate=0.5102,
-    payment_conversion=0.5489,
-    latency_p50_ms=1100,
-    latency_p95_ms=4100,
-    timeout_rate=0.28,
-    decline_counts={"PROVIDER_TIMEOUT": 169, "PROVIDER_INTERNAL_ERROR": 72},
-    data_quality=0.98,
-    window_revision=1,
-    correlation_id="corr_window_001",
-)
+from .windows import compute_windows  # noqa: E402  (depende de WindowMetrics acima)
 
 
 def get_current_metrics(dimensions: dict[str, str] | None = None) -> list[WindowMetrics]:
-    """Stub. Real: TASK-AGG-001/002, query DuckDB windows."""
-    return [_STUB]
+    from app.ingestion.storage import get_connection
+
+    windows = compute_windows(get_connection())
+    if dimensions:
+        windows = [w for w in windows if all(w.dimensions.get(k) == v for k, v in dimensions.items())]
+    return windows
