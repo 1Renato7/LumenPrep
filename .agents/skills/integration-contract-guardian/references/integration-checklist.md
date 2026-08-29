@@ -14,12 +14,16 @@
 - Não existe decisão crítica marcada como `OPEN` sem ação de resolução antes da implementação dependente.
 - A ordem de integração produz incrementos executáveis nos três checkpoints mínimos.
 - A simulação de merges descreve build, testes de contrato, configuração e smoke test esperados em cada etapa.
+- Todos os contratos necessários ao trabalho paralelo estão `FROZEN`, com mock e teste disponíveis.
+- Alterações incompatíveis possuem versionamento, migração, ordem e fallback.
+- O orçamento do evento reserva tempo para os checkpoints e recuperação.
 
 Classifique como `PLAN READY` somente se todos os itens aplicáveis forem atendidos. Caso contrário, use `PLAN BLOCKED` e liste lacunas, impacto, owner da decisão e próxima ação.
 
 ## Integração de código
 
 - Branch-base e diff foram identificados.
+- Dirty state e alterações não relacionadas foram preservados.
 - O contrato implementado corresponde ao ID e à versão registrados.
 - Consumidores continuam compatíveis ou foram atualizados.
 - Migrations têm ordem, rollback ou estratégia segura para o evento.
@@ -28,6 +32,8 @@ Classifique como `PLAN READY` somente se todos os itens aplicáveis forem atendi
 - Não há código temporário, mock ou feature flag ativado por engano.
 - O handoff prometido existe, está localizável e pode ser validado pelo consumidor.
 - O fluxo integrado possui smoke test executado, ou limitação explicitamente bloqueante.
+- O resultado pós-merge foi definido antes da ação e inclui estratégia de recuperação.
+- O plano geral, planos individuais e Linear não divergem sobre tarefa, owner ou dependências.
 
 ## Classificação
 

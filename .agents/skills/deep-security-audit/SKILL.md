@@ -18,15 +18,16 @@ Avalie segurança com profundidade proporcional ao risco e produza conclusões r
 
 ## Fluxo obrigatório
 
-1. **Defina escopo e assurance target.** Registre commit, componentes, ambientes, dados, identidades, integrações, limitações e o que ficou fora da auditoria.
-2. **Reconstrua o sistema.** Leia `AGENTS.md`, planos, contratos, manifests, configuração, entrypoints, rotas, schemas, migrations, CI/CD e caminhos de execução relevantes.
-3. **Modele ameaças.** Leia [threat-model.md](references/threat-model.md). Mapeie ativos, atores, trust boundaries, data flows, privilégios, abuse cases e controles esperados.
-4. **Faça triagem automatizada segura.** Use scanners já disponíveis e apropriados para secrets, dependências, SAST, containers e IaC. Registre comando, versão, cobertura e falhas. Não use um scanner irrelevante apenas para aumentar volume.
-5. **Revise manualmente por fluxo.** Rastreie entrada não confiável até ações sensíveis e valide controles em servidor. Cubra o checklist aplicável de [audit-checklist.md](references/audit-checklist.md).
-6. **Valide em runtime quando possível.** Em ambiente local ou autorizado, teste autenticação, autorização, isolamento, validação, estados de erro e controles de abuso de modo não destrutivo. Para interfaces, use o navegador e inspecione console/rede sem expor dados.
-7. **Confirme achados.** Elimine falso positivo, determine precondições, alcance, impacto, exploitability e confiança. Uma suspeita sem evidência deve permanecer hipótese.
-8. **Produza relatório.** Use [finding-format.md](references/finding-format.md) em `docs/security/security-audit.md`. Inclua threat model, achados, pontos positivos, lacunas, risco residual e plano de remediação ordenado.
-9. **Reteste quando solicitado ou após correções.** Verifique o cenário original, testes de regressão e efeitos colaterais. Não feche achado somente porque o código mudou.
+1. **Defina escopo e assurance target.** Registre commit, componentes, ambientes, dados, identidades, integrações, limitações, autorização e o que ficou fora.
+2. **Planeje a cobertura:** siga [audit-procedure.md](references/audit-procedure.md). Crie matriz componente × ameaça × método × evidência; priorize blast radius e trust boundaries.
+3. **Reconstrua o sistema.** Leia `AGENTS.md`, planos, contratos, manifests, configuração, entrypoints, rotas, schemas, migrations, CI/CD e caminhos reais.
+4. **Modele ameaças.** Leia [threat-model.md](references/threat-model.md). Mapeie ativos, atores, trust boundaries, data flows, privilégios, abuse cases e controles esperados.
+5. **Faça triagem automatizada segura.** Use scanners já disponíveis e apropriados para secrets, dependências, SAST, containers e IaC. Registre comando, versão, cobertura e falhas. Não use volume de alertas como profundidade.
+6. **Revise manualmente por fluxo.** Rastreie entrada não confiável até ação/dado sensível, valide controle server-side e cubra [audit-checklist.md](references/audit-checklist.md).
+7. **Valide em runtime quando possível.** Em local/sandbox autorizado, teste autenticação, autorização, isolamento, validação, erros e abuso de modo não destrutivo. Para interfaces, opere navegador e inspecione console/rede sem expor dados.
+8. **Confirme achados.** Reproduza de forma mínima, elimine falso positivo e determine precondições, alcance, impacto, exploitability e confiança. Suspeita sem evidência permanece hipótese.
+9. **Produza relatório.** Use [finding-format.md](references/finding-format.md) em `docs/security/security-audit.md`, com coverage matrix, threat model, achados, controles positivos, lacunas, risco residual e plano ordenado.
+10. **Remedeie/reteste somente quando autorizado.** Siga [remediation-and-retest.md](references/remediation-and-retest.md); confirme cenário original e regressões, não apenas mudança textual.
 
 ## Profundidade adaptativa
 

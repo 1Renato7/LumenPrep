@@ -32,6 +32,8 @@ Skills automáticas possuem `allow_implicit_invocation: true` e descrições com
 
 Antes dos planos individuais, chama o guardian. Se houver fronteira ambígua, o plano recebe `PLAN BLOCKED`.
 
+O planner possui protocolos separados para descoberta, formatos e quality gates. Os planos individuais incluem context pack, ownership/limites, contratos produzidos/consumidos, setup verificável, microtarefas completas, Git, testes, handoffs, stop conditions e checklists de início/entrega/merge.
+
 Exemplo: `Planeje o sistema completo a partir deste enunciado e destas quatro propostas.`
 
 ## `integration-contract-guardian`
@@ -46,13 +48,15 @@ No modo de integração, compara o diff real com os contratos planejados, recons
 
 Exemplo: `Analise se esta branch está pronta para integrar com main.`
 
+O guardian também possui modo `CHANGE CONTROL`, obrigatório quando um contrato já distribuído muda. Ele define compatibilidade, versionamento, migração, adapters, ordem, fallback e sincronização de todos os consumidores.
+
 ## `linear-microtask-planner`
 
 **Serve para:** converter o plano aprovado em trabalho pequeno, ordenado e rastreável.
 
-Cria um parent issue por objetivo global e child issues de aproximadamente 20–60 minutos, cada uma com responsável, dependências reais, critérios, testes, evidência e IDs dos contratos envolvidos.
+Executa descoberta real de teams/projetos/ciclos/usuários/labels/estados, confirma o mapeamento das pessoas, cria um parent issue por objetivo global e child issues de aproximadamente 20–60 minutos. Cada issue recebe contexto, incluído/fora de escopo, passos sugeridos, contratos, dependências reais, critérios, testes, evidência, handoff e Definition of Done.
 
-Preparar uma prévia pode acontecer automaticamente. Criar ou alterar itens no Linear exige pedido ou autorização explícita.
+Preparar uma prévia pode acontecer automaticamente. Criar ou alterar itens no Linear exige pedido ou autorização explícita. A criação ocorre em duas passagens, possui recuperação de falha parcial, backlinks nos planos e sincronização idempotente por `TASK-*`.
 
 Exemplo: `Prepare as microtarefas no Linear para os quatro planos aprovados e mostre a prévia.`
 
@@ -61,6 +65,8 @@ Exemplo: `Prepare as microtarefas no Linear para os quatro planos aprovados e mo
 **Serve para:** encontrar defeitos de implementação antes dos testes finais e do merge.
 
 Prioriza bugs, regressões, estados inválidos, concorrência, tratamento de erros, exposição de dados, quebra de contratos e testes ausentes. Não se concentra em preferências estéticas cobertas por formatter ou lint.
+
+A revisão reconstrói intenção, callers/consumers e estados, registra cobertura/limitações e usa achados `P0–P3` com cenário, evidência, impacto e correção segura.
 
 **Resultados:** `PASS`, `PASS WITH NOTES` ou `CHANGES REQUIRED`.
 
@@ -72,6 +78,8 @@ Exemplo: `Revise o diff desta microtarefa antes de eu integrar.`
 
 Executa o fluxo no navegador local, testa interação, loading, vazio, erro, navegação, persistência, desktop/mobile, console e rede. Não substitui testes unitários ou de API.
 
+Cada critério vira cenário reproduzível com precondição, ações, esperado/observado, console, rede e evidência. Casos não executados ficam `NOT RUN`, nunca aprovação implícita.
+
 **Resultados:** `PASS`, `PASS WITH LIMITATIONS` ou `FAIL` com matriz de evidências.
 
 Exemplo: `Valide no navegador local os critérios desta tarefa.`
@@ -82,6 +90,8 @@ Exemplo: `Valide no navegador local os critérios desta tarefa.`
 
 Define corpus, parsing, chunking, metadados, permissões, baseline de recuperação, citações, fallback e avaliações. Mede recuperação e geração separadamente e trata documentos como dados não confiáveis.
 
+Também cobre lifecycle documental, versionamento de embeddings/índice, deleção, cache, observabilidade, regressão, custos, isolamento cross-tenant e runbook de falha.
+
 Exemplo: `Projete o RAG e um conjunto pequeno de avaliações antes da implementação.`
 
 ## `agent-payment-safety`
@@ -89,6 +99,8 @@ Exemplo: `Projete o RAG e um conjunto pequeno de avaliações antes da implement
 **Serve para:** manter decisões financeiras determinísticas, auditáveis e resistentes a duplicação ou falhas parciais.
 
 Impõe valores inteiros, moeda explícita, idempotência, autorização no backend, estados, ledger, reconciliação, validação de webhook, sandbox e confirmação humana quando necessária. Texto de modelo ou RAG nunca concede autoridade financeira.
+
+Inclui máquina de estados, distinção entre falha conhecida e resultado desconhecido, provider boundary, transições auditáveis e matriz de testes para concorrência, duplicação, timeout, webhook, partial failure e indisponibilidade.
 
 Exemplo: `Revise o contrato do agente de pagamentos e seus estados de falha.`
 
@@ -101,6 +113,8 @@ Exemplo: `Revise o contrato do agente de pagamentos e seus estados de falha.`
 A auditoria cobre threat modeling, autenticação, autorização, tenants, entradas, injections, XSS, CSRF, SSRF, uploads, dados, secrets, criptografia, APIs, infraestrutura, CI/CD, supply chain, agentes, LLM, RAG, pagamentos, lógica de negócio, logs e resposta a incidentes conforme aplicabilidade.
 
 Por padrão, é read-only e não destrutiva. Produz `docs/security/security-audit.md`, achados `SEC-*`, severidade, evidência sanitizada, correção recomendada e teste de regressão. Não certifica que o sistema está absolutamente seguro.
+
+A auditoria cria uma coverage matrix, define stop conditions, separa scanner de confirmação manual e só marca `VERIFIED FIXED` após repetir o cenário original e validar regressões.
 
 Exemplo: `Use $deep-security-audit para auditar o commit atual antes da apresentação.`
 
@@ -144,3 +158,16 @@ pedido explícito
 - Integre contratos, tipos e mocks cedo.
 - Não deixe revisão, navegador ou integração para os minutos finais.
 - Quando uma skill retornar bloqueio, resolva a causa; não contorne o gate removendo contexto.
+
+## Referências profundas
+
+| Skill | Referências principais |
+| --- | --- |
+| Planner | descoberta, formatos do plano, quality gates |
+| Guardian | catálogo de contratos, checklist, protocolo de merge |
+| Linear | descoberta/mapeamento, schema de issue, sincronização/idempotência |
+| Review | checklist comportamental, formato de achados |
+| Browser | protocolo de execução, matriz de aceitação |
+| RAG | arquitetura, avaliação, operação/segurança |
+| Payments | invariantes, lifecycle, matriz de falhas |
+| Security | threat model, checklist, procedimento, achados, remediação/reteste |

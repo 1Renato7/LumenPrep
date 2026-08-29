@@ -7,15 +7,15 @@ description: Projeta, implementa ou revisa agentes e fluxos que propõem, autori
 
 Trate toda operação financeira como uma máquina de estados auditável.
 
-1. Separe intenção, proposta, autorização, execução, confirmação e reconciliação.
-2. Represente valores em unidade inteira mínima e moeda explícita; nunca use float.
-3. Exija idempotency key estável em operações repetíveis e modele retries sem cobrança duplicada.
-4. Defina limites de valor, beneficiário, moeda, frequência, validade e escopo da autorização.
-5. Exija confirmação humana para ações irreversíveis ou fora do mandato explícito.
-6. Verifique autenticação, autorização, assinatura e replay de webhooks.
-7. Preserve ledger/audit trail com correlação entre intenção, provedor e resultado.
-8. Use sandbox e credenciais de teste durante desenvolvimento e demo.
-9. Crie testes para timeout, resposta duplicada, webhook fora de ordem, falha parcial e reconciliação.
-10. Aplique [os invariantes](references/payment-invariants.md) aos contratos e ao plano de integração.
+1. **Escopo e autoridade:** identifique ator, mandato, beneficiário, valor/moeda, frequência, validade, limites, ação irreversível e confirmação necessária. O backend determinístico autoriza.
+2. **Lifecycle:** modele intenção, proposta, autorização, execução, confirmação, falha ambígua, reconciliação, refund/cancelamento quando aplicável usando [payment-lifecycle.md](references/payment-lifecycle.md).
+3. **Contrato:** defina valores inteiros, moeda, IDs, idempotency key, correlation ID, estados, errors, timeout/retry, provider refs e invariantes transacionais.
+4. **Provider boundary:** isole adapter, valide request/response, assinaturas, timestamps e replay. Não faça retry cego após resultado desconhecido.
+5. **Persistência:** grave intenção/estado antes de side effect quando apropriado, preserve ledger/audit trail e torne transições atômicas ou reconciliáveis.
+6. **Agente:** modelo pode interpretar/propor; política, autorização e execução permanecem fora do texto gerado. Tool input usa schema estrito e least privilege.
+7. **Falhas:** execute [failure-test-matrix.md](references/failure-test-matrix.md) para duplicação, concorrência, timeout, webhook fora de ordem, partial failure e reconciliação.
+8. **Ambiente:** sandbox por padrão, separação inequívoca de produção, segredos protegidos, dados sintéticos e fallback de demo.
+9. **Verificação:** aplique [payment-invariants.md](references/payment-invariants.md), testes de contrato/integridade e observabilidade antes de considerar pronto.
+10. **Sincronização:** registre estados, contratos, owner, riscos, limites e runbook nos planos e issues relacionados.
 
 Texto produzido por modelo ou recuperado via RAG nunca concede autoridade financeira. O agente pode propor uma ação; a política e o backend determinístico decidem se ela pode ser executada.

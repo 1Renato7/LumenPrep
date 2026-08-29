@@ -1,55 +1,131 @@
 # Formatos dos planos
 
-## Plano geral
+## Convenções
 
-Crie `docs/plans/system-plan.md` com:
+Use IDs estáveis: `CMP-*` componente, `DEC-*` decisão, `CTR-*` contrato, `DATA-*` dado, `RSK-*` risco, `SPK-*` spike, `OBJ-*` objetivo e `TASK-*` microtarefa. IDs não mudam quando o título muda. Marque caminhos inexistentes como `proposto`.
 
-1. versão, data, estado e participantes;
-2. problema, usuário, resultado esperado e critério de vitória;
-3. fatos, hipóteses, dúvidas e não objetivos;
-4. roteiro do fluxo principal da demo;
-5. arquitetura com componentes identificados;
-6. decisões arquiteturais com motivação, alternativas descartadas e estado `DECIDED`, `ASSUMED` ou `OPEN`;
-7. modelo de dados, ownership dos dados, estados importantes e lifecycle;
-8. mapa de integração produzido pelo guardian;
-9. catálogo de contratos detalhado;
-10. matriz de ownership por componente, dado, arquivo compartilhado e contrato;
-11. mapa de colisão de arquivos, destacando hotspots e coordenador de mudança;
-12. quatro objetivos globais e suas microtarefas;
-13. grafo de dependências, caminho crítico e oportunidades de trabalho independente por mock;
-14. estratégia de branches, sequência de commits e ordem de merges;
-15. checkpoints de integração: contratos/esqueletos, primeira fatia ponta a ponta e integração final;
-16. estratégia de testes unitários, integração, contrato, revisão, smoke test e aceitação no navegador;
-17. observabilidade mínima para depurar integração: logs, IDs de correlação e erros visíveis;
-18. configuração compartilhada: comandos, env vars sem segredos, fixtures, seeds e serviços locais;
-19. riscos, spikes, decisões pendentes, owner, prazo e plano de contingência;
-20. roteiro de integração, ensaio da demo e estratégia de recuperação;
-21. quality gate com resultado `PLAN READY` ou `PLAN BLOCKED`;
-22. changelog do plano.
+## `docs/plans/system-plan.md`
 
-Cada contrato deve registrar: ID e versão, estado, produtor e consumidor, direção/protocolo, precondições, schema exato ou tipos, exemplo válido, resposta, estados, erros, timeout, retry, idempotência, autenticação/autorização, persistência, compatibilidade, mock e localização, teste de contrato, observabilidade, owner e checkpoint de integração. Use `não aplicável` com justificativa em vez de omitir silenciosamente.
+### 1. Controle do plano
 
-Cada microtarefa deve ter ID, responsável, objetivo observável, entradas, saída concreta, dependências, arquivos ou área provável, critérios de aceitação, testes, evidência esperada e estimativa curta.
+Versão, commit/base analisada, data, autores, participantes, estado, escopo, fontes e changelog com motivo/impacto.
 
-## Plano individual
+### 2. Problema e produto
 
-Crie `docs/plans/people/<nome-normalizado>.md` para cada participante com:
+Enunciado, usuário, job, dor, resultado, critérios de avaliação, critério de vitória, restrições, fatos, hipóteses, perguntas, não objetivos e glossário.
 
-1. versão do plano geral de origem;
-2. missão e resultado global da pessoa;
-3. resumo do sistema, fluxo da demo e explicação de onde sua parte se encaixa;
-4. fronteiras: o que possui, o que pode editar e o que não deve alterar sem coordenação;
-5. componentes, dados e arquivos sob ownership, incluindo hotspots coordenados por outra pessoa;
-6. contratos fornecidos e consumidos, usando os mesmos IDs e versões do plano geral, com exemplos necessários para implementação;
-7. dependências recebidas, mocks/fixtures disponíveis, localização desses recursos e entregas que desbloqueia;
-8. setup local: comandos, serviços, env vars sem valores secretos, seeds e verificações iniciais;
-9. microtarefas ordenadas com os mesmos IDs do plano geral, contexto, decisão esperada, critérios e evidência;
-10. sequência recomendada de branches e commits, evitando misturar contratos com implementação extensa;
-11. testes unitários, integração, contrato, revisão e cenários no navegador;
-12. handoff de cada entrega: artefato, consumidor, como validar e sinal de disponibilidade;
-13. pontos e horários relativos de sincronização com as outras três pessoas;
-14. checklist `ready to start`, `ready to hand off` e `ready to merge`;
-15. riscos, hipóteses, dúvidas, stop conditions e plano alternativo;
-16. contexto proibido de reinterpretar localmente: decisões reservadas ao plano geral.
+### 3. Demo e MVP
 
-O plano individual deve permitir que a pessoa comece, implemente, teste e faça handoff sem depender de explicação oral para qualquer decisão já conhecida. Ele não pode redefinir contratos. Em caso de divergência, o plano geral vence e a divergência bloqueia o merge até ser sincronizada.
+Roteiro passo a passo, dados de demonstração, resultado esperado por passo, componentes envolvidos, evidência visual, dependência externa e fallback. Identifique a menor fatia vertical e melhorias opcionais.
+
+### 4. Arquitetura
+
+Contexto, diagrama textual ou Mermaid quando útil, componentes com IDs, responsabilidade, tecnologia, owner, inputs/outputs, estado, dependências, health signal e condição de falha. Inclua data model, lifecycle, identidades, permissões, observabilidade, configuração, deploy e ambientes.
+
+### 5. Decisões
+
+Para cada `DEC-*`: estado `DECIDED|ASSUMED|OPEN`, contexto, opções, escolha, razão, consequência, owner, prazo e fallback.
+
+### 6. Catálogo de contratos
+
+Para cada `CTR-*`: ID/versão/estado, produtor, consumidores, direção/protocolo, precondições, schema/tipos exatos, exemplos, resposta, estados, erros, timeout, retry, idempotência, autenticação/autorização, persistência, compatibilidade, mock/localização, teste de contrato, observabilidade, owner e checkpoint. Use `não aplicável` com justificativa.
+
+### 7. Ownership e colisões
+
+Matriz de componentes, dados, contratos, diretórios/arquivos e configurações com owner primário, revisores, consumidores e regra de mudança. Liste hotspots como lockfile, schema, router, env example, migrations e entrypoints.
+
+### 8. Objetivos e microtarefas
+
+Para cada `OBJ-*`: missão, owner, resultado, componentes, critérios globais, orçamento de tempo, dependências e plano alternativo.
+
+Para cada `TASK-*` inclua:
+
+- título imperativo e owner único;
+- contexto e motivo;
+- objetivo observável;
+- incluído e fora de escopo;
+- inputs, output/artefato e localização provável;
+- componentes, contratos e decisões relacionados;
+- `blocked by` e `blocks`;
+- passos sugeridos, sem impor implementação desnecessária;
+- critérios binários de aceitação;
+- testes unitários, integração, contrato e navegador;
+- evidência de conclusão e handoff;
+- estimativa curta, prioridade, risco e fallback;
+- status e link do Linear quando criado.
+
+### 9. Dependências e tempo
+
+Grafo, caminho crítico, tarefas paralelas, mocks, milestones relativos, checkpoints, orçamento de implementação/integração/correção/ensaio e gatilhos de corte de escopo.
+
+### 10. Git e integração
+
+Branch base, padrão de nomes, branches iniciais, sequência de commits, ordem de merges, preflight por merge, testes esperados, rollback/revert, resolução de hotspots e responsáveis por checkpoint.
+
+### 11. Qualidade, segurança e operação
+
+Estratégia de lint/types/build/testes, revisão, navegador, smoke/E2E, dados/fixtures, logs/correlation IDs, riscos de segurança conhecidos, segredos/env vars sem valores e Definition of Done.
+
+### 12. Riscos e contingências
+
+Para cada `RSK-*`: probabilidade, impacto, sinal precoce, mitigação, owner, deadline, fallback e decisão de corte. Para `SPK-*`, inclua pergunta, timebox, saída e decisão que desbloqueia.
+
+### 13. Quality gate
+
+Resultado `PLAN READY|PLAN BLOCKED`, checklist, lacunas, perguntas humanas, simulação dos quatro primeiros blocos, simulação de merges e ensaio mental da demo.
+
+## `docs/plans/people/<nome-normalizado>.md`
+
+Cada arquivo é uma projeção autocontida da mesma versão do plano geral.
+
+### 1. Cabeçalho e missão
+
+Pessoa, papel provisório/confirmado, versão do plano geral, objetivo `OBJ-*`, resultado, orçamento de tempo e Definition of Done pessoal.
+
+### 2. Context pack
+
+Explique problema, usuário, MVP, roteiro da demo, arquitetura resumida e exatamente onde esta parte aparece. Inclua glossário e decisões que mudam o trabalho dessa pessoa.
+
+### 3. Ownership e limites
+
+Liste componentes, dados, contratos, diretórios e arquivos próprios; áreas somente leitura; hotspots com coordenador; ações permitidas; mudanças que exigem sincronização; explicitamente fora de escopo.
+
+### 4. Interfaces
+
+Separe contratos produzidos e consumidos. Repita IDs, versões, schemas, exemplos e erros necessários, upstream/downstream, mock/fixture/localização, teste e handoff. Não redefina nada.
+
+### 5. Setup verificável
+
+Pré-requisitos, comandos exatos conhecidos, serviços, env vars sem valores, seeds/fixtures, como confirmar saúde e limitações. Marque comandos propostos quando o projeto ainda não existir.
+
+### 6. Plano de execução
+
+Microtarefas na ordem recomendada usando o template do plano geral. Para cada uma, explique contexto local, arquivos prováveis, decisão permitida, teste/evidência, commit esperado e condição de parada.
+
+### 7. Git e commits
+
+Branch/issue por tarefa, base, sequência de commits, arquivos que não devem ser misturados, quando sincronizar `main`, como lidar com mudança de contrato e o que compõe o PR/handoff.
+
+### 8. Testes e evidência
+
+Comandos, casos felizes, erros e limites, contratos, navegador quando aplicável, fixtures e artefato de evidência. Indique o que é responsabilidade própria e o que será verificado no checkpoint integrado.
+
+### 9. Handoffs e sincronizações
+
+Para cada entrega: destinatário, artefato, interface, como localizar, como validar, sinal de disponibilidade e prazo relativo. Liste reuniões/checkpoints apenas quando houver decisão conjunta real.
+
+### 10. Checklists
+
+`READY TO START`: contexto, dependências, mock e setup disponíveis.
+
+`READY TO HAND OFF`: critérios, testes e evidências completos, contrato sincronizado e consumidor avisado.
+
+`READY TO MERGE`: revisão, browser quando aplicável, guardian, base atualizada e nenhum contrato divergente.
+
+### 11. Riscos e autonomia
+
+Hipóteses, dúvidas, plano alternativo, stop conditions e decisões que a pessoa pode tomar sozinha versus decisões reservadas ao plano geral.
+
+## Regra de consistência
+
+O geral vence em qualquer divergência. Uma diferença de ID, versão, schema, dependência, owner ou ordem de integração bloqueia execução/merge até sincronização. Preserve progresso e evidências ao regenerar planos individuais.

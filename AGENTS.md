@@ -3,7 +3,7 @@
 ## Idioma e fonte de verdade
 
 - Escreva planos, issues e relatórios em português, preservando nomes técnicos em inglês quando forem termos do código.
-- Tudo que for do código é em inglês, esse hackathon tem entregável em inglês
+- Escreva código, símbolos, schemas, nomes de arquivos técnicos e artefatos entregáveis em inglês. Planos e coordenação podem permanecer em português, salvo exigência do evento.
 - Trate `docs/plans/system-plan.md` como fonte de verdade arquitetural.
 - Trate `docs/plans/people/*.md` como projeções individuais do plano geral, nunca como fontes independentes.
 - Registre contratos compartilhados com identificadores estáveis, por exemplo `CTR-API-001`, e repita esses identificadores nos planos das pessoas envolvidas.
@@ -42,9 +42,22 @@
 - `main` deve permanecer executável. Integre contratos e esqueletos cedo; não reserve a integração para o final do evento.
 - Planeje checkpoints de integração durante o evento: contratos/esqueletos, primeira fatia ponta a ponta e integração final.
 - Alterações em contrato começam no plano geral e depois são propagadas aos planos individuais e às issues impactadas.
+- Todo plano novo deve seguir integralmente os formatos e quality gates de `$hackathon-system-planner`; listas resumidas não substituem plano geral ou individual.
+- Antes de publicar microtarefas, confirme usuários reais, destino, preview e carga. Crie relações do Linear em uma segunda passagem e releia o estado final.
+- Em falha parcial de escrita externa, pare, inventarie o que aconteceu e peça direção; não repita cegamente.
+- Use IDs estáveis para correlacionar plano, planos individuais, Linear, contratos, commits e evidências.
+
+## Change control
+
+- Mudança de arquitetura, schema, contrato, owner, dependência ou ordem de integração exige atualização do plano geral primeiro.
+- Classifique impacto, incremente versão quando aplicável e sincronize produtores, consumidores, mocks, testes, planos individuais e Linear.
+- Preserve progresso e evidências ao replanejar; nunca regenere arquivos cegamente.
+- Uma divergência conhecida entre plano, código e Linear bloqueia merge até resolução ou decisão explícita.
 
 ## Definition of Done
 
 Uma tarefa só está concluída quando seus critérios de aceitação foram atendidos, os testes relevantes passaram, a revisão não possui achados bloqueantes, o comportamento observável foi validado localmente e os contratos/documentos afetados estão sincronizados. Se alguma validação não puder ser executada, registre exatamente o que falta e por quê.
 
 `$deep-security-audit` não faz parte automática da Definition of Done. Quando o usuário a solicitar, conduza a auditoria de forma defensiva e read-only por padrão; correções exigem um pedido separado ou autorização explícita para implementar os achados.
+
+Ao criar ou atualizar uma skill, execute o validador oficial em todas as skills afetadas e confirme que referências citadas existem. Nunca altere a política explicit-only de `$deep-security-audit` sem pedido explícito.

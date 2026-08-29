@@ -12,6 +12,8 @@ Este repositório contém o sistema de trabalho do time para planejar, dividir, 
 
 As skills do projeto ficam em [`.agents/skills`](.agents/skills). Consulte [o guia completo das skills](docs/SKILLS.md) para saber quando cada uma é executada, o que recebe e o que entrega.
 
+As skills usam progressive disclosure: cada `SKILL.md` contém o fluxo central e carrega referências profundas somente quando necessárias. Isso mantém o contexto utilizável sem reduzir a precisão dos procedimentos.
+
 ## Fluxo principal
 
 ```text
@@ -28,6 +30,8 @@ Descoberta
 ```
 
 O plano geral em `docs/plans/system-plan.md` será a fonte de verdade arquitetural quando for gerado. Os planos em `docs/plans/people/` serão projeções individuais e não poderão redefinir contratos.
+
+Um plano só é distribuído após `PLAN READY`. Os quality gates verificam problema, arquitetura, contratos, decomposição, autonomia individual, consistência entre os cinco planos, simulação de execução paralela, sequência de merges e ensaio da demo.
 
 ## Regra de segurança
 

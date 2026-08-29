@@ -5,17 +5,17 @@ description: Revisa o diff de uma tarefa antes da aceitação funcional, prioriz
 
 # Code Review Gate
 
-Faça uma revisão orientada a risco e evidências.
+Faça revisão orientada a risco, comportamento e evidência. Revisar não autoriza corrigir; implemente correções quando a tarefa incluir isso ou o usuário pedir.
 
-1. Identifique escopo, critérios da microtarefa, branch-base e diff exato.
-2. Leia o plano geral, o plano individual e os contratos relacionados quando existirem.
-3. Inspecione chamadas e consumidores suficientes para avaliar comportamento, não apenas linhas alteradas.
-4. Procure bugs funcionais, regressões, estados inválidos, concorrência, tratamento de erro, exposição de dados, quebra de contrato e cobertura ausente.
-5. Execute ou recomende testes focados quando o achado depender de confirmação.
-6. Relate achados por severidade, com arquivo/linha, cenário de falha e correção segura. Não liste preferências sem impacto.
-7. Classifique o gate:
+1. **Escopo:** identifique microtarefa, critérios, plano/contratos, branch-base, merge-base, commits, diff e dirty state. Não inclua alterações alheias.
+2. **Intenção:** reconstrua comportamento esperado, invariantes e consumidores. Leia código suficiente ao redor, callers, callees, tipos, testes e configurações.
+3. **Análise:** use [review-checklist.md](references/review-checklist.md). Rastreie estados e caminhos de erro; não limite revisão às linhas vermelhas/verdes.
+4. **Validação:** execute testes focados e checagens existentes quando necessários para confirmar um achado. Diferencie falha nova, preexistente e limitação ambiental.
+5. **Achados:** use [finding-format.md](references/finding-format.md). Inclua somente problemas acionáveis com cenário concreto; evite estilo/lint sem impacto.
+6. **Cobertura:** informe arquivos/fluxos analisados, testes executados, áreas fora do escopo e risco residual.
+7. **Gate:** classifique:
    - `PASS`: nenhum achado bloqueante;
    - `PASS WITH NOTES`: apenas riscos não bloqueantes;
    - `CHANGES REQUIRED`: existe falha que impede aceitação ou integração.
 
-Depois de correções, revise o novo diff e os testes afetados. O gate não substitui `$browser-acceptance-gate` nem `$integration-contract-guardian`.
+Depois de correções, revise o novo diff, cenário original e testes afetados. Não feche achado só porque a linha mudou. O gate não substitui `$browser-acceptance-gate`, `$integration-contract-guardian` nem a auditoria explícita `$deep-security-audit`.

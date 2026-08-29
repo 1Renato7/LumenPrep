@@ -7,13 +7,13 @@ description: Valida no navegador real do Codex o comportamento observável de um
 
 Valide a aplicação em execução, não apenas o código.
 
-1. Descubra o comando oficial e inicie ou reutilize o servidor local sem matar processos não relacionados.
-2. Leia critérios de aceitação e identifique o fluxo mínimo afetado.
-3. Use o navegador local disponível no Codex. Teste o happy path e os estados relevantes de loading, vazio, validação e erro.
-4. Clique e digite como usuário real; confirme navegação, persistência, feedback, prevenção de ações duplicadas e resultado final.
-5. Inspecione console e chamadas de rede relevantes. Diferencie falhas da aplicação de limitações do ambiente.
-6. Teste pelo menos um viewport desktop e um mobile quando a interface for responsiva.
-7. Registre passos, resultado esperado, resultado observado e evidências. Use [a matriz](references/acceptance-matrix.md).
-8. Classifique como `PASS`, `PASS WITH LIMITATIONS` ou `FAIL`.
+1. **Preparação:** siga [test-protocol.md](references/test-protocol.md). Descubra comandos oficiais, dependências, dados/conta de teste, URL e critérios. Inicie ou reutilize servidor sem matar processos alheios.
+2. **Plano de cenários:** mapeie cada critério para cenário, precondição, ações, resultado, console/rede e evidência. Priorize fluxo alterado e dependências downstream.
+3. **Execução real:** use o navegador local disponível no Codex, clique/digite como usuário e não simule sucesso por leitura de código.
+4. **Estados:** cubra happy path, loading, vazio, validação, erro, retry, ação duplicada, refresh/persistência e autorização quando aplicáveis.
+5. **Diagnóstico:** inspecione console e rede relevante, correlacione falha com request/response e diferencie bug, dado incorreto, servidor e limitação ambiental.
+6. **Experiência:** valide feedback, navegação, foco/teclado básico, responsividade desktop/mobile e acessibilidade observável proporcional à mudança.
+7. **Evidência:** preencha [acceptance-matrix.md](references/acceptance-matrix.md) com passos reproduzíveis; screenshots somente quando agregarem prova visual.
+8. **Gate:** `PASS`, `PASS WITH LIMITATIONS` ou `FAIL`. Qualquer critério crítico não testado vira limitação bloqueante, não aprovação silenciosa.
 
 Se não existir interface para uma mudança backend, valide API ou integração com a ferramenta apropriada e execute no navegador todo fluxo consumidor disponível. Nunca afirme que o navegador foi testado se não foi operado.

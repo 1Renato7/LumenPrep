@@ -1,19 +1,32 @@
 # Matriz de aceitação
 
-Registre uma linha por cenário:
+## Contexto
 
-| Cenário | Pré-condição | Ações | Esperado | Observado | Console/rede | Estado |
-| --- | --- | --- | --- | --- | --- | --- |
+Registre tarefa/commit, data, ambiente/URL, viewport, conta/role sanitizada, dados/fixture, servidor/comando e dependências externas.
 
-Cobertura mínima proporcional à mudança:
+## Cenários
 
-- fluxo principal;
-- loading e ação repetida;
-- dados vazios ou entrada inválida;
-- falha de dependência relevante;
-- navegação ou refresh quando houver estado persistido;
-- desktop e mobile para UI responsiva;
+| ID | Critério | Precondição | Ações exatas | Esperado | Observado | Console | Rede | Evidência | Estado |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+Estados: `PASS`, `FAIL`, `BLOCKED`, `NOT RUN`. Nunca converta `NOT RUN` em `PASS`.
+
+Cobertura proporcional:
+
+- fluxo principal e resultado final;
+- loading, vazio, entrada inválida e falha de dependência;
+- retry, ação repetida e prevenção de duplicação;
+- navegação, back/forward e refresh/persistência;
+- role sem permissão quando aplicável;
+- desktop e mobile para interface responsiva;
+- foco/teclado, labels e feedback básico;
 - ausência de erro inesperado no console;
-- status e payload essenciais das requisições afetadas.
+- status, timing e payload essenciais das requests afetadas.
 
-Inclua limitações ambientais e passos exatos para reprodução de qualquer falha.
+## Falha
+
+Para cada falha: ID, severidade, primeiro passo divergente, passos mínimos, evidência, request/erro correlato, frequência e suspeita sem apresentá-la como causa confirmada.
+
+## Resultado
+
+Informe critérios cobertos/não cobertos, bugs, limitações, processos deixados ativos e gate `PASS|PASS WITH LIMITATIONS|FAIL`.
