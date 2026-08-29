@@ -2495,6 +2495,63 @@ Necessidade de recuperar histórico local exclusivo da raiz pai ou falha do repo
 
 - **2026-08-29T18:10:00-03:00:** a primeira movimentação encontrou atributos ocultos/somente leitura e deixou o Git pai parcialmente deslocado. O backup foi validado com `HEAD=1b39bdd`, igual a `LumenPrep/`; os arquivos de controle foram restaurados apenas para recuperar o estado, e o `.git` residual do pai foi removido depois dessa confirmação. PASS: `Projeto/.git` não existe, o backup datado existe e `git -C LumenPrep status` continua saudável. Para reverter, restaure o backup ao nome `.git` na pasta pai.
 
+### FL-20260829-RENATO-005 — Reclassificar o stream histórico validado como harness interno do plano transaction-first
+
+- **Timestamp:** 2026-08-29T19:54:56-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Codex como recorder; plano 2.0 publicado por André
+- **Categoria:** architecture | data | contract | integration
+- **Escopo:** `LUM2-44` concluída, `renato/tarefa44@602ae9d`, `CMP-DATA-001`, `CMP-HARNESS-001`, `TASK-DATA-009 / LUM2-62`, `CTR-TXN-001 v1`, `CTR-TXL-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.0.1; `docs/plans/people/renato.md`; `FL-20260829-TEAM-015`; `FL-20260829-TEAM-017`
+- **Supersedes / superseded by:** não altera as decisões públicas `DEC-015..017`; substitui a classificação local anterior de servidor como fronteira de produto
+
+#### Contexto e pergunta
+
+A branch `renato/tarefa44` implementou e validou geração histórica de 90 dias e publicação/consumo por servidor local. Depois disso, a `main` publicou o plano 2.0, que torna batches de `TransactionInput` a única entrada pública e deixa `CTR-TXN/TXL/API v3` como especificação congelada, porém ainda não implementada. Era necessário decidir se a documentação da tarefa 44 substituiria esses contratos ou seria preservada como evidência reutilizável.
+
+#### Decisão
+
+Preservar a geração determinística, a sazonalidade, o caso de baixa amostra e a separação producer/consumer como harness interno. Não publicar o endpoint/fila local da branch como API pública e não alterar `CTR-TXN/TXL/API v3`. `TASK-DATA-009 / LUM2-62` adapta esse harness para a batch API comum e o lifecycle durável antes de integração funcional.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Decisão |
+| --- | --- | --- | --- | --- |
+| Promover o endpoint local anterior a API pública | entrega rápida de stream | viola batch/idempotência/lifecycle v3 e duplicaria a fronteira | FACT: plano 2.0 declara API v3 pendente | rejeitada |
+| Descartar a implementação da tarefa 44 | elimina diferença documental | perde testes e uma base determinística já validada | TEST: 51 testes e smoke local passaram | rejeitada |
+| Reclassificar como harness e adaptar por LUM2-62 | preserva evidência sem quebrar o plano público | exige trabalho de adaptação posterior | FACT: DEC-017 preserva gerador como adapter | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `renato/tarefa44@602ae9d` foi publicada e contém gerador histórico, servidor local, listener e testes.
+- **TEST:** 51 testes passaram e o smoke local confirmou publicação `202` seguida de listener cursor/backlog zero na branch.
+- **ASSUMPTION:** a lógica determinística pode ser reutilizada sem preservar o transporte local; a validação cabe a `LUM2-62`.
+- **UNKNOWN:** o adapter final para `CTR-TXN/TXL` dependerá das implementações de `LUM2-58/59`.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** continuidade técnica e evidência reprodutível para tráfego de fundo.
+- **Abrimos mão de:** integrar imediatamente o servidor/fila local ao produto público.
+- **Risco residual:** portar o harness pode introduzir divergência de contratos; contract tests de batch e lifecycle são o gate.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** nenhum contrato v3 é rebaixado ou substituído; a mudança fica registrada no plano geral e no plano de Renato.
+- **Pessoas/branches:** Rogério recebe o adapter puro por `LUM2-61`; Renato adapta tráfego por `LUM2-62`; André consome somente a API v3.
+- **Linear:** nenhum item concluído é reaberto; o trabalho de adaptação continua em `LUM2-61/62` já sincronizadas.
+- **Testes:** reprodução, sazonalidade, baixa amostra e producer/consumer informam os novos contract tests, mas não provam a API pública até a integração.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o harness envia carga sintética somente pela batch API e as métricas mudam apenas após o worker processar o batch.
+- **Resultado observado:** NOT RUN para a API v3; implementação correspondente ainda está pendente no plano 2.0.
+- **Fallback:** usar fixtures/samples determinísticos de `LUM2-62` enquanto o tráfego de fundo não estiver conectado.
+
+#### Gatilhos de revisão
+
+Mudança nos schemas `CTR-TXN/TXL`, falha de equivalência entre harness e batch API, ou requisito de transporte persistente exige novo change control.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._

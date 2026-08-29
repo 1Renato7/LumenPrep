@@ -28,7 +28,7 @@ Também fornece geração rápida de `TransactionInput` a partir de quantidade +
 
 ## Trabalho preservado
 
-Histórico de 90 dias, distributions, stream, scenarios, baseline, detector e RCA continuam válidos. Scenario schemas/fixtures v2 permanecem para teste interno e nunca reaparecem como formulário público.
+Histórico de 90 dias, distributions, stream, scenarios, baseline, detector e RCA continuam válidos. A branch publicada `renato/tarefa44@602ae9d` prova geração histórica reprodutível com sazonalidade horária/semanal, tendência, baixa amostra e publicação/consumo separados por servidor local; seus 51 testes e smoke de navegador são evidência para o harness, não para a API pública v3. Scenario schemas/fixtures v2 permanecem para teste interno e nunca reaparecem como formulário público.
 
 ## Novas microtarefas
 
@@ -44,6 +44,7 @@ Histórico de 90 dias, distributions, stream, scenarios, baseline, detector e RC
 
 - Gerar 1..100 inputs válidos por quantidade/seed para `POST /transaction-samples`.
 - Fazer o harness de tráfego de fundo submeter `CTR-TXN-001` pela mesma batch API, em vez de escrever direto no banco.
+- Reaproveitar somente o gerador determinístico e seus testes de `renato/tarefa44`; substituir o endpoint/fila local anterior pelo contrato batch de `CTR-TXN-001` e pelo lifecycle de `CTR-TXL-001`.
 - Permitir defaults opcionais de merchant/country/currency sem hardcode no frontend.
 - **Teste:** seed reproduzível, todos os valores pertencem ao catálogo, sample não contém outcome; cenário interno altera distribuição só depois do processamento.
 - **Desbloqueia:** demo rápida e volume suficiente para analytics.

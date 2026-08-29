@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.0.0
+- **Versão:** 2.0.1
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
 - **Change class:** `MAJOR`; muda a entrada pública, a API, o frontend final e o deployment.
@@ -12,6 +12,7 @@
 - **Base implementada preservada:** runtime Python 3.14.4, Docker/Railway, ingestion, aggregation, detection, simulation, incidents, memory/explanation e API já presentes na `main` em 2026-08-29; a revisão 2.0 estende essa base.
 - **Escopo desta publicação na `main`:** documentação e coordenação apenas. Os drafts executáveis de `CTR-TXN/TXL/API v3`, fixtures e protótipo permanecem em `codex/andre-dashboard-pitch@cc24c7a` até suas microtarefas serem implementadas/revisadas.
 - **Changelog 2.0.0:** substitui o construtor público de efeitos por entrada de uma ou várias transações; métricas, outcomes, classificação e anomalias passam a ser derivados pelo backend; Streamlit vira protótipo/fallback; o gerador existente vira harness interno.
+- **Changelog 2.0.1:** registra a implementação validada de histórico/stream mediado por servidor em `renato/tarefa44@602ae9d` como evidência do harness interno. Ela não implementa nem congela `CTR-TXN/TXL/API v3`; `TASK-DATA-009 / LUM2-62` deve adaptá-la à batch API comum antes de integração funcional.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -207,7 +208,7 @@ Preservar tarefas concluídas. Replanejar API aberta para batch ingest/list/deta
 
 ### Renato — simulator/detector
 
-Preservar gerador, métricas e detector. `TASK-DATA-006` concluída vira base do harness interno; `TASK-DATA-007` mantém ground truth isolado. Trabalho novo: transformar cada TransactionInput em outcome/evento determinístico e enviar tráfego de fundo pela mesma batch API.
+Preservar gerador, métricas e detector. `TASK-DATA-006` concluída vira base do harness interno; `TASK-DATA-007` mantém ground truth isolado. A implementação validada em `renato/tarefa44@602ae9d` acrescenta geração histórica reprodutível com sazonalidade, baixa amostra e publicação mediada por servidor, mas usa a fronteira anterior e permanece referência interna. Trabalho novo: transformar cada TransactionInput em outcome/evento determinístico e adaptar esse harness para enviar tráfego de fundo pela mesma batch API.
 
 ### Altoé — memória/explicação
 
