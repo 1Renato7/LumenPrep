@@ -1054,6 +1054,76 @@ Revisar se a demo exigir playbook adicional, se API/UI precisarem de metadados e
 - Nenhum.
 
 
+### FL-20260829-ALTOE-004 — Usar baseline de avaliação determinístico antes de Neo4j real e rerank
+
+- **Timestamp:** 2026-08-29T17:41:16-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex
+- **Categoria:** AI/RAG | quality | scope
+- **Escopo:** TASK-MEM-008, CTR-MEM-001 v1.1, avaliação de memória
+- **Links:** LUM2-25, docs/evaluations/memory-baseline.md, structured-v1
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A recuperação estruturada já possui testes unitários, mas os critérios do RAG exigem avaliar os resultados do produto antes de introduzir rerank ou depender de Neo4j. Não há URI, credenciais ou Docker Neo4j neste ambiente.
+
+#### Decisão
+
+Criar um conjunto de avaliação de desenvolvimento separado, com cinco resultados verificáveis: recorrência exata, combinação nova, incidente inconclusivo com precedente, precedente não confirmado e memória indisponível. Registrar o relatório como baseline in-memory e manter explícito que holdout independente e Neo4j real continuam pendentes.
+
+#### Critérios e por que agora
+
+Precisão e honestidade sobre no-answer importam mais que complexidade adicional. Os casos cobrem as transições que API/UI precisarão explicar e fornecem uma linha de base antes de qualquer vetor.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Esperar Neo4j/holdout para qualquer avaliação | Mais realismo | Bloqueia feedback e regressão local | FACT: ambiente não possui Neo4j configurado | Rejeitada |
+| Medir só precisão média | Métrica simples | Esconde no-answer, inconclusivo e indisponibilidade | FACT: estes estados são contratos explícitos | Rejeitada |
+| Baseline de desenvolvimento rotulado | Regressão local reproduzível | Não prova generalização | TEST: cinco casos passam | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o baseline roda com repositório in-memory e seed humano confirmado.
+- **TEST:** cinco evals e 23 testes totais passaram localmente.
+- **ASSUMPTION:** Renato fornecerá holdout de combinações independentes antes do code freeze.
+- **UNKNOWN:** latência e compatibilidade contra Neo4j real.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** regressão imediata e métricas por estado.
+- **Abrimos mão de:** estimar recall/generalização nesta fase.
+- **Dívida/limitação:** resultados não substituem holdout.
+- **Risco residual:** otimização excessiva ao seed; mitigada por rotular o conjunto como desenvolvimento.
+
+#### Consequências e propagação
+
+- **Produto/demo:** estados de memória continuam demonstráveis mesmo sem Neo4j.
+- **Arquitetura/contratos:** nenhum schema muda.
+- **Pessoas/branches:** integração Neo4j depende de configuração coordenada por Rogério; Renato deve fornecer holdout.
+- **Plano/Linear:** LUM2-25 passa a In Progress.
+- **Testes/observabilidade:** relatório separa métricas observadas de lacunas.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** regressão que transforme no-answer em match ou altere INCONCLUSIVE falha antes de integração.
+- **Caminho feliz:** Mastercard D-2 é top-1.
+- **Caso difícil/adverso:** falha da memória retorna MEMORY_UNAVAILABLE, não NO_PRECEDENT.
+- **Resultado observado:** PASS em cinco evals locais; NOT RUN contra Neo4j real/holdout.
+- **Fallback:** manter structured-v1 e template deterministicamente.
+
+#### Gatilhos de revisão
+
+Adicionar rerank, conectar Neo4j, receber holdout ou observar falso precedente exige rodar e comparar o conjunto completo.
+
+#### Adendos
+
+- Nenhum.
+
+
 ## Rogério
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->
