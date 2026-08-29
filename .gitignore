@@ -1,2 +1,8 @@
 .DS_Store
 .linear-team.json
+.venv/
+__pycache__/
+*.pyc
+*.duckdb
+.env
+*.egg-info/
