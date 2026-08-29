@@ -1,0 +1,3 @@
+# Optional runtime dependency for the real Neo4j adapter. The core domain tests
+# remain dependency-free because app.memory.neo4j_repository uses injection.
+neo4j>=5,<6
