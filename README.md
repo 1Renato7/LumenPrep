@@ -16,6 +16,20 @@ As decisões do time ficam no [Flight Log](docs/flight-log.md). Ele é atualizad
 
 As skills usam progressive disclosure: cada `SKILL.md` contém o fluxo central e carrega referências profundas somente quando necessárias. Isso mantém o contexto utilizável sem reduzir a precisão dos procedimentos.
 
+## Ambiente Python
+
+O runtime do projeto é **Python 3.14.4**, indicado em `.python-version` e em `pyproject.toml`. Quando o Python install manager não estiver disponível, inicialize o runtime local reproduzível (ignorado pelo Git) com:
+
+```powershell
+.\scripts\bootstrap-python.ps1
+```
+
+Não versione `.venv/`, `.python-runtime/`, artefatos de build ou caches. Após instalar essa versão, valide a base com:
+
+```powershell
+.\.python-runtime\python.exe -m unittest discover -s tests
+```
+
 ## Fluxo principal
 
 ```text
