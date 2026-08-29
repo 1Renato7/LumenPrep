@@ -1272,6 +1272,75 @@ Primeira microtarefa v3 integrada, sincronização do Linear, alteração do con
 
 - **2026-08-29T20:00:00-03:00:** publicação limitada por pedido explícito de André; nenhum arquivo fora de README/docs entra no commit.
 
+### FL-20260829-TEAM-019 — Sincronizar o Linear 2.0 sem reescrever trabalho concluído
+
+- **Timestamp:** 2026-08-29T19:44:45-03:00
+- **Status:** VALIDATED
+- **Decision owner:** André
+- **Participantes:** André; Codex como integrador e recorder
+- **Categoria:** planning | coordination | change control
+- **Escopo:** projeto Linear `Lumen — Yuno Hackathon`, 21 issues afetadas pelo replanejamento 2.0
+- **Links:** `docs/plans/system-plan.md` v2.0.0, `docs/plans/linear-preview.md`, `docs/plans/people/*.md`, `LUM2-4`, `LUM2-9`–`14`, `LUM2-23`, `LUM2-25`, `LUM2-39`, `LUM2-41`, `LUM2-42`, `LUM2-49`, `LUM2-56`–`64`
+- **Supersedes / superseded by:** encerra o estado `NOT RUN` de sincronização em `FL-20260829-TEAM-018`; não altera DEC-015..017
+
+#### Contexto e pergunta
+
+André confirmou explicitamente o preview 2.0 e autorizou a escrita no Linear com uma condição: se uma issue prevista para atualização já estivesse concluída, preservar o trabalho encerrado e criar uma nova issue descrevendo somente a extensão necessária. A releitura imediatamente anterior à escrita encontrou `TASK-MEM-008 / LUM2-25` em `Done`, diferente do estado que constava no preview.
+
+#### Decisão
+
+Sincronizar descrições e relações apenas das 14 issues ainda abertas ou em andamento; criar seis issues originalmente previstas e uma sétima issue, `TASK-MEM-009 / LUM2-64`, para a extensão transacional que não poderia ser incorporada a `LUM2-25`. Preservar título, descrição, estado e evidências de toda issue `Done`. Escrever relações em uma segunda passagem e reler todo o conjunto afetado antes de considerar a sincronização concluída.
+
+#### Critérios e por que agora
+
+O Linear precisa refletir o plano transaction-first para coordenar implementação paralela, mas uma issue concluída representa evidência histórica de um escopo anterior. Separar a extensão evita transformar retroativamente o Definition of Done de `LUM2-25`, preserva métricas e oferece ao novo trabalho dependências e aceite próprios.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Reabrir e reescrever `LUM2-25` | menos uma issue | invalida o encerramento anterior e mistura evidências de dois escopos | FACT: `LUM2-25` estava `Done` na releitura | rejeitada pela regra confirmada |
+| Atualizar `LUM2-25` sem mudar o estado | mantém contagem menor | cria trabalho pendente oculto dentro de uma issue concluída | change control exige estado honesto | rejeitada |
+| Preservar `LUM2-25` e criar `LUM2-64` | histórico e aceite ficam rastreáveis | adiciona uma issue e uma dependência ao preflight | alinhada à autorização explícita | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** 54 issues existentes foram preservadas; 14 descrições abertas/em andamento foram atualizadas; `LUM2-58`–`64` foram criadas; total final 61.
+- **FACT:** `LUM2-25` permaneceu `Done` e não recebeu alteração de título, descrição ou estado.
+- **TEST:** 21/21 issues afetadas foram relidas com team, project, owner, parent, label, state, ID estável e relações; nenhuma divergência foi encontrada.
+- **UNKNOWN:** duração real de cada microtarefa; estimativas continuam operacionais e devem ser revistas com evidência de execução.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** Linear consistente com o plano 2.0, histórico concluído preservado e caminho crítico explícito.
+- **Abrimos mão de:** reutilizar um ID concluído para reduzir a quantidade de issues.
+- **Dívida/limitação:** o plano documental e o Linear agora estão sincronizados, mas a implementação v3 ainda permanece pendente.
+- **Risco residual:** relações podem precisar de ajuste se contratos ou owners mudarem; isso exige novo change control.
+
+#### Consequências e propagação
+
+- **Rogério:** `LUM2-58`–`60` cobrem API transaction-first, worker persistente e deploy Railway.
+- **Renato:** `LUM2-61`–`62` cobrem adaptação determinística e samples/tráfego pela API comum.
+- **Altoé:** `LUM2-63`–`64` cobrem trace grounded e extensão dos evals transacionais.
+- **André:** `LUM2-9`–`14` foram replanejadas e conectadas às novas dependências sem criar issue adicional.
+- **Documentação:** plano geral, quatro planos individuais e registro de sincronização passam a citar os IDs reais.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** cada pessoa consegue iniciar pelo primeiro item desbloqueado e rastrear produtores, consumidores e bloqueios sem depender do preview local.
+- **Caminho feliz:** abrir o plano individual, seguir o ID Linear real e consultar suas relações.
+- **Caso difícil/adverso:** uma necessidade nova incide sobre issue `Done`; o padrão aplicado é criar extensão separada, como `LUM2-64`.
+- **Resultado observado:** `VALIDATED`; auditoria pós-escrita de 21/21 issues sem divergência.
+- **Fallback:** em divergência futura, interromper novas escritas, inventariar o estado e corrigir plano/Linear por uma mudança explicitamente aprovada.
+
+#### Gatilhos de revisão
+
+Issue concluída que receba novo escopo, alteração de owner/contrato, bloqueio incompatível com o caminho crítico ou primeira evidência real que invalide uma estimativa/dependência.
+
+#### Adendos
+
+- **2026-08-29T19:44:45-03:00:** sincronização autorizada pelo usuário, escrita em duas passagens e auditada antes da atualização documental.
+
 ## André
 
 <!-- ANDRE: faça append de novas entradas imediatamente antes da próxima seção. -->

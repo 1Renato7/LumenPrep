@@ -78,4 +78,4 @@ Contract tests, worker restart/idempotency, review gate, integration guardian e 
 
 ## Linear
 
-Parent: [LUM2-6](https://linear.app/lumenhack/issue/LUM2-6/entregar-ingestao-contratos-e-api-integradora). As três novas issues e atualizações de LUM2-39/41/42 estão no preview 2.0, ainda não sincronizadas.
+Parent: [LUM2-6](https://linear.app/lumenhack/issue/LUM2-6/entregar-ingestao-contratos-e-api-integradora). Novas issues: `TASK-TXN-API-001`→`LUM2-58`, `TASK-TXN-WORKER-001`→`LUM2-59`, `TASK-DEPLOY-API-001`→`LUM2-60`. `LUM2-39/41/42` foram atualizadas sem mudar seus estados.

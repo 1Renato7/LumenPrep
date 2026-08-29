@@ -132,7 +132,7 @@ Autorização recebida em 2026-08-29 para criar o projeto `Lumen — Yuno Hackat
 - Preview de mudança 1.3.0: nas mesmas issues e sem alterar relações, atualizar também `TASK-API-002` (LUM2-39) e os contratos citados nas issues acima para CTR-MEM-001 v1.1, cujo `memory_status` obrigatório diferencia `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE`. A confirmação explícita deste preview continua pendente antes da escrita externa.
 - Preview de mudança 1.4.0: nas mesmas issues e sem alterar relações, atualizar `TASK-UI-005` (LUM2-12), `TASK-API-003` (LUM2-40) e `TASK-DATA-006` (LUM2-48) para o construtor visual sem código, `CTR-SCN-001 v2` e `CTR-API-001 v2`. A autorização atual cobre os documentos locais; a escrita externa no Linear permanece pendente até sincronização explícita.
 
-## Preview de mudança 2.0.0 — aguardando confirmação explícita
+## Sincronização 2.0.0 — concluída em 2026-08-29
 
 ### Escopo e política de preservação
 
@@ -154,7 +154,7 @@ Autorização recebida em 2026-08-29 para criar o projeto `Lumen — Yuno Hackat
 | LUM2-13 | TASK-UI-006 | Todo | Browser acceptance e deploy Vercel → Railway | UI-004/005, DEPLOY-API-001 |
 | LUM2-14 | TASK-DEMO-001 | Todo | Ensaiar demo transaction-first com seed e fallback | UI-006, INT-002 |
 | LUM2-23 | TASK-EXP-002 | Todo | ExplanationBundle resolve evidence até transactions sem LLM por item | INC-003, MEM-006, EXP-001 |
-| LUM2-25 | TASK-MEM-008 | In Progress | Evals incluem no-incident, multi-transaction e sem vazamento de seed/config | EXP-003, EXP-004 |
+| LUM2-25 | TASK-MEM-008 | Done | Preservada sem alteração; extensão transacional foi criada como TASK-MEM-009 / LUM2-64 | nenhuma mudança na issue concluída |
 | LUM2-39 | TASK-API-002 | In Progress | Incidents filtráveis por transaction ID e eixos causal/memory separados | INC-003, EXP-003 |
 | LUM2-41 | TASK-INT-001 | In Progress | Fatia Vercel → Railway → worker → log/detail → analytics | TXN-WORKER-001, UI-005, DATA-009 |
 | LUM2-42 | TASK-INT-002 | In Progress | Preflight de schemas v3, volume, restart, CORS e browser deployed | INT-001, UI-006, MEM-008 |
@@ -162,16 +162,17 @@ Autorização recebida em 2026-08-29 para criar o projeto `Lumen — Yuno Hackat
 | LUM2-56 | TASK-EVAL-001 | Todo | Casos de batch misto, low volume e equivalência manual/background | DATA-009, RCA-002 |
 | LUM2-57 | TASK-EVAL-002 | Todo | Holdout usa somente logs persistidos, sem input de efeito | EVAL-001, DATA-007 |
 
-### Novas issues propostas
+### Novas issues criadas
 
-| ID estável | Título | Owner | Estimativa operacional | Prioridade | Blocked by | Desbloqueia |
-| --- | --- | --- | --- | --- | --- | --- |
-| TASK-TXN-API-001 | Expor API transaction-first e geração de samples | Rogério | 90m | Urgent | TASK-CON-001 | TXN-WORKER-001, UI-005 |
-| TASK-TXN-WORKER-001 | Persistir lifecycle e retomar processamento idempotente | Rogério | 90m | Urgent | TXN-API-001, DATA-008 | INT-001, DEPLOY-API-001 |
-| TASK-DEPLOY-API-001 | Publicar FastAPI/worker no Railway com volume e CORS | Rogério | 75m | High | TXN-WORKER-001 | UI-006, INT-002 |
-| TASK-DATA-008 | Adaptar TransactionInput para outcome e eventos determinísticos | Renato | 75m | Urgent | TASK-DATA-001, TASK-CON-001 | TXN-WORKER-001 |
-| TASK-DATA-009 | Gerar samples e tráfego de fundo pela batch API comum | Renato | 75m | High | DATA-008, DATA-006 | INT-001, UI-002, EVAL-001 |
-| TASK-EXP-004 | Validar trace grounded de transaction até incident | Gabriel Altoé | 60m | High | EXP-002, API-002 | UI-004, MEM-008 |
+| Linear | ID estável | Título | Owner | Estimativa operacional | Prioridade | Blocked by | Desbloqueia |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| LUM2-58 | TASK-TXN-API-001 | Expor API transaction-first e geração de samples | Rogério | 90m | Urgent | LUM2-28 | LUM2-59, LUM2-12 |
+| LUM2-59 | TASK-TXN-WORKER-001 | Persistir lifecycle e retomar processamento idempotente | Rogério | 90m | Urgent | LUM2-58, LUM2-61 | LUM2-41, LUM2-60 |
+| LUM2-60 | TASK-DEPLOY-API-001 | Publicar API v3/worker no Railway com volume e CORS | Rogério | 75m | High | LUM2-59 | LUM2-13, LUM2-42 |
+| LUM2-61 | TASK-DATA-008 | Adaptar TransactionInput para outcome e eventos determinísticos | Renato | 75m | Urgent | LUM2-43, LUM2-28 | LUM2-59 |
+| LUM2-62 | TASK-DATA-009 | Gerar samples e tráfego de fundo pela batch API comum | Renato | 75m | High | LUM2-61, LUM2-48 | LUM2-41, LUM2-56, LUM2-64 |
+| LUM2-63 | TASK-EXP-004 | Validar trace grounded de transaction até incident | Gabriel Altoé | 60m | High | LUM2-23, LUM2-39 | LUM2-11, LUM2-64 |
+| LUM2-64 | TASK-MEM-009 | Estender evals de memória para o fluxo transacional 2.0 | Gabriel Altoé | 60m | High | LUM2-25, LUM2-62, LUM2-63 | LUM2-42 |
 
 ### Corpo canônico das novas issues
 
@@ -229,9 +230,18 @@ Autorização recebida em 2026-08-29 para criar o projeto `Lumen — Yuno Hackat
 - **Aceite/teste:** todo related ID existe e pertence às evidências autorizadas; resumo reutiliza bundle/template; `INCONCLUSIVE` não é promovido; falhas ficam explícitas.
 - **Handoff:** fixtures/semântica para André e regra de resolução para Rogério.
 
-### Carga após confirmação
+#### TASK-MEM-009 — Estender evals de memória para o fluxo transacional 2.0
 
-- 54 issues existentes preservadas; 15 descrições existentes atualizadas; 6 novas issues; total esperado 60.
-- Novas cargas: André 0 issues novas (6 abertas replanejadas), Rogério +3, Renato +2, Altoé +1.
+- **Motivo da nova issue:** `TASK-MEM-008 / LUM2-25` já estava `Done`; seu escopo/evidências não foram reescritos.
+- **Outcome:** cobrir transaction sem Incident, múltiplas transactions por Incident, ausência de vazamento de seed/config/ground truth, Neo4j/model down e cross-transaction leakage.
+- **Aceite:** resultado sem Incident não inventa explicação; related transactions ficam no escopo; evals de LUM2-25 continuam passando.
+- **Handoff:** evidência para Rogério/André e bloqueio explícito do preflight LUM2-42.
+
+### Resultado e carga auditada
+
+- 54 issues existentes preservadas; 14 descrições abertas/em andamento atualizadas; 7 novas issues; total final 61.
+- Novas cargas: André 0 issues novas (6 abertas replanejadas), Rogério +3, Renato +2, Altoé +2.
 - Caminho crítico 2.0: `contracts → DATA-008 + TXN-API-001 → TXN-WORKER-001 → UI-005 + DATA-009 → INT-001 → DEPLOY-API-001 + UI-006 → INT-002`.
-- **Estado de escrita externa:** `NOT RUN`. Este preview substitui previews 1.2–1.4 pendentes e precisa de confirmação explícita antes de qualquer `save_issue`.
+- Regra solicitada aplicada: nenhuma issue `Done` teve título, descrição ou estado alterados; a nova necessidade de LUM2-25 virou LUM2-64.
+- Auditoria: 21/21 issues relidas com projeto, team, owner, parent, label, estado, ID estável e relações esperadas; nenhuma divergência encontrada.
+- **Estado de escrita externa:** `SYNCED`. As relações foram escritas em segunda passagem e auditadas depois.

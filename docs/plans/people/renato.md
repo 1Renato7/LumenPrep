@@ -66,6 +66,6 @@ Reprodutibilidade, contract tests, evals, review gate e integração ponta a pon
 
 ## Linear
 
-Parent: [LUM2-7](https://linear.app/lumenhack/issue/LUM2-7/entregar-dados-sinteticos-deteccao-e-rca). `TASK-DATA-008/009` são novas issues propostas no preview 2.0; atualizações das tarefas existentes aguardam sincronização confirmada.
+Parent: [LUM2-7](https://linear.app/lumenhack/issue/LUM2-7/entregar-dados-sinteticos-deteccao-e-rca). Novas issues: `TASK-DATA-008`→`LUM2-61` e `TASK-DATA-009`→`LUM2-62`. `LUM2-49/56/57` foram atualizadas sem mudar seus estados.
 
 Mapeamento corrigido já publicado: `LUM2-44` = Gerar 90 dias com sazonalidade (`TASK-DATA-004` no texto legado), `LUM2-45` = outcomes condicionais/retries (`TASK-DATA-002`) e `LUM2-46` = latências/declines (`TASK-DATA-003`). Não reescrever esses IDs concluídos; o preview 2.0 só adiciona tarefas novas e atualiza descrições ainda abertas.

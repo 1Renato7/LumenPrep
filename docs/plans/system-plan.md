@@ -213,7 +213,7 @@ Preservar gerador, métricas e detector. `TASK-DATA-006` concluída vira base do
 
 Preservar grafo/RAG. Não adicionar RAG por transação. Atualizar explanation para aceitar incidentes correlacionados a transaction IDs e garantir que o detalhe linkado nunca trate precedente como causa atual.
 
-Os detalhes e microtarefas estão em `docs/plans/people/*.md`; o preview de sincronização está em `docs/plans/linear-preview.md` e requer confirmação explícita antes da escrita no Linear.
+Os detalhes e microtarefas estão em `docs/plans/people/*.md`; a sincronização Linear 2.0 foi concluída e auditada em `docs/plans/linear-preview.md` (`LUM2-58`–`64` para o trabalho novo).
 
 ## 10. Ordem e paralelismo
 
@@ -266,7 +266,7 @@ Checkpoints:
 - O trabalho concluído não é apagado: Streamlit vira referência/fallback e o cenário v2 vira harness interno.
 - A incompatibilidade pública é deliberadamente versionada em `CTR-API-001 v3`; não existe adapter silencioso para endpoints `/demo/scenarios`.
 - A fatia ponta a ponta precede polimento, RAG adicional ou pitch.
-- Linear ainda não é fonte de verdade desta revisão até o preview 2.0 ser confirmado e sincronizado.
+- Linear está sincronizado com a revisão 2.0; issues concluídas foram preservadas e novas necessidades receberam novos IDs.
 - **Integração da branch:** `READY TO HAND OFF`, mas não `READY TO MERGE` como produto completo. O código vindo da main ainda implementa a API/demo anterior; `TASK-TXN-API-001`, `TASK-TXN-WORKER-001` e `TASK-UI-002..006` devem eliminar essa divergência antes do merge funcional.
 
 ## 14. Fontes operacionais
