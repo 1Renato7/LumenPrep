@@ -1103,6 +1103,62 @@ Alteração de `CTR-SCN-001`, integração da branch de Rogério ou um consumido
 - **2026-08-29T17:52:00-03:00:** PASS: o adapter aceitou `contracts/fixtures/scenario-provider-br.json`, rejeitou `seed` ausente, campo `ground_truth` e timestamp sem timezone, e preservou o caso permitido pelo schema de filtros vazios. A configuração referencia o schema canônico por `scenario_contract.schema_path`.
 - **2026-08-29T17:55:00-03:00:** `LumenPrep/` permaneceu não rastreado e fora do índice; a branch de Rogério não foi integrada nesta microtarefa. O consumidor futuro pode trocar `ScenarioV1Contract` sem alterar as regras declarativas de distribuição.
 
+### FL-20260829-RENATO-004 — Desativar o repositório Git duplicado da pasta pai
+
+- **Timestamp:** 2026-08-29T18:05:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Codex como recorder
+- **Categoria:** operations | Git/integration
+- **Escopo:** `Projeto/.git`; raiz operacional `Projeto/LumenPrep/`
+- **Links:** `LumenPrep/.git`; `docs/flight-log.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+`Projeto/` e `Projeto/LumenPrep/` possuíam metadados Git independentes para o mesmo trabalho remoto. Isso poderia direcionar comandos e commits futuros à raiz errada.
+
+#### Decisão
+
+Mover `Projeto/.git` para um diretório de backup datado dentro de `Projeto/`, sem apagar arquivos de trabalho e sem alterar `LumenPrep/.git`. A raiz única passa a ser `LumenPrep/`.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Mover para backup recuperável | elimina ambiguidade e preserva reversão | a pasta pai deixa de aceitar comandos Git | FACT: Renato autorizou a desativação | escolhido |
+| Apagar `.git` | mesma simplificação | recuperação difícil | nenhuma necessidade de destruição | rejeitado |
+| Manter os dois repositórios | nenhuma operação imediata | alto risco de commits na raiz errada | FACT: já ocorreu ambiguidade de raiz | rejeitado |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `LumenPrep/` possui branch `renato/define-generator` rastreando o remoto correto.
+- **TEST:** NOT RUN — a estrutura será verificada imediatamente após a movimentação.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** uma única raiz Git explícita para a equipe.
+- **Abrimos mão de:** usar Git diretamente em `Projeto/` até restaurar o backup.
+- **Risco residual:** ferramentas abertas na pasta pai deixam de reconhecer Git; mitigado pelo backup datado.
+
+#### Consequências e propagação
+
+- **Pessoas/branches:** todo novo trabalho deve usar `Projeto/LumenPrep/`.
+- **Testes/observabilidade:** confirmar que a pasta pai não contém `.git` e que a filha continua com status Git saudável.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** `git -C LumenPrep status` continua funcional e `Projeto/.git` deixa de existir.
+- **Fallback:** restaurar o diretório de backup ao nome `.git` na pasta pai.
+
+#### Gatilhos de revisão
+
+Necessidade de recuperar histórico local exclusivo da raiz pai ou falha do repositório filho.
+
+#### Adendos
+
+- **2026-08-29T18:10:00-03:00:** a primeira movimentação encontrou atributos ocultos/somente leitura e deixou o Git pai parcialmente deslocado. O backup foi validado com `HEAD=1b39bdd`, igual a `LumenPrep/`; os arquivos de controle foram restaurados apenas para recuperar o estado, e o `.git` residual do pai foi removido depois dessa confirmação. PASS: `Projeto/.git` não existe, o backup datado existe e `git -C LumenPrep status` continua saudável. Para reverter, restaure o backup ao nome `.git` na pasta pai.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._
