@@ -13,7 +13,7 @@ def current_incident(*, status: str = "SUPPORTED", brand: str = "MASTERCARD") ->
         {
             "incident_id": "INC-CURRENT-001",
             "detected_at": "2026-08-29T15:00:00Z",
-            "scope": {"provider": ["stripe"], "country": ["BR"], "card_brand": [brand]},
+            "scope": {"provider_id": ["stripe"], "country": ["BR"], "card_brand": [brand]},
             "metrics": {
                 "decline_codes": ["DO_NOT_HONOR", "ISSUER_UNAVAILABLE"],
                 "temporal_shape": "sudden_approval_drop",
