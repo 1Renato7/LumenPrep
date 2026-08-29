@@ -2,7 +2,7 @@
 
 ## Missão
 
-- **Plano geral:** 1.3.0
+- **Plano geral:** 1.3.1
 - **Objetivo:** `OBJ-ROGERIO-001`
 - **Papel:** contratos, ingestão, normalização, DuckDB, agregação, incident correlation/impact, API e coordenação de integração.
 - **Orçamento:** 13–14h de implementação; H15–H19 integração e suporte à demo.
