@@ -37,7 +37,7 @@ class Neo4jIncidentRepository:
             "confirmed_cause": incident.confirmed_cause,
             "prior_playbook_id": incident.prior_playbook_id,
             "evidence_ids": list(incident.evidence_ids),
-            "providers": list(incident.scope.get("provider", ())),
+            "providers": list(incident.scope.get("provider_id", ())),
             "countries": list(incident.scope.get("country", ())),
             "brands": list(incident.scope.get("card_brand", ())),
         }
