@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.1",
+  "query_incident_id": "inc_current_mastercard_uncertain_002",
+  "memory_status": "MEMORY_UNAVAILABLE",
+  "matches": [],
+  "retrieval_trace": {
+    "cypher_filter": "country = 'BR' AND card_brand = 'MASTERCARD' AND confirmation = 'HUMAN_CONFIRMED'",
+    "candidate_count": 0,
+    "embedding_model": null,
+    "index_version": "incident-memory-v1",
+    "fallback_used": true
+  },
+  "correlation_id": "corr_inc_uncertain_002"
+}

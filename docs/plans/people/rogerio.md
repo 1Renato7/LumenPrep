@@ -2,7 +2,7 @@
 
 ## Missão
 
-- **Plano geral:** 1.0.0
+- **Plano geral:** 1.3.0
 - **Objetivo:** `OBJ-ROGERIO-001`
 - **Papel:** contratos, ingestão, normalização, DuckDB, agregação, incident correlation/impact, API e coordenação de integração.
 - **Orçamento:** 13–14h de implementação; H15–H19 integração e suporte à demo.
@@ -53,11 +53,11 @@ AnomalyCandidate {
 
 ### CTR-INC-001 v1
 
-Schema executável: `contracts/v1/incident.schema.json`. `INCONCLUSIVE` é válido. Impacto sempre local e `GMV_AT_RISK`. Memória/explicação são anexadas sem alterar fatos originais.
+Schema executável: `contracts/v1/incident.schema.json`. `INCONCLUSIVE` é válido e depende apenas de evidência atual. Impacto sempre local e `GMV_AT_RISK`. Todo Incident segue para memória; causa atual e estado da memória são eixos separados. Memória/explicação são anexadas sem alterar fatos originais; `matches=[]` significa ausência de precedente.
 
 ### CTR-API-001 v1
 
-Endpoints conforme plano geral; localhost; scenario injection somente em demo; responses incluem `correlation_id`; OpenAPI é mock para André.
+Endpoints conforme plano geral; localhost; scenario injection somente em demo; responses incluem `correlation_id`; detalhe do incidente retorna separadamente `incident`, `memory` (`CTR-MEM-001 v1.1`) e `explanation`; OpenAPI é mock para André.
 
 ## Plano de execução
 
@@ -89,7 +89,7 @@ Endpoints conforme plano geral; localhost; scenario injection somente em demo; r
 
 - **Tempo:** H3–H9 em incrementos.
 - **Aceite:** UI funciona primeiro por fixtures e depois por serviços reais; health mostra fallback.
-- **Teste:** OpenAPI/contract tests e timeout states.
+- **Teste:** OpenAPI/contract tests, timeout states e matriz `SUPPORTED|INCONCLUSIVE × MATCH|NO_PRECEDENT`, confirmando que memória nunca altera `root_cause.status`.
 
 ### TASK-ROGERIO-006 — Coordenar checkpoints e integração
 

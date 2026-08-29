@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.1",
+  "query_incident_id": "inc_new_provider_country_001",
+  "memory_status": "NO_PRECEDENT",
+  "matches": [],
+  "retrieval_trace": {
+    "cypher_filter": "provider_id = 'provider_new' AND country = 'BR'",
+    "candidate_count": 0,
+    "embedding_model": null,
+    "index_version": "incident-memory-v1",
+    "fallback_used": false
+  },
+  "correlation_id": "corr_new_provider_country_001"
+}

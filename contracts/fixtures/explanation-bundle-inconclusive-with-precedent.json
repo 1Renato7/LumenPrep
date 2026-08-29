@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "incident_id": "inc_current_mastercard_uncertain_002",
+  "executive_summary": "Há BRL 1.940,00 de GMV estimado em risco; a causa atual ainda é inconclusiva, mas existe um precedente Mastercard semelhante de dois dias atrás.",
+  "operations_summary": "A approval rate Mastercard no Brasil caiu de 82% para 67% em 86 attempts. Nenhum slice atual explica mais de 38% da perda; um incidente humano confirmado de dois dias atrás compartilha país, bandeira, perfil de recusa e forma de latência.",
+  "what_happened": "Há uma queda relevante de aprovação e aumento de latência em pagamentos Mastercard no Brasil.",
+  "where_and_why": "Os dados atuais não sustentam uma origem única entre provider, merchant e issuer; a causa corrente permanece INCONCLUSIVE.",
+  "recurrence_statement": "Existe um precedente humano confirmado de dois dias atrás com sinais semelhantes. Ele teve causa PROVIDER_DEGRADATION e usou PB-PROVIDER-DEGRADATION-001, mas diferenças de provider e amostra impedem afirmar que a causa atual seja a mesma.",
+  "evidence_ids": ["evd_uncertain_current_rate", "evd_uncertain_low_coverage", "evd_prior_confirmed_uncertain"],
+  "playbook_id": "PB-PROVIDER-DEGRADATION-001",
+  "recommended_action": "Usar o playbook anterior como checklist de investigação: verificar a saúde dos providers Mastercard no Brasil e confirmar a concentração antes de considerar rerouting humano.",
+  "execution": "HUMAN_ONLY",
+  "limitations": [
+    "O precedente é evidência histórica de similaridade, não prova da causa atual.",
+    "É necessário aumentar a amostra ou observar concentração por provider, merchant ou issuer para sustentar uma causa atual."
+  ],
+  "model_version": "deterministic-template"
+}

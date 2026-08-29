@@ -22,7 +22,7 @@ paths:
       parameters:
         - {name: incident_id, in: path, required: true, schema: {type: string}}
       responses:
-        "200": {description: Incident plus explanation}
+        "200": {description: Incident plus typed SimilarIncidentResult and ExplanationBundle}
         "404": {description: INCIDENT_NOT_FOUND}
   /demo/scenarios/{scenario_id}/inject:
     post:

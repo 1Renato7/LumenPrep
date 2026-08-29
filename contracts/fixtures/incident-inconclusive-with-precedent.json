@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "incident_id": "inc_current_mastercard_uncertain_002",
+  "state": "INCONCLUSIVE",
+  "detected_at": "2026-08-29T15:06:00Z",
+  "estimated_started_at": "2026-08-29T15:03:00Z",
+  "title": "Queda difusa em pagamentos Mastercard no Brasil",
+  "scope": {
+    "country": ["BR"],
+    "card_brand": ["MASTERCARD"]
+  },
+  "metrics": {
+    "eligible_attempts": 86,
+    "approval_rate_observed": 0.67,
+    "approval_rate_expected": 0.82,
+    "provider_latency_p95_ms_observed": 1730,
+    "provider_latency_p95_ms_expected": 910,
+    "lost_approvals": 13
+  },
+  "root_cause": {
+    "status": "INCONCLUSIVE",
+    "category": null,
+    "confidence": 0.42,
+    "confidence_factors": {
+      "statistical_strength": 0.55,
+      "loss_coverage": 0.38,
+      "temporal_consistency": 0.47,
+      "data_quality": 0.88
+    }
+  },
+  "impact": {
+    "metric": "GMV_AT_RISK",
+    "amount_minor": 194000,
+    "currency": "BRL",
+    "method": "EXPECTED_APPROVAL_SHORTFALL",
+    "lower_bound_minor": 72000,
+    "upper_bound_minor": 326000
+  },
+  "evidence": [
+    {
+      "evidence_id": "evd_uncertain_current_rate",
+      "kind": "METRIC_SHIFT",
+      "statement": "Approval rate caiu de 82% para 67% em 86 attempts Mastercard no Brasil.",
+      "source_ref": "duckdb://window/current-uncertain"
+    },
+    {
+      "evidence_id": "evd_uncertain_low_coverage",
+      "kind": "INSUFFICIENT_CAUSAL_COVERAGE",
+      "statement": "Nenhum slice de provider, merchant ou issuer explica mais de 38% das aprovações perdidas.",
+      "source_ref": "rca://candidate/uncertain-2"
+    },
+    {
+      "evidence_id": "evd_prior_confirmed_uncertain",
+      "kind": "PAST_INCIDENT",
+      "statement": "INC-HIST-002D-MASTERCARD foi confirmado por humano dois dias antes e compartilha bandeira, país, perfil de recusa e forma de latência.",
+      "source_ref": "neo4j://incident/INC-HIST-002D-MASTERCARD"
+    }
+  ],
+  "memory_matches": [
+    {
+      "incident_id": "INC-HIST-002D-MASTERCARD",
+      "occurred_at": "2026-08-27T14:02:00Z",
+      "confirmation": "HUMAN_CONFIRMED",
+      "structured_score": 0.84,
+      "semantic_score": 0.79,
+      "matching_factors": ["country", "card_brand", "decline_profile", "latency_shape"],
+      "different_factors": ["provider_scope", "sample_size"]
+    }
+  ],
+  "recommendations": [
+    {
+      "playbook_id": "PB-PROVIDER-DEGRADATION-001",
+      "action": "Usar o playbook anterior como roteiro de investigação: verificar a saúde dos providers Mastercard no Brasil e confirmar concentração antes de qualquer rerouting humano.",
+      "execution": "HUMAN_ONLY",
+      "rationale_evidence_ids": ["evd_uncertain_current_rate", "evd_uncertain_low_coverage", "evd_prior_confirmed_uncertain"]
+    }
+  ],
+  "limitations": [
+    "Os dados atuais não isolam uma causa; o precedente histórico orienta a investigação, mas não confirma que a causa atual seja a mesma."
+  ],
+  "correlation_id": "corr_inc_uncertain_002"
+}

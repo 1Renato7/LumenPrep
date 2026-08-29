@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 1.0.0
+- **Versão:** 1.3.0
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
 - **Janela:** 19 horas totais; 15 horas para construção e 4 horas protegidas para integração, validação, ensaio e pitch.
@@ -11,7 +11,7 @@
 - **Escopo:** MVP demonstrável de monitoramento, diagnóstico causal e memória de incidentes para uma plataforma fictícia de payment orchestration.
 - **Base analisada:** repositório sem aplicação; apenas documentação e skills de planejamento.
 - **Fontes externas:** documentação oficial da Yuno, DuckDB, Neo4j e OpenAI, listadas no fim.
-- **Changelog:** 1.0.0 cria arquitetura, contratos, MVP, ownership, cronograma e planos individuais.
+- **Changelog:** 1.0.0 cria arquitetura, contratos, MVP, ownership, cronograma e planos individuais. 1.1.0 reafirma descoberta de causas novas como objetivo principal e posiciona memória como braço posterior para reconhecer recorrência e reaproveitar, com validação, o playbook anteriormente usado. 1.2.0 torna a consulta à memória obrigatória para todo incidente detectado, inclusive quando a evidência atual é inconclusiva, mantendo separados o status causal atual e o precedente histórico. 1.3.0 tipa o resultado da memória para diferenciar `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` na API/UI.
 
 ## 2. Problema e produto
 
@@ -22,7 +22,7 @@
 
 ### Critério de vitória
 
-O sistema recebe uma nova combinação de dimensões não codificada previamente, detecta a anomalia, aponta o menor slice causal sustentado pelos dados, separa incidentes simultâneos, mostra evidências recalculáveis, recupera um incidente semelhante confirmado e recomenda um playbook sem executar ação.
+O sistema recebe uma nova combinação de dimensões não codificada previamente, detecta a anomalia, aponta o menor slice causal sustentado pelos dados, separa incidentes simultâneos e mostra evidências recalculáveis. Quando existir precedente, recupera o incidente confirmado e prioriza a solução anterior somente após validar sua aplicabilidade; sem precedente, continua com a causa nova e recomenda um playbook atual sem executar ação.
 
 ### Prioridades, em ordem
 
@@ -75,7 +75,9 @@ O sistema recebe uma nova combinação de dimensões não codificada previamente
 
 1. **Detectar:** observar fluxo acelerado e distinguir ruído sazonal de queda relevante em approval rate e/ou latência.
 2. **Diagnosticar:** explorar `merchant × provider × method × country × issuer × brand × decline_code`, separar incidentes e produzir causa suportada ou `INCONCLUSIVE`.
-3. **Lembrar e explicar:** recuperar incidentes humanos confirmados no Neo4j, justificar a similaridade, estimar GMV local em risco e selecionar playbook humano.
+3. **Lembrar e acelerar a resposta:** depois de formar o incidente atual como `SUPPORTED` ou `INCONCLUSIVE`, recuperar incidentes humanos confirmados no Neo4j, justificar a similaridade e, quando as precondições observáveis ainda forem válidas, recomendar ao humano o playbook que funcionou antes como orientação de investigação.
+
+O objetivo primário é descobrir problemas atuais, inclusive combinações nunca vistas. Memória é um braço de enriquecimento e aceleração operacional; não é o mecanismo de descoberta nem uma condição para produzir diagnóstico.
 
 ### Menor fatia vertical — pronta até H4
 
@@ -91,7 +93,7 @@ O sistema recebe uma nova combinação de dimensões não codificada previamente
 | D1 | Iniciar stream normal | Nenhum alerta apesar de sazonalidade/ruído | gráfico + contador de janelas avaliadas |
 | D2 | Injetar provider degradado somente no Brasil | Incidente isolado em provider × país | current vs baseline, n, p95, declines |
 | D3 | Injetar emissor mexicano para um merchant | Segundo incidente independente | dois cards e contribuição separada |
-| D4 | Repetir assinatura Mastercard de dois dias antes | Sistema aponta recorrência provável | ID passado, causa confirmada e fatores coincidentes/divergentes |
+| D4 | Repetir assinatura Mastercard de dois dias antes | Sistema aponta recorrência provável e recupera a solução anterior | ID passado, causa/playbook confirmados, precondições e fatores coincidentes/divergentes |
 | D5 | Injetar queda difusa/baixo volume | Sistema usa `INCONCLUSIVE` | limitações e evidência faltante |
 | D6 | Jurado escolhe nova combinação válida | Diagnóstico sem regra hardcoded | configuração secreta comparada após resposta |
 
@@ -103,7 +105,19 @@ O seed inclui `INC-HIST-002D-MASTERCARD`, ocorrido exatamente dois dias antes, c
 - fatores que coincidem e fatores que divergem;
 - score estruturado e score semântico separados;
 - causa anterior e playbook anterior como precedente, não autoridade;
-- evidências atuais que sustentam o diagnóstico corrente.
+- evidências atuais que sustentam o diagnóstico corrente;
+- precondições atuais que tornam o playbook anterior aplicável ou contraindicado.
+
+### Regra de independência entre diagnóstico e memória
+
+O diagnóstico corrente é produzido exclusivamente por métricas atuais, baseline, detector e RCA. A busca de memória acontece para **todo incidente detectado**, depois que ele já contém `root_cause.status`, confiança, evidências e limitações próprias — inclusive quando esse status é `INCONCLUSIVE`.
+
+- `SUPPORTED + MATCH`: mantém a causa atual suportada, relata a recorrência e pode priorizar o playbook anterior após validar suas precondições;
+- `SUPPORTED + NO_PRECEDENT`: mantém a causa atual suportada e relata que pode ser um problema novo;
+- `INCONCLUSIVE + MATCH`: mantém a causa atual inconclusiva, mostra a causa humana confirmada e o playbook do precedente, explica fatores iguais/diferentes e usa o playbook somente como roteiro de investigação; o precedente não confirma a causa atual;
+- `INCONCLUSIVE + NO_PRECEDENT`: relata ausência simultânea de causa atual sustentada e precedente semelhante, portanto o resultado final é inconclusivo e explicita os dados faltantes;
+- `MEMORY_UNAVAILABLE`: acrescenta limitação operacional, mas não altera `root_cause.status`;
+- o explainer recebe separadamente `current_diagnosis` e `memory_context`, evitando tratar precedente como prova atual ou ausência de memória como ausência de evidência transacional.
 
 ## 4. Decisões
 
@@ -118,6 +132,9 @@ O seed inclui `INC-HIST-002D-MASTERCARD`, ocorrido exatamente dois dias antes, c
 | DEC-007 | DECIDED | Um agente read-only explica e recomenda via Structured Output; código calcula fatos/confiança | reduz alucinação e preserva autoridade | template determinístico se API falhar | Team | FL-20260829-TEAM-007 |
 | DEC-008 | DECIDED | Reservar H15–H19 para integração, acceptance, pitch e demo | working beats promised | cortes em ordem explícita em H10/H13 | Team | FL-20260829-TEAM-008 |
 | DEC-009 | DECIDED | André recebe menos implementação e assume UI/pitch; demais owners seguem especialidades | protege comunicação sem abandonar integração | matriz abaixo | Team | FL-20260829-TEAM-008 |
+| DEC-010 | SUPERSEDED | Descoberta causal atual é o núcleo; memória é enriquecimento posterior para reconhecer recorrência e reaproveitar playbook validado | refinada para cobrir explicitamente incidentes atuais inconclusivos | substituída por DEC-011 | Team | FL-20260829-TEAM-010 |
+| DEC-011 | DECIDED | Consultar memória para todo incidente `SUPPORTED` ou `INCONCLUSIVE`, mantendo independentes a força da causa atual e a existência de precedente | um incidente humano anterior pode orientar a investigação mesmo quando os dados atuais ainda não isolam a causa | `INCONCLUSIVE + MATCH` mostra precedente e playbook como contexto, sem promover a causa atual; somente `INCONCLUSIVE + NO_PRECEDENT` encerra sem causa nem precedente | Team | FL-20260829-TEAM-011 |
+| DEC-012 | DECIDED | Tornar `memory_status` obrigatório em CTR-MEM-001 v1.1 e expor Incident + memória + explicação separadamente na API | lista vazia não distingue ausência real de precedente de falha do Neo4j/fallback | migração coordenada das fixtures antes da implementação; UI nunca infere indisponibilidade por `matches=[]` | Team | FL-20260829-TEAM-012 |
 
 ## 5. Arquitetura
 
@@ -130,13 +147,15 @@ flowchart LR
     AGG --> DET[CMP-DET-001 Detector]
     DET --> RCA[CMP-RCA-001 Root Cause Explorer]
     RCA --> INC[CMP-INC-001 Incident Correlator]
-    INC --> MEM[CMP-MEM-001 Neo4j Incident Memory]
-    INC --> EXP[CMP-EXP-001 Grounded Explainer]
-    MEM --> EXP
+    INC -->|SUPPORTED ou INCONCLUSIVE| EXP[CMP-EXP-001 Grounded Explainer]
+    INC -->|consulta sempre| MEM[CMP-MEM-001 Neo4j Incident Memory]
+    MEM -->|precedente ou NO_PRECEDENT| EXP
     EXT[CMP-EXT-001 External Corroboration] -. optional .-> EXP
     EXP --> API[CMP-API-001 Read API]
     API --> UI[CMP-UI-001 Dashboard]
 ```
+
+O fluxo geral para leigos e as quatro projeções técnicas por responsável estão em `docs/plans/architecture-diagrams.md`.
 
 ### Componentes
 
@@ -148,8 +167,8 @@ flowchart LR
 | CMP-DET-001 | approval e latência vs baseline sazonal | SciPy/NumPy | Renato | detector version, candidates/window |
 | CMP-RCA-001 | beam search hierárquico e contribuição causal | Python | Renato | coverage, tested slices, pruning |
 | CMP-INC-001 | separar/correlacionar/priorizar e calcular impacto | Python | Rogério | incident count, overlap, currency |
-| CMP-MEM-001 | persistir e recuperar recorrência | Neo4j + driver + embedding opcional | Altoé | graph ping, retrieval trace |
-| CMP-EXP-001 | explicação ops/executiva e playbook grounded | OpenAI Responses API, `gpt-5.6-terra` | Altoé | schema-valid, citation coverage, fallback |
+| CMP-MEM-001 | persistir e recuperar recorrência, causa confirmada e playbook anterior | Neo4j + driver + embedding opcional | Altoé | graph ping, retrieval trace |
+| CMP-EXP-001 | explicar diagnóstico atual e recomendar playbook grounded, priorizando solução anterior quando aplicável | OpenAI Responses API, `gpt-5.6-terra` | Altoé | schema-valid, citation coverage, fallback |
 | CMP-EXT-001 | consultar somente fontes oficiais após incidente | web search read-only | Altoé | timeout/source/`NOT_CHECKED` |
 | CMP-API-001 | endpoints read-only e scenario control de demo | FastAPI | Rogério | `/health`, dependency states |
 | CMP-UI-001 | dashboard, injection controls e pitch flow | Streamlit | André | render, API state, fallback demo |
@@ -192,8 +211,10 @@ flowchart LR
 5. Gerar candidatos somente quando volume, efeito e persistência passam thresholds versionados.
 6. Explorar dimensões em beam search até profundidade 3; não enumerar produto cartesiano completo.
 7. Score de RCA combina `loss_coverage`, força estatística, consistência temporal, qualidade do dado e penalidade de complexidade.
-8. Se nenhum slice cobre o mínimo confiável, produzir `INCONCLUSIVE` com evidência faltante.
+8. Se nenhum slice atual cobre o mínimo confiável, produzir `INCONCLUSIVE` com evidência faltante; esse estado é decidido independentemente da memória, mas ainda dispara a consulta histórica.
 9. Separar candidatos por overlap de attempts, intervalo e assinatura; priorizar por GMV local em risco, lost approvals, alcance e confiança.
+10. Consultar memória após formar todo incidente, seja `SUPPORTED` ou `INCONCLUSIVE`; lista vazia significa caso sem precedente, não evidência insuficiente por si só.
+11. Quando houver precedente, comparar as precondições do playbook anterior com escopo, métricas, sinais e limitações atuais. Em causa suportada, ele pode ser priorizado; em causa inconclusiva, é apenas roteiro de investigação. Sempre usar rationale e `HUMAN_ONLY`.
 
 ### Impacto financeiro
 
@@ -247,7 +268,7 @@ Somente causa `HUMAN_CONFIRMED` pode ser apresentada como precedente confirmado.
 | CTR-AGG-001 v1 FROZEN | AGG → DET/RCA | métricas por janela fechada/revisada | `INSUFFICIENT_VOLUME` | Rogério | schema + fixture no plano de Rogério |
 | CTR-DET-001 v1 FROZEN | DET → RCA/INC | candidato estatístico, nunca narrativa | `NO_ANOMALY`, `DATA_QUALITY_LOW` | Renato | schema + unit fixtures |
 | CTR-INC-001 v1 FROZEN | INC → MEM/EXP/API | incidente auditável e versionado | `INCONCLUSIVE` é resultado válido | Rogério | `incident-mastercard-recurrence.json` |
-| CTR-MEM-001 v1 FROZEN | MEM → EXP/API | top-k precedentes e trace de similaridade | `MEMORY_UNAVAILABLE`; lista vazia | Altoé | `similar-incidents.json` |
+| CTR-MEM-001 v1.1 FROZEN | MEM → EXP/API | `memory_status` tipado + top-k precedentes, causa/playbook anteriores e trace para Incident `SUPPORTED` ou `INCONCLUSIVE`, sem alterar `root_cause` | `MATCH_FOUND`, `NO_PRECEDENT` ou `MEMORY_UNAVAILABLE`; somente os dois últimos exigem `matches=[]` | Altoé | quatro fixtures `similar-incidents*.json`, incluindo unavailable |
 | CTR-LLM-001 v1 FROZEN | EXP → API/UI | resumo ops/executivo + playbook + evidence IDs | template determinístico | Altoé | schema Structured Output |
 | CTR-EXT-001 v1 PROPOSED | EXT → EXP | corroborar fonte oficial, não provar causa | timeout 5s, `NOT_CHECKED` | Altoé | stub vazio |
 | CTR-API-001 v1 FROZEN | API → UI | health, metrics, incidents, inject scenario | 4xx estável; timeout 2s UI | Rogério | OpenAPI + fixture |
@@ -259,6 +280,7 @@ Somente causa `HUMAN_CONFIRMED` pode ser apresentada como precedente confirmado.
 - toda resposta carrega `schema_version`, `correlation_id` e, quando aplicável, versão de baseline/detector/modelo.
 - mudanças incompatíveis exigem v2 e atualização coordenada; campo opcional novo é compatível.
 - chamadas LLM e Neo4j possuem timeout, no máximo uma retry segura e fallback local.
+- `CTR-MEM-001` é uma etapa obrigatória com fallback: recebe todo Incident; `memory_status` nunca modifica `CTR-INC-001.root_cause`; consumidores não inferem falha por lista vazia.
 - nenhuma autenticação de produção será implementada; serviço local de demo é bindado a localhost.
 
 ## 8. Ownership e colisões
@@ -284,7 +306,7 @@ Owner: André. Orçamento de implementação: 6–7h; restante protegido para in
 
 ### OBJ-ALTOE-001 — Provar memória recorrente grounded
 
-Owner: Altoé. Orçamento: 13–14h. Entregas: grafo, seed de incidente de dois dias antes, recuperação híbrida, explainer e no-answer.
+Owner: Altoé. Orçamento: 13–14h. Entregas: grafo, seed de incidente de dois dias antes com resolução, recuperação híbrida, validação de aplicabilidade do playbook, explainer e `NO_PRECEDENT` seguro.
 
 ### OBJ-ROGERIO-001 — Prover espinha dorsal contratual e integração
 
@@ -383,6 +405,7 @@ CTR schemas/fixtures
 - O caminho crítico produz aplicação executável em H4, H8 e H15.
 - Não há ciclo obrigatório: UI usa fixture; memória aceita Incident fixture; detector usa WindowMetrics fixture.
 - External web, vector rerank e LLM têm fallback e não bloqueiam diagnóstico.
+- A revisão 1.3.0 mantém o grafo acíclico, mas substitui CTR-MEM-001 v1 por v1.1 antes de qualquer implementação: `memory_status` agora é obrigatório e todas as fixtures produtoras/consumidoras foram migradas em conjunto.
 - `ASM-001..003` têm prazo H1 e não alteram contratos públicos.
 
 ## 15. Estratégia para a banca
@@ -390,9 +413,9 @@ CTR schemas/fixtures
 | Lente | Evidência planejada |
 | --- | --- |
 | Funciona | normal silencioso, dois incidentes, recurrence e holdout ao vivo |
-| Profundidade | denominadores explícitos, RCA por contribuição, no-answer e event-time |
+| Profundidade | denominadores explícitos, RCA por contribuição, memória não-gating, no-answer e event-time |
 | Problema real | provider/approval/latency e dimensões da Yuno |
-| Originalidade | memória causal humana confirmada ligada ao diagnóstico corrente |
+| Originalidade | descoberta causal para combinações inéditas + memória humana confirmada que acelera resposta ao sugerir solução anterior aplicável |
 | Clareza | uma linha executiva + drill-down operacional + evidence IDs |
 
 Perguntas de defesa: por que não LLM por dimensão; por que DuckDB e não Kafka; por que Neo4j não armazena transações; como evitamos Simpson's paradox; como `INCONCLUSIVE` é decidido; como sabemos que recorrência não é coincidência; o que acontece sem internet/API.

@@ -2,7 +2,7 @@
 
 ## Missão
 
-- **Plano geral:** 1.0.0
+- **Plano geral:** 1.3.0
 - **Objetivo:** `OBJ-ALTOE-001`
 - **Papel:** Neo4j, memória recorrente, Graph RAG, explicação grounded e corroboration externa.
 - **Orçamento:** 13–14h de implementação; H15–H19 integração/validação/pitch support.
@@ -10,7 +10,11 @@
 
 ## Context pack
 
-O detector e o RCA são determinísticos. Altoé recebe um `Incident` já calculado, persiste/consulta memória e devolve precedentes com trace. O LLM sintetiza somente campos estruturados e escolhe um playbook permitido. Causas antigas só têm autoridade quando `HUMAN_CONFIRMED`; a recomendação permanece `HUMAN_ONLY`.
+O detector e o RCA são determinísticos. Altoé recebe todo `Incident` já calculado — `SUPPORTED` ou `INCONCLUSIVE` —, persiste/consulta memória e devolve precedentes com trace. O LLM sintetiza somente campos estruturados e escolhe um playbook permitido. Causas antigas só têm autoridade sobre o incidente histórico quando `HUMAN_CONFIRMED`; a recomendação permanece `HUMAN_ONLY`.
+
+Ausência de precedente não é no-answer causal: `matches=[]` preserva integralmente `Incident.root_cause`. Se a causa atual já for `INCONCLUSIVE`, somente a combinação `INCONCLUSIVE + NO_PRECEDENT` termina sem causa nem contexto histórico. Se houver match, o precedente, sua causa humana e seu playbook são exibidos como orientação, sem elevar a causa atual a `SUPPORTED`.
+
+Memória também recupera `prior_playbook_id` e a resolução humana anterior. O explainer pode priorizar esse playbook somente quando causa, escopo e precondições atuais forem compatíveis; diferenças viram limitações explícitas. A recomendação continua `HUMAN_ONLY`.
 
 ## Ownership e limites
 
@@ -26,12 +30,13 @@ O detector e o RCA são determinísticos. Altoé recebe um `Incident` já calcul
 
 Campos mínimos: `incident_id`, `scope`, `metrics`, `root_cause`, `impact`, `evidence`, `limitations`, `correlation_id`. Taxas 0..1; dinheiro inteiro; timestamps UTC.
 
-### CTR-MEM-001 v1 — produzido
+### CTR-MEM-001 v1.1 — produzido
 
 ```text
 SimilarIncidentResult {
-  schema_version: "1.0";
+  schema_version: "1.1";
   query_incident_id: string;
+  memory_status: "MATCH_FOUND"|"NO_PRECEDENT"|"MEMORY_UNAVAILABLE";
   matches: [{incident_id, occurred_at, confirmation,
              structured_score, semantic_score|null,
              matching_factors[], different_factors[],
@@ -42,7 +47,7 @@ SimilarIncidentResult {
 }
 ```
 
-Sem match válido: `matches=[]`, nunca um texto improvisado. Timeout 2s; fallback Cypher/fixture.
+Sem match válido: `memory_status="NO_PRECEDENT"` e `matches=[]`; falha depois dos fallbacks: `memory_status="MEMORY_UNAVAILABLE"` e `matches=[]`. Nunca mudar `root_cause`. A query aceita causa atual nula e recupera por escopo, métricas, decline profile e forma temporal. Timeout 2s; fallback Cypher/fixture.
 
 ### CTR-LLM-001 v1 — produzido
 
@@ -65,6 +70,20 @@ ExplanationBundle {
 ```
 
 Structured Output obrigatório; output com evidence ID inexistente é rejeitado e vira template.
+
+### CTR-EXT-001 v1 — produzido, opcional
+
+```text
+ExternalCorroborationResult {
+  schema_version: "1.0";
+  incident_id: string;
+  status: "CORROBORATED"|"NOT_CHECKED"|"UNAVAILABLE";
+  sources: [{publisher, url, retrieved_at, summary, evidence_ids[]}];
+  correlation_id: string;
+}
+```
+
+Consulta read-only somente fontes oficiais, com timeout de 5s. O resultado é rotulado `CORROBORATION`, nunca prova da causa atual; se a funcionalidade for cortada, devolve `NOT_CHECKED` em vez de omitir o estado.
 
 ## Plano de execução
 
@@ -93,7 +112,7 @@ Structured Output obrigatório; output com evidence ID inexistente é rejeitado 
 
 - **Tempo:** H7:30–H10.
 - **Ferramenta:** Responses API, `gpt-5.6-terra`, Structured Outputs, uma chamada por incidente.
-- **Aceite:** 100% das afirmações factuais citam evidence IDs; playbook vem do catálogo; nenhuma tool financeira existe.
+- **Aceite:** 100% das afirmações factuais citam evidence IDs; playbook vem do catálogo; solução anterior só é priorizada como ação provável quando a causa atual é suportada e as precondições são compatíveis; com causa atual inconclusiva, aparece apenas como roteiro de investigação com limitação explícita; nenhuma tool financeira existe.
 - **Fallback:** formatter determinístico.
 
 ### TASK-ALTOE-005 — No-answer, adversarial e external corroboration
@@ -105,8 +124,8 @@ Structured Output obrigatório; output com evidence ID inexistente é rejeitado 
 ### TASK-ALTOE-006 — Evals de memória/RAG
 
 - **Tempo:** H12–H15.
-- **Casos:** exact recurrence, partial recurrence, no match, conflicting precedent, unconfirmed cause, prompt injection, Neo4j down, model down.
-- **Métricas:** precision@1, no-answer, evidence coverage e fallback success.
+- **Casos:** exact recurrence, partial recurrence, causa atual suportada sem match, causa atual inconclusiva com/sem match, conflicting precedent, unconfirmed cause, prompt injection, Neo4j down, model down.
+- **Métricas:** precision@1, `NO_PRECEDENT` correto sem alterar causa atual, evidence coverage, applicability do playbook anterior e fallback success.
 
 ## Git e handoffs
 

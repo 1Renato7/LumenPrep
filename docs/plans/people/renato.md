@@ -2,7 +2,7 @@
 
 ## Missão
 
-- **Plano geral:** 1.0.0
+- **Plano geral:** 1.3.0
 - **Objetivo:** `OBJ-RENATO-001`
 - **Papel:** geração sintética, baselines, detector estatístico, RCA e avaliação causal.
 - **Orçamento:** 13–14h de implementação; H15–H19 integração/validação.
@@ -11,6 +11,10 @@
 ## Context pack
 
 O LLM não gera milhões de linhas e não diagnostica. O gerador vetorizado produz 90 dias reprodutíveis e um stream acelerado; o ground truth fica separado. O detector recebe WindowMetrics e devolve candidatos. O RCA explora dimensões hierarquicamente e retorna evidências numéricas, sem narrativa.
+
+Renato decide suficiência causal exclusivamente com dados atuais. O RCA deve conseguir sustentar uma combinação inédita sem consultar Neo4j; a memória posterior não participa do score nem do limiar de `INCONCLUSIVE`. Tanto o resultado suportado quanto o inconclusivo precisam carregar escopo, métricas, sinais e limitações suficientes para Altoé consultar precedentes.
+
+O holdout deve privilegiar combinações nunca vistas, pois a capacidade principal do sistema é descobrir problemas novos; recorrência é avaliada separadamente por Altoé.
 
 ## Ownership e limites
 
@@ -78,12 +82,12 @@ Nenhum texto causal livre. Sem evidência: zero candidates ou candidato marcado 
 
 - **Tempo:** H10–H12.
 - **Casos:** simultaneous, latency-only, mix shift/Simpson, duplicates, unknown code, late data, recurrence signature e diffuse inconclusive.
-- **Handoff:** candidates esperados para Rogério e signatures para Altoé.
+- **Handoff:** candidates esperados para Rogério e signatures para Altoé, inclusive para casos `INCONCLUSIVE`, sem inserir causa histórica no score atual.
 
 ### TASK-RENATO-006 — Holdout e tuning por evidência
 
 - **Tempo:** H12–H15.
-- **Aceite:** reporta top-1 accuracy, scope exact match, false alerts e inconclusive; thresholds congelados antes do holdout final.
+- **Aceite:** reporta top-1 accuracy, scope exact match, false alerts e inconclusive; inclui causa nova suportada sem precedente; thresholds congelados antes do holdout final.
 - **Regra:** não ajustar usando o caso secreto de trial by fire.
 
 ## Git e handoffs

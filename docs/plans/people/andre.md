@@ -2,7 +2,7 @@
 
 ## Missão
 
-- **Plano geral:** 1.0.0
+- **Plano geral:** 1.3.0
 - **Objetivo:** `OBJ-ANDRE-001`
 - **Papel:** frontend, experiência da demo, recorder transversal e pitch.
 - **Orçamento:** 6–7h de implementação; H15–H19 prioritariamente integração visual, acceptance, ensaio e pitch.
@@ -11,6 +11,10 @@
 ## Context pack
 
 O Lumen observa attempts de pagamentos, detecta quedas de approval/latência, localiza o slice causal, separa incidentes, recupera precedentes confirmados no Neo4j e recomenda ação humana. A UI não recalcula fatos nem consulta DuckDB/Neo4j diretamente; ela renderiza contratos do backend.
+
+A memória nunca decide o estado causal. André renderiza dois sinais independentes: `root_cause.status` (`SUPPORTED` ou `INCONCLUSIVE`) e memória (`MATCH`, `NO_PRECEDENT` ou `UNAVAILABLE`). Mesmo `INCONCLUSIVE` consulta memória. Com match, a UI mostra o precedente e a solução anterior como orientação; sem match, declara que não há causa atual sustentada nem precedente.
+
+Quando houver precedente, a UI mostra separadamente o playbook usado antes, por que ele parece aplicável agora e quais diferenças exigem validação humana. O botão/controle nunca executa a solução.
 
 No roteiro, André demonstra: silêncio no normal, provider degradado no Brasil, emissor mexicano simultâneo, repetição Mastercard de dois dias antes, `INCONCLUSIVE` e trial by fire.
 
@@ -29,7 +33,7 @@ No roteiro, André demonstra: silêncio no normal, provider degradado no Brasil,
 - `GET /health` → estados `api`, `duckdb`, `neo4j`, `openai`, `demo_mode`.
 - `GET /metrics/current` → janelas com current/baseline.
 - `GET /incidents` → lista `CTR-INC-001`.
-- `GET /incidents/{id}` → Incident completo + `explanation`.
+- `GET /incidents/{id}` → Incident completo + `memory` (`CTR-MEM-001 v1.1`) + `explanation`; a UI lê `memory_status` e nunca infere indisponibilidade por lista vazia.
 - `POST /demo/scenarios/{scenario_id}/inject` → `202` com `correlation_id`; somente ambiente demo.
 - UI timeout: 2s; fallback: renderizar fixtures marcadas `DEMO FALLBACK`.
 
@@ -59,7 +63,7 @@ No roteiro, André demonstra: silêncio no normal, provider degradado no Brasil,
 
 - **Tempo:** H5–H6:30.
 - **Inclui:** “aconteceu há 2 dias”, confirmação humana anterior, fatores iguais/diferentes e scores separados.
-- **Aceite:** não usa “mesma causa” quando status corrente não sustenta; linka evidence IDs.
+- **Aceite:** não usa “mesma causa” quando status corrente não sustenta; linka evidence IDs; cobre visualmente `SUPPORTED + MATCH`, `SUPPORTED + NO_PRECEDENT`, `INCONCLUSIVE + MATCH` e `INCONCLUSIVE + NO_PRECEDENT`; no terceiro caso mostra precedente sem afirmar a causa atual.
 - **Handoff:** Altoé revisa semântica e groundedness.
 
 ### TASK-ANDRE-004 — Preparar pitch e roteiro resiliente

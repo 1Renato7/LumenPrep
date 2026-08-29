@@ -28,6 +28,9 @@ _Consolidar no modo `FINALIZE`; as entradas originais permanecem nas lanes._
 | 2026-08-29T11:56:33-03:00 | FL-20260829-TEAM-001 | Adotar um Flight Log Markdown, append-only e dividido por lanes | André | VALIDATED | Três skills validadas e checagens Git aprovadas |
 | 2026-08-29T12:08:01-03:00 | FL-20260829-TEAM-002 | Separar avaliação viva do histórico de decisões | André | VALIDATED | `avaliacao.md` aponta para o Flight Log canônico |
 | 2026-08-29T15:42:08-03:00 | FL-20260829-TEAM-009 | Publicar plano no Linear correto com quatro owners | André | VALIDATED | 54 issues e 50 relações auditadas sem divergência |
+| 2026-08-29T16:28:49-03:00 | FL-20260829-TEAM-010 | Priorizar descoberta causal e usar memória para acelerar solução | Team | ACCEPTED | Plano 1.1.0 e fixtures de caso novo sem precedente |
+| 2026-08-29T16:40:08-03:00 | FL-20260829-TEAM-011 | Consultar memória mesmo quando a causa atual for inconclusiva | Team | ACCEPTED | Plano 1.2.0 e fixtures `INCONCLUSIVE + MATCH` |
+| 2026-08-29T16:48:27-03:00 | FL-20260829-TEAM-012 | Tipar o estado da memória no contrato compartilhado | Team | ACCEPTED | CTR-MEM-001 v1.1 e fixture `MEMORY_UNAVAILABLE` |
 
 ## Decisões do time
 
@@ -171,7 +174,7 @@ Exigência oficial de nome/localização, conflitos recorrentes, backlinks quebr
 
 #### Adendos
 
-- Nenhum.
+- **2026-08-29T16:49:29-03:00:** o schema passou a impor as invariantes de estado: `MATCH_FOUND` exige ao menos um match; `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` exigem lista vazia. O parse das quatro fixtures e a checagem dessas invariantes passaram; teste de aplicação continua `NOT RUN`.
 
 ### FL-20260829-TEAM-003 — Colocar precisão causal e memória recorrente no núcleo do MVP
 
@@ -656,6 +659,213 @@ Mudança de time, assignee, plano, contrato, caminho crítico ou falha parcial n
 
 - **2026-08-29T16:01:00-03:00:** projeto criado em `Lumen`; parents `LUM2-4`–`LUM2-7`; microtarefas `LUM2-8`–`LUM2-57`. Releitura completa confirmou estado `Todo`, label `Feature`, assignees exatos, descrições com ID estável e 48 tarefas bloqueadas pelas relações previstas; `TASK-CORE-001` e `TASK-CON-001` são as duas raízes intencionais. Nenhuma escrita parcial falhou.
 - **2026-08-29T16:06:00-03:00:** o preflight de `integration-contract-guardian` encontrou aliases não canônicos em 21 descrições do Linear. `CTR-TXN-001`, `CTR-WIN-001` e `CTR-ANM-001` foram substituídos respectivamente pelos IDs congelados `CTR-EVT-001`, `CTR-AGG-001` e `CTR-DET-001`; releitura das 21 issues confirmou zero alias restante. Os schemas não foram renomeados.
+
+### FL-20260829-TEAM-010 — Priorizar descoberta causal atual e usar memória para acelerar a solução
+
+- **Timestamp:** 2026-08-29T16:28:49-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team, confirmado por André
+- **Participantes:** André; Codex como recorder; validação de implementação por Altoé, Rogério e Renato
+- **Categoria:** product | architecture | AI/RAG | demo
+- **Escopo:** DEC-010, CMP-RCA-001, CMP-INC-001, CMP-MEM-001, CMP-EXP-001
+- **Links:** `docs/plans/system-plan.md` v1.1.0, `docs/plans/architecture-diagrams.md`, CTR-INC-001, CTR-MEM-001, CTR-LLM-001
+- **Supersedes / superseded by:** não substitui FL-20260829-TEAM-007; explicita sua fronteira de autoridade
+
+#### Contexto e pergunta
+
+Um diagrama anterior sugeria que não encontrar um incidente na memória levaria diretamente a incerteza. Isso inverteria o objetivo do produto: o sistema precisa descobrir combinações novas e só depois verificar recorrência. Também era necessário explicitar por que a memória importa operacionalmente: recuperar uma solução anterior potencialmente reutilizável.
+
+#### Decisão
+
+Detector e RCA atuais são a única fonte da suficiência causal. `matches=[]` significa `NO_PRECEDENT`, não `INCONCLUSIVE`. Depois de formar o incidente, a memória procura recorrências humanas confirmadas e recupera o playbook anterior. Esse playbook é priorizado somente se suas precondições ainda forem compatíveis com causa, escopo e evidências atuais; o sistema explica diferenças e apenas recomenda ao humano.
+
+#### Critérios e por que agora
+
+Precisão em combinações inéditas é o critério principal da banca. Memória deve reduzir tempo de resposta em recorrências sem limitar descoberta nem transformar coincidência histórica em causalidade atual.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Memória como gate | simples de explicar | falha em causas novas e confunde ausência de histórico com ausência de evidência | FACT: trial by fire usa combinação não ensaiada | viola o objetivo central |
+| Ignorar memória na recomendação | separação forte | perde o principal ganho operacional do bônus | FACT: usuário quer reaproveitar solução anterior | desperdiça conhecimento confirmado |
+| RCA atual + memória posterior | descobre novos casos e acelera recorrências | exige duas confianças e validação de precondições | FACT: contratos já separam Incident de SimilarIncidentResult | escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o fluxo e os contratos já calculavam `Incident.root_cause` antes de `CTR-MEM-001`; a ambiguidade estava na representação e na regra de recomendação.
+- **TEST:** NOT RUN; fixtures de causa suportada com `matches=[]` foram adicionados para contract/e2e.
+- **ASSUMPTION:** o catálogo de playbooks terá precondições verificáveis por causa/escopo; Altoé valida antes de H8.
+- **UNKNOWN:** granularidade mínima das precondições; se faltar, o sistema recomenda inspeção, não reutilização direta.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** descoberta de causas inéditas, sem perder memória recorrente e solução anterior.
+- **Abrimos mão de:** narrativa mais simples de “buscar caso igual e repetir”.
+- **Dívida/limitação:** exige versionar e avaliar precondições dos playbooks.
+- **Risco residual:** solução antiga pode estar obsoleta; diferenças e `HUMAN_ONLY` mitigam.
+
+#### Consequências e propagação
+
+- **Produto/demo:** trial by fire demonstra caso novo; cenário Mastercard demonstra reaproveitamento fundamentado.
+- **Arquitetura/contratos:** sem quebra de schema; semântica de CTR-MEM-001 esclarecida e fixtures adicionados.
+- **Pessoas/branches:** Renato prova descoberta sem memória; Altoé valida solução anterior; Rogério preserva root cause; André separa diagnóstico de precedente.
+- **Plano/Linear:** plano geral e planos individuais sincronizados; auditoria mostrou que as issues atuais já preservam essa separação, portanto nenhuma relação/tarefa mudou.
+- **Testes/observabilidade:** casos `SUPPORTED + NO_PRECEDENT`, `SUPPORTED + MATCH`, `INCONCLUSIVE + MATCH/NO_MATCH` e `MEMORY_UNAVAILABLE`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma combinação nova recebe causa suportada mesmo com memória vazia; uma recorrência recebe o playbook anterior com rationale.
+- **Caminho feliz:** provider novo no Brasil sem match e Mastercard recorrente com match.
+- **Caso difícil/adverso:** precedente semelhante com escopo ou precondição incompatível.
+- **Resultado observado:** NOT RUN; plano e fixtures preparados.
+- **Fallback:** manter diagnóstico e usar playbook genérico/inspeção humana quando memória ou precondições falharem.
+
+#### Gatilhos de revisão
+
+RCA depender de histórico, `NO_PRECEDENT` gerar `INCONCLUSIVE`, recomendação antiga sem rationale/precondição ou jurado demonstrar regressão em causa nova.
+
+#### Adendos
+
+- **2026-08-29T16:40:08-03:00:** decisão substituída por `FL-20260829-TEAM-011`. Preserva-se a separação de autoridade, mas a consulta à memória passa a ocorrer também para incidentes atuais `INCONCLUSIVE`.
+
+### FL-20260829-TEAM-011 — Consultar memória mesmo quando a causa atual for inconclusiva
+
+- **Timestamp:** 2026-08-29T16:40:08-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team, confirmado por André
+- **Participantes:** André; Codex como recorder; validação de implementação por Altoé, Rogério e Renato
+- **Categoria:** product | architecture | AI/RAG | contract | demo
+- **Escopo:** DEC-011, CMP-RCA-001, CMP-INC-001, CMP-MEM-001, CMP-EXP-001, CMP-UI-001
+- **Links:** `docs/plans/system-plan.md` v1.2.0, `docs/plans/architecture-diagrams.md`, CTR-INC-001, CTR-MEM-001, CTR-LLM-001
+- **Supersedes / superseded by:** supersedes FL-20260829-TEAM-010
+
+#### Contexto e pergunta
+
+A regra anterior preservava corretamente o diagnóstico de casos novos, mas sua formulação podia fazer um incidente atual `INCONCLUSIVE` encerrar antes de consultar a memória. Isso descartaria um precedente semelhante que um humano confirmou no passado justamente quando os sinais atuais ainda são fracos. A pergunta é como aproveitar esse histórico sem transformar similaridade em prova causal atual.
+
+#### Decisão
+
+Todo Incident detectado consulta a memória depois que o RCA fixa seu status atual, tanto `SUPPORTED` quanto `INCONCLUSIVE`. O sistema combina dois eixos sem fundi-los: suficiência causal atual e existência de precedente. Em `INCONCLUSIVE + MATCH`, mostra o incidente histórico, sua causa humana confirmada, fatores iguais/diferentes e o playbook usado, mas mantém a causa atual inconclusiva e apresenta o playbook apenas como roteiro de investigação. Somente `INCONCLUSIVE + NO_PRECEDENT` termina sem causa sustentada nem precedente. Toda ação permanece `HUMAN_ONLY`.
+
+#### Critérios e por que agora
+
+A memória deve capturar conhecimento operacional humano, inclusive diagnósticos que os sinais automatizados atuais ainda não conseguem provar. Ao mesmo tempo, precisão causal é a prioridade da banca, então o precedente não pode alterar `root_cause.status` nem entrar no score estatístico atual.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Consultar memória apenas para causa atual suportada | fluxo simples e menor custo | perde precedentes úteis nos casos mais ambíguos | FACT: o usuário exige busca mesmo sem causa atual | não atende o comportamento desejado |
+| Fazer o match histórico confirmar a causa atual | resposta mais assertiva | confunde similaridade com causalidade e pode repetir erro antigo | FACT: prioridade é precisão da causa | risco de falso diagnóstico |
+| Consultar sempre e manter dois status independentes | aproveita conhecimento humano sem adulterar evidência atual | exige matriz de quatro estados e copy cuidadosa | INFERENCE: schemas atuais já separam Incident e SimilarIncidentResult | escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `CTR-INC-001` já aceita `root_cause.status=INCONCLUSIVE`; `CTR-MEM-001` consulta escopo/sinais e não precisa alterar o schema para receber esse incidente.
+- **TEST:** validação local de 2026-08-29 confirmou parse de todos os JSON, conformidade das cinco fixtures novas/afetadas com seus schemas por validador recursivo, cinco blocos Mermaid balanceados e IDs únicos no Flight Log; código da aplicação ainda não existe.
+- **ASSUMPTION:** escopo, métricas, decline profile e forma temporal do incidente inconclusivo serão suficientes para recuperação útil; Altoé valida em `TASK-ALTOE-006`.
+- **UNKNOWN:** threshold ótimo para matches parciais em baixa amostra; até os evals, o sistema deve mostrar score e diferenças.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** recuperação de conhecimento humano nos casos em que a investigação atual ainda não fecha uma causa.
+- **Abrimos mão de:** um fluxo linear simples e de uma única confiança agregada.
+- **Dívida/limitação:** UI, API e evals precisam cobrir a matriz causal × memória e evitar copy ambígua.
+- **Risco residual:** um precedente visualmente parecido pode induzir viés de ancoragem; mitigado por diferenças visíveis, limitação explícita e causa atual ainda `INCONCLUSIVE`.
+
+#### Consequências e propagação
+
+- **Produto/demo:** o caso inconclusivo pode dizer “não sei a causa atual, mas há um precedente humano semelhante e esta foi a investigação/solução anterior”.
+- **Arquitetura/contratos:** sem mudança sintática de schema; mudança comportamental no acionamento de CTR-MEM-001 e na composição de CTR-LLM-001.
+- **Pessoas/branches:** Renato entrega assinatura também no no-answer; Altoé recupera sem causa atual; Rogério preserva os dois eixos; André renderiza os quatro estados.
+- **Plano/Linear:** plano geral v1.2.0 e planos individuais sincronizados; descrições do Linear devem ser auditadas no próximo sync autorizado.
+- **Testes/observabilidade:** evals separados para `SUPPORTED + MATCH`, `SUPPORTED + NO_PRECEDENT`, `INCONCLUSIVE + MATCH`, `INCONCLUSIVE + NO_PRECEDENT` e `MEMORY_UNAVAILABLE`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um incidente de baixa cobertura ainda recupera o Mastercard confirmado de dois dias antes sem mudar a causa atual de `INCONCLUSIVE`.
+- **Caminho feliz:** o dashboard mostra precedente, solução anterior, fatores coincidentes/divergentes e limitação causal na mesma tela.
+- **Caso difícil/adverso:** match alto em bandeira/país, mas provider diferente e amostra pequena; o sistema não afirma “mesma causa”.
+- **Resultado observado:** PASS para consistência documental, schemas/fixtures e estrutura dos diagramas; NOT RUN para comportamento da aplicação, pois ainda não foi implementada.
+- **Fallback:** se memória falhar, preservar o status atual e declarar `MEMORY_UNAVAILABLE`; se nenhum match passar o threshold, `INCONCLUSIVE + NO_PRECEDENT`.
+
+#### Gatilhos de revisão
+
+Qualquer implementação que pule memória em `INCONCLUSIVE`, promova causa atual por match histórico, esconda fatores divergentes ou recomende execução automática exige revisão imediata.
+
+#### Adendos
+
+- **2026-08-29T16:44:00-03:00:** `git diff --check` passou; cinco fixtures validaram contra os contratos relevantes, os cinco diagramas possuem fences balanceadas e o Flight Log contém 11 IDs únicos. Não foi executado teste de aplicação porque o repositório ainda contém apenas planejamento/contratos.
+
+### FL-20260829-TEAM-012 — Tipar o estado da memória no contrato compartilhado
+
+- **Timestamp:** 2026-08-29T16:48:27-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team
+- **Participantes:** André; Codex como recorder; lacuna identificada em revisão cruzada do plano de Altoé
+- **Categoria:** contract | architecture | AI/RAG | UX
+- **Escopo:** DEC-012, CTR-MEM-001, CTR-API-001, CMP-MEM-001, CMP-API-001, CMP-UI-001
+- **Links:** `docs/plans/system-plan.md` v1.3.0, `contracts/v1/similar-incidents.schema.json`, `contracts/v1/api.openapi.yaml`
+- **Supersedes / superseded by:** complementa FL-20260829-TEAM-011; não altera sua separação de autoridade
+
+#### Contexto e pergunta
+
+CTR-MEM-001 devolvia apenas `matches[]`. Uma lista vazia representava `NO_PRECEDENT`, mas a arquitetura também exigia `MEMORY_UNAVAILABLE`. Sem estado tipado, API e UI teriam de inferir falha por health, exceção ou texto, criando interpretações divergentes justamente nos casos inconclusivos.
+
+#### Decisão
+
+Substituir CTR-MEM-001 v1 por v1.1 antes da implementação. `memory_status` passa a ser obrigatório com `MATCH_FOUND`, `NO_PRECEDENT` ou `MEMORY_UNAVAILABLE`. O detalhe da API expõe separadamente Incident, SimilarIncidentResult e ExplanationBundle. `matches=[]` continua presente nos dois últimos estados, mas consumidores usam `memory_status`, nunca a lista, para distinguir ausência de precedente de indisponibilidade.
+
+#### Critérios e por que agora
+
+O contrato ainda não foi implementado, então a migração coordenada agora é barata. Estado explícito melhora teste, copy e fallback sem misturar falha operacional com incerteza causal.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Inferir por `matches=[]` | nenhum campo novo | torna `NO_PRECEDENT` indistinguível de falha | FACT: ambos podem produzir lista vazia | semanticamente incorreto |
+| Inferir pelo `/health` | evita mudar schema | health global pode divergir da chamada específica e cria race | INFERENCE de sistemas distribuídos | não representa o resultado da consulta |
+| Campo obrigatório `memory_status` | contrato e testes determinísticos | mudança incompatível antes da implementação | FACT: nenhum consumidor foi implementado ainda | escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o schema v1 não possuía campo de estado; OpenAPI descrevia apenas “Incident plus explanation”.
+- **TEST:** PASS documental: quatro fixtures `similar-incidents*.json` validaram contra CTR-MEM-001 v1.1; JSON, OpenAPI YAML, versões dos quatro planos individuais, cinco diagramas e IDs do Flight Log passaram nas checagens locais.
+- **ASSUMPTION:** uma resposta degradada com `MEMORY_UNAVAILABLE`, trace e `matches=[]` é suficiente para a demo; Rogério/Altoé validam no checkpoint H8.
+- **UNKNOWN:** se produção futura preferirá erro HTTP parcial; fora do MVP local.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** estados observáveis e copy correta em UI/API.
+- **Abrimos mão de:** compatibilidade com fixtures v1 ainda não implementadas.
+- **Dívida/limitação:** precisa validar coerência entre status e quantidade de matches no código, pois o schema atual não usa condicionais `if/then`.
+- **Risco residual:** adapter pode emitir combinação inválida; contract tests cobrem os três estados.
+
+#### Consequências e propagação
+
+- **Produto/demo:** “sem precedente” e “memória indisponível” ficam visual e semanticamente distintos.
+- **Arquitetura/contratos:** CTR-MEM-001 v1.1 e resposta detalhada do CTR-API-001; CTR-EXT-001 permanece opcional, timeout 5 s, `NOT_CHECKED` e somente corroboration.
+- **Pessoas/branches:** Altoé produz o status; Rogério o transporta; André o renderiza; Renato não é afetado.
+- **Plano/Linear:** plano geral v1.3.0 e planos individuais sincronizados; preview Linear 1.3.0 aguarda confirmação antes de escrita.
+- **Testes/observabilidade:** fixtures de match, no precedent e unavailable; contract test impede inferência por lista vazia.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** UI distingue `INCONCLUSIVE + NO_PRECEDENT` de `INCONCLUSIVE + MEMORY_UNAVAILABLE` sem analisar texto.
+- **Caminho feliz:** `MATCH_FOUND` contém ao menos um precedente e mostra a solução histórica.
+- **Caso difícil/adverso:** Neo4j cai durante um incidente inconclusivo; causa atual permanece inconclusiva e UI declara indisponibilidade, não ausência de histórico.
+- **Resultado observado:** PASS para migração documental/contratual; NOT RUN para aplicação, ainda não implementada.
+- **Fallback:** adapter in-memory emite o mesmo contrato; se também falhar, `MEMORY_UNAVAILABLE`.
+
+#### Gatilhos de revisão
+
+Consumidor inferindo status por `matches.length`, necessidade de erro HTTP parcial, ou implementação iniciada ainda usando schema v1.
+
+#### Adendos
+
+- **2026-08-29T16:50:00-03:00:** validação pós-migração passou para quatro fixtures de memória, três fixtures causais/explicativas, parse de todos os JSON, OpenAPI YAML, cinco diagramas, versões 1.3.0 dos quatro planos individuais, 12 IDs únicos no Flight Log e `git diff --check`.
 
 ## André
 

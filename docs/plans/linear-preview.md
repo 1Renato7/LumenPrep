@@ -1,4 +1,4 @@
-# Preview de publicação no Linear — Plano 1.0.0
+# Sincronização no Linear — base 1.0.0, revisada contra o plano 1.3.0
 
 ## Destino descoberto
 
@@ -127,3 +127,6 @@ Autorização recebida em 2026-08-29 para criar o projeto `Lumen — Yuno Hackat
 - Auditoria de contratos: 21 descrições tiveram aliases corrigidos para `CTR-EVT-001`, `CTR-AGG-001` e `CTR-DET-001`; releitura confirmou zero referência não canônica.
 - Faixas Linear: André `LUM2-8`–`LUM2-14`; Altoé `LUM2-15`–`LUM2-26`; Rogério `LUM2-27`–`LUM2-42`; Renato `LUM2-43`–`LUM2-57`.
 - Evidência e decisão: `FL-20260829-TEAM-009` em `docs/flight-log.md`.
+- Revisão 1.1.0: as issues de RCA, Incident, memória, explainer e UI foram relidas. Elas já colocam cálculo causal antes da memória e proíbem tratar similaridade como causa; nenhuma tarefa, owner ou relação precisou mudar. `no-answer` em `TASK-MEM-008` significa `NO_PRECEDENT` da recuperação, nunca `INCONCLUSIVE` causal.
+- Preview de mudança 1.2.0: manter as mesmas issues, owners, estimativas e dependências, mas atualizar descrições/aceites de `TASK-UI-004` (LUM2-11), `TASK-MEM-006` (LUM2-20), `TASK-EXP-002` (LUM2-23), `TASK-EXP-003` (LUM2-24), `TASK-MEM-008` (LUM2-25), `TASK-INC-003` (LUM2-37), `TASK-RCA-002` (LUM2-55) e `TASK-EVAL-001` (LUM2-56) para exigir consulta de memória em Incident `INCONCLUSIVE` e cobrir `INCONCLUSIVE + MATCH` sem promover a causa atual. Escrita externa ainda não executada para esta revisão; exige confirmação explícita deste preview conforme a skill.
+- Preview de mudança 1.3.0: nas mesmas issues e sem alterar relações, atualizar também `TASK-API-002` (LUM2-39) e os contratos citados nas issues acima para CTR-MEM-001 v1.1, cujo `memory_status` obrigatório diferencia `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE`. A confirmação explícita deste preview continua pendente antes da escrita externa.

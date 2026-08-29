@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "incident_id": "inc_new_provider_country_001",
+  "executive_summary": "Há BRL 18.400,00 de GMV estimado em risco em pagamentos processados pelo provider_new no Brasil.",
+  "operations_summary": "A approval rate caiu de 82% para 58%; o slice provider_new × Brasil explica 88% das aprovações perdidas.",
+  "what_happened": "A taxa de aprovação caiu de forma estatisticamente relevante.",
+  "where_and_why": "O efeito atual está concentrado em provider_new × Brasil e é sustentado pelas métricas e códigos de recusa correntes.",
+  "recurrence_statement": null,
+  "evidence_ids": ["evd_current_rate_new", "evd_current_scope_new", "evd_current_declines_new"],
+  "playbook_id": "PB-PROVIDER-DEGRADATION-001",
+  "recommended_action": "Validar a saúde da conexão do provider_new no Brasil e comparar os códigos de recusa com uma conexão alternativa.",
+  "execution": "HUMAN_ONLY",
+  "limitations": ["Nenhum precedente histórico suficientemente semelhante foi encontrado; a causa atual permanece suportada pelas evidências correntes."],
+  "model_version": "deterministic-template"
+}
