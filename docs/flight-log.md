@@ -1031,6 +1031,7 @@ Schema definitivo incompatível, necessidade de quarta dimensão/cardinalidade o
 - **2026-08-29T17:52:00-03:00:** PASS: `.\\.python-runtime\\python.exe -m unittest discover -s tests -v` executou 10 testes. O baseline declarou 360.000.000 attempts lógicos / 90 dias, `low_sample_attempts=12`, cardinalidade 3 em cada dimensão e fingerprint `bf5ff7ed8ea6f112e561af3c104ab2398f3e008c2cced16b036f1005575d958b`. `compileall` e `git diff --check` também passaram.
 - **2026-08-29T17:55:00-03:00:** `code-review-gate`: `PASS`, sem achados bloqueantes. `integration-contract-guardian` em modo `INTEGRATION`: `READY`; merge-base com `origin/main` em `cf20447`, nenhum arquivo em `contracts/` ou `pyproject.toml` modificado, handoff localizável em `config/generator/v1/default.json` e `app/simulation/`, e os 10 testes passaram.
 - **2026-08-29T17:53:30-03:00:** `LUM2-43` foi marcado como `Done` no Linear após o commit `97b966c`, sem alterar sua descrição, relações ou contrato.
+- **2026-08-29T17:57:10-03:00:** Renato autorizou publicar `renato/define-generator` em `origin` depois dos gates `PASS`/`READY`; o push inclui somente os commits `97b966c` e `873065f` mais este registro, mantendo `LumenPrep/` fora do Git.
 
 ### FL-20260829-RENATO-003 — Usar CTR-SCN-001 validado por LUM2-28 como contrato de entrada
 
