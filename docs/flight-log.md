@@ -961,6 +961,146 @@ Introdução da primeira dependência de runtime, falha em Python 3.14.4 ou exig
 - **2026-08-29T17:38:00-03:00:** PASS: `.\\.python-runtime\\python.exe -m unittest discover -s tests -v` executou 2 testes; a checagem `tomllib` confirmou `project.requires-python == "==3.14.4"`; `git diff --check` passou.
 - **2026-08-29T17:41:00-03:00:** `code-review-gate` classificou o diff como `PASS` após remover uma linha em branco extra em `pyproject.toml`; `integration-contract-guardian` em modo `INTEGRATION` classificou o checkpoint como `READY`. Foram confirmados `HEAD`, `origin/main` e merge-base em `28dfcbd`, ausência de mudança em schemas/consumidores, testes de smoke e preservação de `LumenPrep/` fora do índice.
 
+### FL-20260829-RENATO-002 — Configurar um baseline de 360 milhões de attempts por regras condicionais
+
+- **Timestamp:** 2026-08-29T17:43:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Codex como recorder
+- **Categoria:** data | architecture | quality | demo
+- **Escopo:** `TASK-DATA-001` / `LUM2-43`; `CMP-DATA-001`; `CTR-SCN-001` v1 provisório
+- **Links:** `docs/plans/system-plan.md` v1.3.1; `docs/plans/people/renato.md`; `contracts/v1/scenario.schema.json`; `config/generator/v1/default.json`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O gerador ainda não existe e precisa de valores iniciais configuráveis, suficientemente grandes para representar um baseline de produção, mas sem tornar a primeira tarefa responsável por materializar centenas de milhões de linhas. O schema definitivo depende de `LUM2-28`; Renato autorizou o uso do schema v1 atual como provisório desde que seja substituível.
+
+#### Decisão
+
+Usar 360 milhões de attempts lógicos em 90 dias, com três países (BR, MX, CO), três merchants, três providers e três categorias de método. País é a distribuição base; merchant, provider e método são probabilidades condicionais declaradas por país. A configuração será JSON versionado e o parser de cenário ficará atrás de um protocolo/adaptador provisório de `CTR-SCN-001` v1.
+
+#### Critérios e por que agora
+
+O volume representa centenas de milhões sem impor custo de geração nesta microtarefa. Regras condicionais tornam combinações novas possíveis e evitam uma tabela cartesiana hardcoded; o adaptador protege o gerador contra a mudança contratual pendente.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| JSON versionado com condições por país | editável, testável e extensível sem alterar schema | exige validação explícita das probabilidades | FACT: CTR-SCN-001 aceita dimensões conhecidas e filtros abertos | escolhido |
+| Regras fixadas em código | implementação inicial curta | substituição do schema e tuning exigem mudanças de código | FACT: a banca pode escolher combinação nova | reduz controlabilidade |
+| Materializar 360 milhões de linhas agora | produz imediatamente o histórico completo | custo desnecessário e bloqueia tarefas seguintes | FACT: LUM2-43 define dimensões e probabilidades, não os 90 dias | fora do escopo |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o plano exige geração determinística, seed, probabilidades condicionais e ground truth isolado.
+- **TEST:** NOT RUN — os testes de cardinalidade, normalização e adaptador serão executados nesta tarefa.
+- **ASSUMPTION:** BR/MX/CO e três valores por dimensão cobrem a primeira fatia e os cenários de demo; Renato reavalia ao implementar os cenários seguintes.
+- **UNKNOWN:** as taxas calibradas contra dados reais não existem, pois o dataset é sintético.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** configuração transparente, reprodutível e barata de testar.
+- **Abrimos mão de:** realismo calibrado em dados de produção.
+- **Dívida/limitação:** a geração vetorizada e a sazonalidade ficam para tarefas posteriores.
+- **Risco residual:** distribuições iniciais podem não produzir casos difíceis suficientes; os evals futuros ajustam parâmetros sem ler ground truth no detector.
+
+#### Consequências e propagação
+
+- **Produto/demo:** permite construir baseline e cenários com escopo visível.
+- **Arquitetura/contratos:** consome provisoriamente `CTR-SCN-001` v1 sem mudar seu arquivo; a troca fica localizada no adaptador.
+- **Pessoas/branches:** Rogério e André receberão uma configuração e fixture estáveis, sem acesso a ground truth.
+- **Plano/Linear:** nenhum estado no Linear será alterado; a configuração é a evidência da microtarefa.
+- **Testes/observabilidade:** testes verificam seed, cardinalidade, probabilidades normalizadas e rejeição de payload de cenário incompleto.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** a mesma configuração produz o mesmo fingerprint e cada distribuição soma 1.
+- **Caminho feliz:** cenário `provider=stripe AND country=BR` do fixture passa pelo adaptador provisório.
+- **Caso difícil/adverso:** um payload sem efeito ou sem seed é rejeitado antes de alcançar o gerador.
+- **Resultado observado:** NOT RUN — pendente da implementação.
+- **Fallback:** substituir apenas o adaptador por uma implementação do schema validado em `LUM2-28`.
+
+#### Gatilhos de revisão
+
+Schema definitivo incompatível, necessidade de quarta dimensão/cardinalidade ou eval que revele distribuição incapaz de formar o cenário de demonstração.
+
+#### Adendos
+
+- **2026-08-29T17:52:00-03:00:** PASS: `.\\.python-runtime\\python.exe -m unittest discover -s tests -v` executou 10 testes. O baseline declarou 360.000.000 attempts lógicos / 90 dias, `low_sample_attempts=12`, cardinalidade 3 em cada dimensão e fingerprint `bf5ff7ed8ea6f112e561af3c104ab2398f3e008c2cced16b036f1005575d958b`. `compileall` e `git diff --check` também passaram.
+- **2026-08-29T17:55:00-03:00:** `code-review-gate`: `PASS`, sem achados bloqueantes. `integration-contract-guardian` em modo `INTEGRATION`: `READY`; merge-base com `origin/main` em `cf20447`, nenhum arquivo em `contracts/` ou `pyproject.toml` modificado, handoff localizável em `config/generator/v1/default.json` e `app/simulation/`, e os 10 testes passaram.
+
+### FL-20260829-RENATO-003 — Usar CTR-SCN-001 validado por LUM2-28 como contrato de entrada
+
+- **Timestamp:** 2026-08-29T17:46:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Rogério como produtor do contrato; Codex como recorder
+- **Categoria:** contract | integration | data
+- **Escopo:** `TASK-DATA-001` / `LUM2-43`; `CTR-SCN-001` v1; `LUM2-28`
+- **Links:** `LUM2-28`; `contracts/v1/scenario.schema.json`; `contracts/fixtures/scenario-provider-br.json`; `FL-20260829-RENATO-002`
+- **Supersedes / superseded by:** substitui a condição provisória de `FL-20260829-RENATO-002`; a decisão de dimensões e probabilidades permanece válida
+
+#### Contexto e pergunta
+
+Depois de iniciada a tarefa, Rogério concluiu `LUM2-28`. Era necessário decidir se a tarefa 43 continuaria com um contrato provisório ou se passaria a depender diretamente da definição já validada.
+
+#### Decisão
+
+Consumir `contracts/v1/scenario.schema.json` e o fixture correspondente como `CTR-SCN-001` v1 validado por Rogério. A tarefa 43 não altera o schema, não importa a branch inteira de Rogério e encapsula sua leitura em um adaptador para uma futura versão contratual.
+
+#### Critérios e por que agora
+
+O bloqueio foi removido e a fonte de verdade está disponível. Manter um adapter provisório criaria duplicação e risco de divergência sem benefício.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Consumir o CTR-SCN-001 validado | um único contrato e fixture compartilhados | integração posterior precisa preservar a interface do adaptador | FACT: LUM2-28 está `Done` e o schema é idêntico ao arquivo canônico | escolhido |
+| Manter schema provisório paralelo | isolamento temporário | divergência de validação e duplicação | FACT: o bloqueio da tarefa foi removido | não há benefício restante |
+| Integrar toda a branch de Rogério | disponibiliza a stack completa agora | mistura múltiplas tarefas e dependências fora do escopo | FACT: o diff contém ingestion, API e integração além dos contratos | fora do escopo de LUM2-43 |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Linear registra `LUM2-28` como `Done` em 2026-08-29T20:26:31Z.
+- **FACT:** o schema e fixture de cenário na branch de Rogério são iguais aos arquivos canônicos atuais.
+- **TEST:** NOT RUN — os testes da tarefa 43 usarão ambos os arquivos canônicos.
+- **UNKNOWN:** a ordem de merge da branch completa de Rogério será tratada no checkpoint de integração próprio.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** aderência ao contrato validado sem antecipar dependências.
+- **Abrimos mão de:** usar agora o validador `jsonschema` existente apenas na branch de Rogério.
+- **Dívida/limitação:** o adaptador local cobre somente a fronteira usada pelo gerador até a integração do validador completo.
+- **Risco residual:** o schema v2 futuro exige novo adaptador, não alteração das regras de distribuição.
+
+#### Consequências e propagação
+
+- **Produto/demo:** cenários de demonstração passam pela mesma definição compartilhada.
+- **Arquitetura/contratos:** `CTR-SCN-001` v1 é consumido, não modificado.
+- **Pessoas/branches:** o handoff de Rogério fica explícito e a branch de Renato não importa componentes alheios.
+- **Plano/Linear:** dependência resolvida no Linear; nenhum estado será escrito pela tarefa 43.
+- **Testes/observabilidade:** fixture canônico é aceito e um payload inválido é rejeitado.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** trocar a implementação do adaptador não altera o carregamento da configuração.
+- **Caminho feliz:** fixture `scenario-provider-br.json` é aceito.
+- **Caso difícil/adverso:** campo obrigatório ausente ou campo extra é rejeitado no limite do adaptador.
+- **Resultado observado:** NOT RUN — pendente da implementação.
+- **Fallback:** manter o mesmo protocolo e substituir somente a implementação pelo validador completo de Rogério durante a integração.
+
+#### Gatilhos de revisão
+
+Alteração de `CTR-SCN-001`, integração da branch de Rogério ou um consumidor que exija validação JSON Schema completa nesta branch.
+
+#### Adendos
+
+- **2026-08-29T17:52:00-03:00:** PASS: o adapter aceitou `contracts/fixtures/scenario-provider-br.json`, rejeitou `seed` ausente, campo `ground_truth` e timestamp sem timezone, e preservou o caso permitido pelo schema de filtros vazios. A configuração referencia o schema canônico por `scenario_contract.schema_path`.
+- **2026-08-29T17:55:00-03:00:** `LumenPrep/` permaneceu não rastreado e fora do índice; a branch de Rogério não foi integrada nesta microtarefa. O consumidor futuro pode trocar `ScenarioV1Contract` sem alterar as regras declarativas de distribuição.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._

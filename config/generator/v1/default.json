@@ -1,0 +1,145 @@
+{
+  "config_version": "1.0",
+  "seed": 29082026,
+  "volume": {
+    "logical_attempts": 360000000,
+    "days": 90,
+    "low_sample_attempts": 12
+  },
+  "scenario_contract": {
+    "schema_version": "1.0",
+    "schema_path": "contracts/v1/scenario.schema.json"
+  },
+  "sampling_order": [
+    "country",
+    "merchant_id",
+    "provider_id",
+    "payment_method_category"
+  ],
+  "dimensions": {
+    "country": {
+      "cardinality": 3,
+      "values": [
+        {"id": "BR", "probability": 0.48},
+        {"id": "MX", "probability": 0.30},
+        {"id": "CO", "probability": 0.22}
+      ]
+    },
+    "merchant_id": {
+      "cardinality": 3,
+      "values": [
+        {"id": "merchant_aurora", "probability": 0.36},
+        {"id": "merchant_nova", "probability": 0.34},
+        {"id": "merchant_atlas", "probability": 0.30}
+      ]
+    },
+    "provider_id": {
+      "cardinality": 3,
+      "values": [
+        {"id": "stripe", "probability": 0.39},
+        {"id": "adyen", "probability": 0.33},
+        {"id": "dlocal", "probability": 0.28}
+      ]
+    },
+    "payment_method_category": {
+      "cardinality": 3,
+      "values": [
+        {"id": "CARD", "probability": 0.70},
+        {"id": "BANK_TRANSFER", "probability": 0.20},
+        {"id": "DIGITAL_WALLET", "probability": 0.10}
+      ]
+    }
+  },
+  "conditional_probabilities": [
+    {
+      "rule_id": "merchant-br",
+      "when": {"country": "BR"},
+      "target_dimension": "merchant_id",
+      "values": [
+        {"id": "merchant_aurora", "probability": 0.45},
+        {"id": "merchant_nova", "probability": 0.30},
+        {"id": "merchant_atlas", "probability": 0.25}
+      ]
+    },
+    {
+      "rule_id": "merchant-mx",
+      "when": {"country": "MX"},
+      "target_dimension": "merchant_id",
+      "values": [
+        {"id": "merchant_aurora", "probability": 0.28},
+        {"id": "merchant_nova", "probability": 0.42},
+        {"id": "merchant_atlas", "probability": 0.30}
+      ]
+    },
+    {
+      "rule_id": "merchant-co",
+      "when": {"country": "CO"},
+      "target_dimension": "merchant_id",
+      "values": [
+        {"id": "merchant_aurora", "probability": 0.31},
+        {"id": "merchant_nova", "probability": 0.29},
+        {"id": "merchant_atlas", "probability": 0.40}
+      ]
+    },
+    {
+      "rule_id": "provider-br",
+      "when": {"country": "BR"},
+      "target_dimension": "provider_id",
+      "values": [
+        {"id": "stripe", "probability": 0.46},
+        {"id": "adyen", "probability": 0.31},
+        {"id": "dlocal", "probability": 0.23}
+      ]
+    },
+    {
+      "rule_id": "provider-mx",
+      "when": {"country": "MX"},
+      "target_dimension": "provider_id",
+      "values": [
+        {"id": "stripe", "probability": 0.39},
+        {"id": "adyen", "probability": 0.34},
+        {"id": "dlocal", "probability": 0.27}
+      ]
+    },
+    {
+      "rule_id": "provider-co",
+      "when": {"country": "CO"},
+      "target_dimension": "provider_id",
+      "values": [
+        {"id": "stripe", "probability": 0.30},
+        {"id": "adyen", "probability": 0.26},
+        {"id": "dlocal", "probability": 0.44}
+      ]
+    },
+    {
+      "rule_id": "method-br",
+      "when": {"country": "BR"},
+      "target_dimension": "payment_method_category",
+      "values": [
+        {"id": "CARD", "probability": 0.73},
+        {"id": "BANK_TRANSFER", "probability": 0.18},
+        {"id": "DIGITAL_WALLET", "probability": 0.09}
+      ]
+    },
+    {
+      "rule_id": "method-mx",
+      "when": {"country": "MX"},
+      "target_dimension": "payment_method_category",
+      "values": [
+        {"id": "CARD", "probability": 0.66},
+        {"id": "BANK_TRANSFER", "probability": 0.21},
+        {"id": "DIGITAL_WALLET", "probability": 0.13}
+      ]
+    },
+    {
+      "rule_id": "method-co",
+      "when": {"country": "CO"},
+      "target_dimension": "payment_method_category",
+      "values": [
+        {"id": "CARD", "probability": 0.64},
+        {"id": "BANK_TRANSFER", "probability": 0.25},
+        {"id": "DIGITAL_WALLET", "probability": 0.11}
+      ]
+    }
+  ]
+}
