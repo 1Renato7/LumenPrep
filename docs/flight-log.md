@@ -1124,6 +1124,75 @@ Reabrir quando `TASK-DET-004` ou `TASK-RCA-001` (Renato) produzirem `AnomalyCand
 
 #### Adendos
 
+- 2026-08-29 — `TASK-DET-004` foi entregue (ver `FL-20260829-ROGERIO-003`), então o gatilho de revisão desta decisão está parcialmente atingido. `AnomalyCandidate.slice` real usa `{provider_id, country}`, consistente com o resto do sistema. Falta `TASK-RCA-001/002` (Renato) pra fechar o conjunto definitivo de dimensões antes de travar o enum.
+
+### FL-20260829-ROGERIO-003 — Assumir parte da frente de Renato (dados + detecção)
+
+- **Timestamp:** 2026-08-29T18:49:11-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério (decisão, alinhada no time), Claude e Codex (execução)
+- **Categoria:** scope
+- **Escopo:** `CMP-DATA-001`, `CMP-DET-001` (originalmente `OBJ-RENATO-001`); branch `RENATO_CONTINUCAO_ROGERIO`
+- **Links:** `LUM2-7`, `LUM2-45`, `LUM2-48`, `LUM2-50`, `LUM2-51`, `LUM2-52`, `LUM2-53`, `CTR-DET-001`, `CTR-SCN-001`, `CTR-EVT-001`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+`OBJ-ROGERIO-001` (`LUM2-6`) chegou ao limite do que era possível sem terceiros: `TASK-INC-001` dependia de `TASK-RCA-002`, `TASK-INT-001` de `TASK-DET-004`+`TASK-UI-002`, e a frente de Renato (`LUM2-7`, 15 microtarefas) tinha só `TASK-DATA-001` pronta. O time decidiu que o Rogério assumiria parte dessa frente para o projeto não ficar parado. Quais tarefas pegar, sem tomar o trabalho autoral de Renato nem colidir fisicamente com ele?
+
+#### Decisão
+
+Assumir **6 de 15** microtarefas de `LUM2-7`, escolhidas por destravarem a cadeia sem invadir a parte autoral: `TASK-DATA-002` (`LUM2-45`), `TASK-DATA-006` (`LUM2-48`), `TASK-DET-001..004` (`LUM2-50/51/52/53`). Trabalho isolado na branch `RENATO_CONTINUCAO_ROGERIO`, com pacotes novos (`app/detection/`) e extensão não-destrutiva do que Renato já tinha (`app/simulation/`), sem reescrever nada dele. As 9 restantes — incluindo `RCA-001/002` e `EVAL-001/002`, o núcleo autoral — permanecem com Renato.
+
+#### Critérios e por que agora
+
+`TASK-DET-004` era o bloqueio de `TASK-RCA-001` (Renato) *e* de `TASK-INT-001` (nosso) ao mesmo tempo — entregá-lo destrava os dois lados. `TASK-DATA-006` era o único bloqueio de `TASK-API-003` (`LUM2-40`, nosso), até então preso em fixture. O corte foi por fronteira de arquivo, não por volume: `app/simulation/` (estendido) e `app/detection/` (novo) não colidem com o que Renato continua tocando.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Assumir a frente inteira de Renato (15 tarefas) | destrava tudo de uma vez | toma o trabalho autoral dele (RCA/beam search é o diferencial da lente Originality); risco de colisão física com o que ele já estava tocando | FACT: branch `renato/define-generator` ativa | não é só volume de trabalho — muda quem entregou o quê no hackathon |
+| Não assumir nada e esperar | zero risco de colisão ou sobreposição | projeto parado; `LUM2-6` já sem tarefa desbloqueada | FACT: verificado tarefa a tarefa contra `linear-preview.md` | tempo do hackathon é o recurso mais escasso (DEC-008) |
+| **Assumir 6, por fronteira de arquivo** | destrava `API-003` e `RCA-001`; sem colisão | Renato precisa saber exatamente quais IDs para não duplicar esforço | FACT: 46/46 testes verdes pós-integração | **escolhida** |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `app/detection/` implementa baseline com pooling hierárquico (`weekday_hour` → `hour` → `global`, sem vazamento de futuro), Wilson score 95% para taxas e 3-MAD robusto para latência.
+- **TEST:** PASS — smoke de integração completo (script manual, não commitado): 10 dias de tráfego normal + injeção real de `scenario-provider-br` → `get_current_metrics()` → `detect_candidates()` → `correlate_candidates()` → `to_incident()`. A degradação injetada em `stripe/BR` foi detectada nos 3 sinais (`APPROVAL_RATE` 0.222 vs 0.889 esperado, `LATENCY_P95` 21609ms vs 1695ms, `TIMEOUT_RATE` 0.25 vs 0.0; `statistical_strength=1.0` nos três) e virou `Incident` `SUPPORTED` com impacto GMV real. 46/46 testes e `scripts/validate_contracts.py` OK.
+- **ASSUMPTION:** Renato foi (ou será) informado dos 6 IDs assumidos e seguirá nas 9 restantes. Owner: Rogério, gatilho: próxima sincronização do time.
+- **UNKNOWN:** se o baseline sazonal se comporta igual sobre os 90 dias reais de `TASK-DATA-004` (Renato) — hoje foi exercitado só contra série sintética de janelas.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** `TASK-API-003` deixou de ser fixture e virou injeção real; `TASK-RCA-001` destravado para Renato; 3 dos 4 bloqueios de `TASK-INT-001` resolvidos.
+- **Abrimos mão de:** clareza de autoria única na frente `LUM2-7` — agora ela tem dois donos, o que exige comunicação explícita para não duplicar trabalho.
+- **Dívida/limitação:** `app/simulation/outcomes.py` usa placeholders para decline codes e latência (`TASK-DATA-003`, Renato) e emite todos os eventos perto de um único `reference_time` (sem a sazonalidade de `TASK-DATA-004`). Documentado no docstring do módulo.
+- **Risco residual:** o detector produz falsos positivos de baixa força em slices não relacionados (~10 candidatos com `statistical_strength=0.5` no smoke, contra os 3 reais de força 1.0) — comportamento esperado de testes independentes a 95% sem correção de comparações múltiplas. Visível via `statistical_strength` para quem consome; tratar em `TASK-EVAL-001` (Renato).
+
+#### Consequências e propagação
+
+- **Produto/demo:** o passo D2 do roteiro (injetar provider degradado no Brasil) agora funciona com dado real ponta a ponta, não fixture.
+- **Arquitetura/contratos:** nenhum contrato alterado. `app/detection/` consome `CTR-AGG-001` e produz `CTR-DET-001`; `app/simulation/` produz `CTR-EVT-001` e consome `CTR-SCN-001`.
+- **Pessoas/branches:** Renato precisa saber os 6 IDs assumidos (`LUM2-45/48/50/51/52/53`) e que os 9 restantes seguem com ele. `RENATO_CONTINUCAO_ROGERIO` não foi mergeada em lugar nenhum.
+- **Plano/Linear:** os 6 marcados `Done`; `LUM2-7` movido para `In Progress`. Mapa Linear em `docs/plans/people/renato.md` corrigido — as issues `LUM2-44/45/46` têm o campo interno "ID estável" rotacionado entre si, e o título da issue é a fonte confiável.
+- **Testes/observabilidade:** `tests/test_detection.py`, `tests/test_simulation_outcomes.py`, `tests/test_simulation_live_stream.py`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma degradação injetada por cenário é detectada estatisticamente e vira incidente, sem regra hardcoded para aquele slice.
+- **Caminho feliz:** verificado — ver `TEST` acima.
+- **Caso difícil/adverso:** jurado injeta combinação inédita (D6). O detector varre todos os slices presentes nas janelas agregadas, sem lista fixa, então deve funcionar; **não exercitado** com combinação fora de `scenario-provider-br`.
+- **Resultado observado:** PASS no caminho feliz; `NOT RUN` para D6.
+- **Fallback:** fixtures anteriores continuam válidas; nenhuma foi removida.
+
+#### Gatilhos de revisão
+
+Reabrir se Renato retomar qualquer uma das 6 tarefas assumidas (risco de trabalho duplicado), ou se o baseline sazonal se comportar diferente sobre os 90 dias reais de `TASK-DATA-004`.
+
+#### Adendos
+
 - Nenhum.
 
 ## Renato
