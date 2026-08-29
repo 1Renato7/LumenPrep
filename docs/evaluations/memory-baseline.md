@@ -20,7 +20,24 @@
 - Preservação de `INCONCLUSIVE`: 1/1.
 - Distinção de falha operacional: 1/1.
 
-## Limitações e próximo gate
+## Validação contra Neo4j local
 
-Este conjunto não mede recall, latência de Neo4j, rerank vetorial, isolamento por tenant nem um holdout de combinações do Renato. Antes de marcar a tarefa como concluída, executar os mesmos cenários contra Neo4j real e acrescentar holdout independente.
+Em 2026-08-29, os cenários críticos foram executados contra a instância Neo4j
+local saudável, usando o bootstrap da aplicação e o adaptador
+`Neo4jIncidentRepository` da mesma cópia Git. O seed foi reaplicado de forma
+idempotente antes da consulta.
+
+| Caso | Resultado observado |
+| --- | --- |
+| Recorrência Mastercard D-2 | `MATCH_FOUND` para `INC-HIST-002D-MASTERCARD` |
+| Combinação nova Visa | `NO_PRECEDENT` |
+| Mesma marca, mas decline codes e forma temporal incompatíveis | `NO_PRECEDENT` |
+| Dependência indisponível | `MEMORY_UNAVAILABLE` |
+
+## Limitações remanescentes
+
+Este conjunto ainda não mede recall, latência sob carga, rerank vetorial,
+isolamento por tenant nem um holdout independente de combinações geradas pelo
+Renato. Esses pontos não invalidam os critérios de aceitação da baseline
+determinística; tornam-se gates quando houver corpus e rerank correspondentes.
 
