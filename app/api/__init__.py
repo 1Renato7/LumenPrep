@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.demo import router as demo_router
+from app.api.events import router as events_router
 from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
 from app.api.metrics import router as metrics_router
@@ -12,3 +13,4 @@ router.include_router(health_router)
 router.include_router(metrics_router)
 router.include_router(incidents_router)
 router.include_router(demo_router)
+router.include_router(events_router)

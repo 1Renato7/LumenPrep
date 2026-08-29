@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.0.1
+- **Versão:** 2.0.2
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
 - **Change class:** `MAJOR`; muda a entrada pública, a API, o frontend final e o deployment.
@@ -10,9 +10,10 @@
 - **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
 - **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
 - **Base implementada preservada:** runtime Python 3.14.4, Docker/Railway, ingestion, aggregation, detection, simulation, incidents, memory/explanation e API já presentes na `main` em 2026-08-29; a revisão 2.0 estende essa base.
-- **Escopo desta publicação na `main`:** documentação e coordenação apenas. Os drafts executáveis de `CTR-TXN/TXL/API v3`, fixtures e protótipo permanecem em `codex/andre-dashboard-pitch@cc24c7a` até suas microtarefas serem implementadas/revisadas.
+- **Escopo desta publicação na `main`:** a especificação e coordenação públicas de `CTR-TXN/TXL/API v3` permanecem pendentes de implementação/revisão. O harness interno histórico/stream de `renato/tarefa44@602ae9d` é integrado somente como base técnica, sem promover seu endpoint ou fila local a contrato público.
 - **Changelog 2.0.0:** substitui o construtor público de efeitos por entrada de uma ou várias transações; métricas, outcomes, classificação e anomalias passam a ser derivados pelo backend; Streamlit vira protótipo/fallback; o gerador existente vira harness interno.
 - **Changelog 2.0.1:** registra a implementação validada de histórico/stream mediado por servidor em `renato/tarefa44@602ae9d` como evidência do harness interno. Ela não implementa nem congela `CTR-TXN/TXL/API v3`; `TASK-DATA-009 / LUM2-62` deve adaptá-la à batch API comum antes de integração funcional.
+- **Changelog 2.0.2:** integra `renato/tarefa44@602ae9d` na `main` como `CMP-HARNESS-001`; `CTR-TXN/TXL/API v3` continuam sendo a única fronteira pública planejada, e `LUM2-61/62` continuam responsáveis pelo adapter e tráfego de fundo compatíveis.
 
 ## 2. Problema, usuário e critério de vitória
 

@@ -2552,6 +2552,10 @@ Preservar a geração determinística, a sazonalidade, o caso de baixa amostra e
 
 Mudança nos schemas `CTR-TXN/TXL`, falha de equivalência entre harness e batch API, ou requisito de transporte persistente exige novo change control.
 
+#### Adendos
+
+- **2026-08-29T20:03:55-03:00:** conflitos de merge de `renato/tarefa44@602ae9d` foram resolvidos preservando o plano transaction-first da `main`; o código foi integrado exclusivamente como `CMP-HARNESS-001`. `CTR-TXN/TXL/API v3` não foram promovidos nem alterados por este merge. A validação integrada (testes, revisão e smoke) é o gate antes do push; `LUM2-61/62` permanecem as tarefas de adapter/lifecycle.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._

@@ -28,7 +28,7 @@ Também fornece geração rápida de `TransactionInput` a partir de quantidade +
 
 ## Trabalho preservado
 
-Histórico de 90 dias, distributions, stream, scenarios, baseline, detector e RCA continuam válidos. A branch publicada `renato/tarefa44@602ae9d` prova geração histórica reprodutível com sazonalidade horária/semanal, tendência, baixa amostra e publicação/consumo separados por servidor local; seus 51 testes e smoke de navegador são evidência para o harness, não para a API pública v3. Scenario schemas/fixtures v2 permanecem para teste interno e nunca reaparecem como formulário público.
+Histórico de 90 dias, distributions, stream, scenarios, baseline, detector e RCA continuam válidos. A implementação de `renato/tarefa44@602ae9d`, integrada como harness interno, prova geração histórica reprodutível com sazonalidade horária/semanal, tendência, baixa amostra e publicação/consumo separados por servidor local; seus 51 testes e smoke de navegador são evidência para o harness, não para a API pública v3. Scenario schemas/fixtures v2 permanecem para teste interno e nunca reaparecem como formulário público.
 
 ## Novas microtarefas
 
