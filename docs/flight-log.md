@@ -890,7 +890,76 @@ _Nenhuma decisão registrada._
 
 <!-- RENATO: faça append de novas entradas ao final desta seção. -->
 
-_Nenhuma decisão registrada._
+### FL-20260829-RENATO-001 — Fixar Python 3.14.4 e uma base sem dependências para o primeiro incremento
+
+- **Timestamp:** 2026-08-29T17:32:02-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Codex como recorder
+- **Categoria:** architecture | quality | operations | Git/integration
+- **Escopo:** ambientação compartilhada anterior a `TASK-DATA-001` / `LUM2-43`
+- **Links:** `docs/plans/system-plan.md` v1.3.1; `pyproject.toml`; `FL-20260829-TEAM-005`; `DEC-004`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O repositório contém contratos e planos, mas não possuía runtime Python, launcher, arquivo de projeto ou layout de pacote. Renato solicitou que a ambientação fosse integrada diretamente na `main` antes do primeiro código compartilhado de geração.
+
+#### Decisão
+
+Fixar Python 3.14.4 em `.python-version` e `pyproject.toml`; usar `app/` como pacote compatível com os diretórios previstos no plano e `unittest` da biblioteca padrão para os primeiros checks. Não commitar ambiente virtual, binários ou dependências especulativas.
+
+#### Critérios e por que agora
+
+A tarefa de geração precisa de um comando de teste e uma versão de runtime comum antes que os componentes paralelos criem dependências divergentes. O gerador ainda não exige NumPy, Polars, FastAPI ou Neo4j nesta etapa.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Fixar Python 3.14.4 sem dependências | ambiente mínimo, reprodutível e sem lockfile prematuro | bibliotecas de dados serão adicionadas depois | FACT: o repositório não contém aplicação nem dependências | escolhido pelo escopo atual |
+| Adicionar toda a stack do MVP agora | aparenta acelerar as tarefas seguintes | antecipa versões, lockfile e decisões dos demais owners | FACT: as tarefas de ingestão, API e memória têm owners distintos | excede a ambientação solicitada |
+| Manter apenas instruções informais | nenhum arquivo novo | versões e comandos podem divergir entre máquinas | FACT: não há runtime Python instalado localmente | não oferece reprodução verificável |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `python`, `py` e `winget` não estavam disponíveis localmente antes da ambientação.
+- **TEST:** NOT RUN — será registrado após instalar o runtime e executar o smoke test.
+- **ASSUMPTION:** Python 3.14.4 executará o esqueleto inicial somente com biblioteca padrão; validar nesta entrega.
+- **UNKNOWN:** a compatibilidade de wheels de NumPy/Polars será verificada na tarefa que as introduzir.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** um ponto de partida comum e pequeno para o trabalho paralelo.
+- **Abrimos mão de:** instalar antecipadamente o stack analítico completo.
+- **Dívida/limitação:** o lockfile será necessário ao introduzir a primeira dependência de runtime.
+- **Risco residual:** outro componente pode requerer biblioteca incompatível; a resolução ocorrerá na respectiva tarefa com change control se afetar o ambiente compartilhado.
+
+#### Consequências e propagação
+
+- **Produto/demo:** nenhuma mudança de comportamento.
+- **Arquitetura/contratos:** não altera `CTR-SCN-001` nem schemas congelados.
+- **Pessoas/branches:** os demais owners passam a partir da mesma versão de Python na `main`.
+- **Plano/Linear:** plano geral atualizado para 1.3.1; nenhum estado do Linear será alterado.
+- **Testes/observabilidade:** `python -m unittest discover -s tests` será o smoke test inicial.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma máquina limpa consegue identificar a versão exigida e executar a descoberta de testes.
+- **Caminho feliz:** Python 3.14.4 executa o smoke test sem dependência externa.
+- **Caso difícil/adverso:** a instalação do runtime falha; o commit não inclui binários e documenta a condição para reproduzir em outra máquina.
+- **Resultado observado:** NOT RUN — pendente da instalação.
+- **Fallback:** usar o instalador oficial da Python Software Foundation para 3.14.4 e repetir o smoke test.
+
+#### Gatilhos de revisão
+
+Introdução da primeira dependência de runtime, falha em Python 3.14.4 ou exigência de uma ferramenta de ambiente incompatível.
+
+#### Adendos
+
+- **2026-08-29T17:37:00-03:00:** o instalador MSI oficial retornou `0x80070003` antes de instalar qualquer pacote; o log aponta falha de acesso ao `core.msi` no Package Cache. Como fallback sem binários versionados, `scripts/bootstrap-python.ps1` baixou o pacote embeddable oficial, validou o SHA-256 publicado e preparou `.python-runtime/`. O runtime reportou `Python 3.14.4`, importou `app` e a descoberta inicial de testes foi executada; o smoke test com casos reais será executado após sua inclusão nesta alteração.
+- **2026-08-29T17:38:00-03:00:** PASS: `.\\.python-runtime\\python.exe -m unittest discover -s tests -v` executou 2 testes; a checagem `tomllib` confirmou `project.requires-python == "==3.14.4"`; `git diff --check` passou.
+- **2026-08-29T17:41:00-03:00:** `code-review-gate` classificou o diff como `PASS` após remover uma linha em branco extra em `pyproject.toml`; `integration-contract-guardian` em modo `INTEGRATION` classificou o checkpoint como `READY`. Foram confirmados `HEAD`, `origin/main` e merge-base em `28dfcbd`, ausência de mudança em schemas/consumidores, testes de smoke e preservação de `LumenPrep/` fora do índice.
 
 ## Prontidão para a banca
 

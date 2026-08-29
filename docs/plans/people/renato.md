@@ -2,7 +2,7 @@
 
 ## Missão
 
-- **Plano geral:** 1.3.0
+- **Plano geral:** 1.3.1
 - **Objetivo:** `OBJ-RENATO-001`
 - **Papel:** geração sintética, baselines, detector estatístico, RCA e avaliação causal.
 - **Orçamento:** 13–14h de implementação; H15–H19 integração/validação.

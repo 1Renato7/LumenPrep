@@ -2,16 +2,16 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 1.3.0
+- **Versão:** 1.3.1
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
 - **Janela:** 19 horas totais; 15 horas para construção e 4 horas protegidas para integração, validação, ensaio e pitch.
 - **Participantes:** André, Altoé, Rogério e Renato.
 - **Fonte de verdade:** este arquivo.
 - **Escopo:** MVP demonstrável de monitoramento, diagnóstico causal e memória de incidentes para uma plataforma fictícia de payment orchestration.
-- **Base analisada:** repositório sem aplicação; apenas documentação e skills de planejamento.
+- **Base analisada:** inicialmente sem aplicação, apenas documentação e skills de planejamento; a v1.3.1 adiciona a ambientação Python e o esqueleto vazio compartilhado.
 - **Fontes externas:** documentação oficial da Yuno, DuckDB, Neo4j e OpenAI, listadas no fim.
-- **Changelog:** 1.0.0 cria arquitetura, contratos, MVP, ownership, cronograma e planos individuais. 1.1.0 reafirma descoberta de causas novas como objetivo principal e posiciona memória como braço posterior para reconhecer recorrência e reaproveitar, com validação, o playbook anteriormente usado. 1.2.0 torna a consulta à memória obrigatória para todo incidente detectado, inclusive quando a evidência atual é inconclusiva, mantendo separados o status causal atual e o precedente histórico. 1.3.0 tipa o resultado da memória para diferenciar `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` na API/UI.
+- **Changelog:** 1.0.0 cria arquitetura, contratos, MVP, ownership, cronograma e planos individuais. 1.1.0 reafirma descoberta de causas novas como objetivo principal e posiciona memória como braço posterior para reconhecer recorrência e reaproveitar, com validação, o playbook anteriormente usado. 1.2.0 torna a consulta à memória obrigatória para todo incidente detectado, inclusive quando a evidência atual é inconclusiva, mantendo separados o status causal atual e o precedente histórico. 1.3.0 tipa o resultado da memória para diferenciar `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` na API/UI. 1.3.1 fixa o runtime de desenvolvimento em Python 3.14.4 e adiciona a ambientação compartilhada antes da implementação.
 
 ## 2. Problema e produto
 
@@ -47,7 +47,7 @@ O sistema recebe uma nova combinação de dimensões não codificada previamente
 
 - `ASM-001`: André será o owner de frontend e pitch, pois as especialidades informadas reservam Altoé para RAG/banco, Rogério para backend e Renato para computação. Validar no checkpoint H0:30; fallback: trocar somente ownership de `CMP-UI-001`, sem alterar contratos.
 - `ASM-002`: haverá uma chave da OpenAI e uma instância Neo4j acessível. Validar até H1; fallback: explicação por template e memória em grafo local/in-memory usando o mesmo contrato.
-- `ASM-003`: Python 3.11+ e Docker estarão disponíveis. Validar em H0:30; fallback: execução local sem containers.
+- `ASM-003`: Python 3.14.4 e Docker estarão disponíveis. Validar em H0:30; fallback: execução local sem containers. A ambientação compartilhada está registrada em `FL-20260829-RENATO-001`.
 
 ### Não objetivos do MVP
 

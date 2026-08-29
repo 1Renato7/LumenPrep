@@ -1,6 +1,6 @@
 # Diagramas de arquitetura — Lumen
 
-Fonte de verdade: `docs/plans/system-plan.md` v1.3.0. Estes diagramas são projeções explicativas; em caso de divergência, o plano geral vence.
+Fonte de verdade: `docs/plans/system-plan.md` v1.3.1. Estes diagramas são projeções explicativas; em caso de divergência, o plano geral vence.
 
 ## 1. Fluxo completo para público geral
 
