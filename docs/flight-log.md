@@ -1055,7 +1055,7 @@ Reabrir se o trial expirar antes do fim do hackathon sem migração para Hobby d
 
 #### Adendos
 
-- Nenhum.
+- 2026-08-29 — Claude: `Dockerfile` + `.dockerignore` prontos e validados sem Docker local (install + start real do `CMD` numa cópia isolada do build context, `/health` e `/metrics/current` responderam 200). Deploy real em si ainda não executado — Rogério decidiu adiar pra mais pra frente. Runbook manual dos passos que só a conta Railway consegue fazer: `docs/deploy-railway.md`.
 
 ## Renato
 
