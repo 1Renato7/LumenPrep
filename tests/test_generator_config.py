@@ -25,8 +25,16 @@ class GeneratorConfigTest(unittest.TestCase):
         self.assertEqual(self.config.logical_attempts, 360_000_000)
         self.assertEqual(self.config.days, 90)
         self.assertEqual(self.config.low_sample_attempts, 12)
-        self.assertEqual(set(self.config.dimensions), {"country", "merchant_id", "provider_id", "payment_method_category"})
-        self.assertTrue(all(distribution.cardinality == 3 for distribution in self.config.dimensions.values()))
+        self.assertEqual(
+            set(self.config.dimensions),
+            {"country", "merchant_id", "provider_id", "payment_method_category", "status"},
+        )
+        self.assertTrue(
+            all(
+                distribution.cardinality == (4 if name == "status" else 3)
+                for name, distribution in self.config.dimensions.items()
+            )
+        )
 
     def test_every_distribution_is_normalized(self) -> None:
         for dimension in self.config.dimensions:

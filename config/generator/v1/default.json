@@ -14,7 +14,8 @@
     "country",
     "merchant_id",
     "provider_id",
-    "payment_method_category"
+    "payment_method_category",
+    "status"
   ],
   "dimensions": {
     "country": {
@@ -46,7 +47,16 @@
       "values": [
         {"id": "CARD", "probability": 0.70},
         {"id": "BANK_TRANSFER", "probability": 0.20},
-        {"id": "DIGITAL_WALLET", "probability": 0.10}
+        {"id": "WALLET", "probability": 0.10}
+      ]
+    },
+    "status": {
+      "cardinality": 4,
+      "values": [
+        {"id": "SUCCEEDED", "probability": 0.80},
+        {"id": "DECLINED", "probability": 0.15},
+        {"id": "TIMEOUT", "probability": 0.03},
+        {"id": "ERROR", "probability": 0.02}
       ]
     }
   },
@@ -118,7 +128,7 @@
       "values": [
         {"id": "CARD", "probability": 0.73},
         {"id": "BANK_TRANSFER", "probability": 0.18},
-        {"id": "DIGITAL_WALLET", "probability": 0.09}
+        {"id": "WALLET", "probability": 0.09}
       ]
     },
     {
@@ -128,7 +138,7 @@
       "values": [
         {"id": "CARD", "probability": 0.66},
         {"id": "BANK_TRANSFER", "probability": 0.21},
-        {"id": "DIGITAL_WALLET", "probability": 0.13}
+        {"id": "WALLET", "probability": 0.13}
       ]
     },
     {
@@ -138,7 +148,40 @@
       "values": [
         {"id": "CARD", "probability": 0.64},
         {"id": "BANK_TRANSFER", "probability": 0.25},
-        {"id": "DIGITAL_WALLET", "probability": 0.11}
+        {"id": "WALLET", "probability": 0.11}
+      ]
+    },
+    {
+      "rule_id": "status-stripe",
+      "when": {"provider_id": "stripe"},
+      "target_dimension": "status",
+      "values": [
+        {"id": "SUCCEEDED", "probability": 0.87},
+        {"id": "DECLINED", "probability": 0.10},
+        {"id": "TIMEOUT", "probability": 0.02},
+        {"id": "ERROR", "probability": 0.01}
+      ]
+    },
+    {
+      "rule_id": "status-adyen",
+      "when": {"provider_id": "adyen"},
+      "target_dimension": "status",
+      "values": [
+        {"id": "SUCCEEDED", "probability": 0.82},
+        {"id": "DECLINED", "probability": 0.14},
+        {"id": "TIMEOUT", "probability": 0.03},
+        {"id": "ERROR", "probability": 0.01}
+      ]
+    },
+    {
+      "rule_id": "status-dlocal",
+      "when": {"provider_id": "dlocal"},
+      "target_dimension": "status",
+      "values": [
+        {"id": "SUCCEEDED", "probability": 0.75},
+        {"id": "DECLINED", "probability": 0.19},
+        {"id": "TIMEOUT", "probability": 0.04},
+        {"id": "ERROR", "probability": 0.02}
       ]
     }
   ]
