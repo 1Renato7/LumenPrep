@@ -1,6 +1,6 @@
 """TASK-DATA-006. Stream ao vivo (trafego normal continuo, TASK-DATA-002) +
 injecao de cenarios (CTR-SCN-001), aplicando `effects` sobre as tentativas
-que casam `filters`, e ingerindo de verdade via app.ingestion.ingest_event.
+que casam `filters`, e publicando-as em CTR-STR-001.
 
 decline_code_distribution do CTR-SCN-001 nao e aplicado ainda — decline
 codes realistas sao TASK-DATA-003 (Renato); aqui so approval_rate_multiplier,
@@ -14,20 +14,18 @@ from datetime import datetime
 from random import Random
 from typing import Any
 
-from app.ingestion import IngestResult, ingest_event
 from app.simulation.config import GeneratorConfig
 from app.simulation.outcomes import GeneratedAttempt, OutcomeGenerator
 from app.simulation.scenario_contract import ScenarioDefinition
+from app.streaming.server import TransactionPublisher
 
 
 @dataclass(frozen=True)
 class InjectionResult:
     scenario_id: str
     correlation_id: str
-    events_ingested: int
+    events_published: int
     matched_attempts: int
-    accepted: int
-    quarantined: int
 
 
 def _matches_filters(context: dict[str, str], filters: dict[str, tuple[str, ...]]) -> bool:
@@ -65,27 +63,33 @@ def _apply_latency_effect(event: dict[str, Any], multiplier: float | None) -> di
 
 
 class LiveStreamController:
-    """Trafego normal continuo + injecao de cenario sobre o mesmo gerador seedado."""
+    """Publica trafego normal e cenarios no mesmo servidor transacional."""
 
-    def __init__(self, config: GeneratorConfig, *, reference_time: datetime | None = None) -> None:
+    def __init__(
+        self,
+        config: GeneratorConfig,
+        publisher: TransactionPublisher,
+        *,
+        reference_time: datetime | None = None,
+    ) -> None:
         self._config = config
+        self._publisher = publisher
         self._generator = OutcomeGenerator(config, reference_time=reference_time)
         self._random = Random(config.seed ^ 0xC0FFEE)
 
-    def emit_baseline_batch(self, payment_count: int) -> list[IngestResult]:
-        """Trafego normal, sem nenhum efeito de cenario — D1 do roteiro de demo."""
-        results: list[IngestResult] = []
+    def emit_baseline_batch(self, payment_count: int) -> int:
+        """Publica trafego normal; a ingestão o recebe pelo listener separado."""
+        events: list[dict[str, Any]] = []
         for attempts in self._generator.generate_payments(payment_count):
-            for event in self._generator.to_canonical_events(attempts):
-                results.append(ingest_event(event))
-        return results
+            events.extend(self._generator.to_canonical_events(attempts))
+        return self._publisher.publish(events).accepted
 
     def inject_scenario(self, scenario: ScenarioDefinition, *, payment_count: int = 50) -> InjectionResult:
         """Gera `payment_count` payments; nas tentativas que casam `scenario.filters`,
         reamostra o status e escala a latencia pelos `effects` de CTR-SCN-001;
-        ingere tudo (matched e nao-matched) de verdade via ingest_event."""
+        publica matched e nao-matched para o listener de ingestão."""
         matched = 0
-        results: list[IngestResult] = []
+        events: list[dict[str, Any]] = []
         latency_multiplier = scenario.effects.get("latency_p95_multiplier")
 
         for attempts in self._generator.generate_payments(payment_count):
@@ -103,13 +107,13 @@ class LiveStreamController:
                 if is_match:
                     event = _apply_latency_effect(event, latency_multiplier)
                     event["correlation_id"] = f"demo:{scenario.scenario_id}"
-                results.append(ingest_event(event))
+                events.append(event)
+
+        receipt = self._publisher.publish(events)
 
         return InjectionResult(
             scenario_id=scenario.scenario_id,
             correlation_id=f"demo:{scenario.scenario_id}",
-            events_ingested=len(results),
+            events_published=receipt.accepted,
             matched_attempts=matched,
-            accepted=sum(1 for r in results if r.status == "ACCEPTED"),
-            quarantined=sum(1 for r in results if r.status == "QUARANTINED"),
         )

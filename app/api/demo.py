@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from app.config import settings
 from app.simulation import LiveStreamController, ScenarioV1Contract, load_generator_config
 from app.simulation.scenario_contract import ScenarioContractError
+from app.streaming import get_transaction_server
 
 router = APIRouter()
 _SCENARIOS = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
@@ -24,7 +25,7 @@ _scenario_contract = ScenarioV1Contract(_SCENARIO_SCHEMA)
 def _get_controller() -> LiveStreamController:
     global _controller
     if _controller is None:
-        _controller = LiveStreamController(load_generator_config(_GENERATOR_CONFIG))
+        _controller = LiveStreamController(load_generator_config(_GENERATOR_CONFIG), get_transaction_server())
     return _controller
 
 
@@ -64,5 +65,5 @@ def inject_scenario(scenario_id: str) -> dict[str, Any]:
         "correlation_id": result.correlation_id,
         "source": "live_stream",
         "matched_attempts": result.matched_attempts,
-        "events_ingested": result.events_ingested,
+        "events_published": result.events_published,
     }

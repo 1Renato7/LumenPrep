@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.simulation import LiveStreamController, ScenarioV1Contract, load_generator_config
+from app.streaming import get_ingestion_listener, get_transaction_server
 
 CONFIG_PATH = Path("config/generator/v1/default.json")
 SCHEMA_PATH = Path("contracts/v1/scenario.schema.json")
@@ -11,7 +12,11 @@ FIXTURE_PATH = Path("contracts/fixtures/scenario-provider-br.json")
 
 def _controller() -> LiveStreamController:
     config = load_generator_config(CONFIG_PATH)
-    return LiveStreamController(config, reference_time=datetime(2026, 8, 29, 14, 0, 0, tzinfo=timezone.utc))
+    return LiveStreamController(
+        config,
+        get_transaction_server(),
+        reference_time=datetime(2026, 8, 29, 14, 0, 0, tzinfo=timezone.utc),
+    )
 
 
 def _scenario():
@@ -20,11 +25,13 @@ def _scenario():
     return contract.parse(payload)
 
 
-def test_baseline_batch_all_accepted():
+def test_baseline_batch_is_published_then_consumed_by_listener():
     controller = _controller()
-    results = controller.emit_baseline_batch(20)
-    assert results
-    assert all(r.status == "ACCEPTED" for r in results)
+    published = controller.emit_baseline_batch(20)
+    assert published > 0
+    report = get_ingestion_listener().consume_available()
+    assert report.consumed == published
+    assert report.accepted == published
 
 
 def test_inject_scenario_degrades_only_matching_attempts():
@@ -36,8 +43,8 @@ def test_inject_scenario_degrades_only_matching_attempts():
     assert result.scenario_id == "scenario_provider_br"
     assert result.correlation_id == "demo:scenario_provider_br"
     assert result.matched_attempts > 0
-    assert result.events_ingested >= result.matched_attempts
-    assert result.accepted + result.quarantined == result.events_ingested
+    assert result.events_published >= result.matched_attempts
+    assert get_ingestion_listener().consume_available(limit=500).accepted == result.events_published
 
 
 def test_injected_scenario_measurably_lowers_approval_rate():
@@ -49,6 +56,7 @@ def test_injected_scenario_measurably_lowers_approval_rate():
     from app.aggregation import get_current_metrics
 
     controller.inject_scenario(scenario, payment_count=150)
+    get_ingestion_listener().consume_available(limit=500)
     windows = get_current_metrics(dimensions={"provider_id": "stripe", "country": "BR"})
     assert windows
     approval_rate = sum(w.approval_rate * w.eligible_attempts for w in windows) / sum(w.eligible_attempts for w in windows)

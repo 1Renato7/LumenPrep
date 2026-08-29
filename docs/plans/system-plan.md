@@ -2,16 +2,16 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 1.3.1
+- **Versão:** 1.4.0
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
 - **Janela:** 19 horas totais; 15 horas para construção e 4 horas protegidas para integração, validação, ensaio e pitch.
 - **Participantes:** André, Altoé, Rogério e Renato.
 - **Fonte de verdade:** este arquivo.
 - **Escopo:** MVP demonstrável de monitoramento, diagnóstico causal e memória de incidentes para uma plataforma fictícia de payment orchestration.
-- **Base analisada:** inicialmente sem aplicação, apenas documentação e skills de planejamento; a v1.3.1 adiciona a ambientação Python e o esqueleto vazio compartilhado.
+- **Base analisada:** `origin/RENATO_CONTINUCAO_ROGERIO` em `41b819f`, que contém ingestão, agregação, API, stream e detectores posteriores; a v1.4.0 adapta esses consumidores ao fluxo mediado por servidor.
 - **Fontes externas:** documentação oficial da Yuno, DuckDB, Neo4j e OpenAI, listadas no fim.
-- **Changelog:** 1.0.0 cria arquitetura, contratos, MVP, ownership, cronograma e planos individuais. 1.1.0 reafirma descoberta de causas novas como objetivo principal e posiciona memória como braço posterior para reconhecer recorrência e reaproveitar, com validação, o playbook anteriormente usado. 1.2.0 torna a consulta à memória obrigatória para todo incidente detectado, inclusive quando a evidência atual é inconclusiva, mantendo separados o status causal atual e o precedente histórico. 1.3.0 tipa o resultado da memória para diferenciar `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` na API/UI. 1.3.1 fixa o runtime de desenvolvimento em Python 3.14.4 e adiciona a ambientação compartilhada antes da implementação.
+- **Changelog:** 1.0.0 cria arquitetura, contratos, MVP, ownership, cronograma e planos individuais. 1.1.0 reafirma descoberta de causas novas como objetivo principal e posiciona memória como braço posterior para reconhecer recorrência e reaproveitar, com validação, o playbook anteriormente usado. 1.2.0 torna a consulta à memória obrigatória para todo incidente detectado, inclusive quando a evidência atual é inconclusiva, mantendo separados o status causal atual e o precedente histórico. 1.3.0 tipa o resultado da memória para diferenciar `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` na API/UI. 1.3.1 fixa o runtime de desenvolvimento em Python 3.14.4 e adiciona a ambientação compartilhada antes da implementação. 1.4.0 substitui a chamada direta do gerador à ingestão por um servidor de transações e um listener, preservando `CTR-EVT-001` e permitindo publicação contínua.
 
 ## 2. Problema e produto
 
@@ -137,13 +137,16 @@ O diagnóstico corrente é produzido exclusivamente por métricas atuais, baseli
 | DEC-012 | DECIDED | Tornar `memory_status` obrigatório em CTR-MEM-001 v1.1 e expor Incident + memória + explicação separadamente na API | lista vazia não distingue ausência real de precedente de falha do Neo4j/fallback | migração coordenada das fixtures antes da implementação; UI nunca infere indisponibilidade por `matches=[]` | Team | FL-20260829-TEAM-012 |
 | DEC-013 | DECIDED | Hospedar CMP-API-001/CMP-UI-001 (FastAPI + Streamlit) no Railway via Docker; Neo4j continua em Aura, fora do Railway | Docker/volume/env vars simples e trial de 30 dias cobre a janela do hackathon | migrar para Hobby ($5/mês) se o trial expirar antes da apresentação; fallback local de ASM-003 se o deploy falhar | Rogério | FL-20260829-ROGERIO-001 |
 | DEC-014 | DECIDED | Não travar as chaves de `scope` em `CTR-INC-001` (schema livre) até o RCA real de Renato existir | enum não teria pego os bugs reais (leitura de chave errada em Python, não dado inválido); travar cedo arrisca bloquear dimensões que o detector ainda vai definir | revisar quando `TASK-DET-004`/`RCA-001` produzirem `Incident.scope` real; até lá, `provider_id` é convenção garantida por teste, não por schema | Rogério | FL-20260829-ROGERIO-002 |
+| DEC-015 | DECIDED | Publicar eventos no servidor de transações e fazer a ingestão consumi-los por listener, em vez de o gerador chamar `ingest_event` | produção contínua precisa de uma fronteira observável e desacoplada; `CTR-EVT-001` já é o payload canônico estável | o broker local é volátil e de processo único no MVP; uma implementação externa substitui apenas o adapter de transporte | Renato (publisher) e Rogério (consumer/API) | FL-20260829-RENATO-004 |
 
 ## 5. Arquitetura
 
 ```mermaid
 flowchart LR
-    SCN[CMP-DATA-001 Scenario Generator] --> RAW[(Parquet raw)]
-    SCN --> ING[CMP-ING-001 Ingestion & Normalization]
+    SCN[CMP-DATA-001 Historical / live generator] --> STR[CMP-STR-001 Transaction Server]
+    EXT[External transaction producer] --> STR
+    STR --> LIS[CMP-ING-001 Listener & normalization]
+    LIS --> RAW[(Raw event store)]
     ING --> CAN[(DuckDB canonical)]
     CAN --> AGG[CMP-AGG-001 Window Aggregator]
     AGG --> DET[CMP-DET-001 Detector]
@@ -163,8 +166,9 @@ O fluxo geral para leigos e as quatro projeções técnicas por responsável est
 
 | ID | Responsabilidade | Tecnologia | Owner | Health/falha explícita |
 | --- | --- | --- | --- | --- |
-| CMP-DATA-001 | 90 dias, stream acelerado, injeções e ground truth isolado | Python, NumPy, Polars, Faker opcional | Renato | seed, row count, distribution checks |
-| CMP-ING-001 | validar, deduplicar, normalizar e quarentenar | Pydantic, Python | Rogério | accepted/rejected/duplicate counts |
+| CMP-DATA-001 | 90 dias, stream acelerado, injeções e ground truth isolado; apenas publica `CTR-EVT-001` | Python, NumPy, Faker opcional | Renato | seed, row count, distribution checks |
+| CMP-STR-001 | aceitar eventos canônicos de produtores e entregá-los ordenadamente ao listener | FastAPI + adapter em memória no MVP | Rogério | published/consumed backlog, sequence e health |
+| CMP-ING-001 | escutar `CMP-STR-001`, validar, deduplicar, normalizar e quarentenar | Pydantic, Python | Rogério | accepted/rejected/duplicate counts |
 | CMP-AGG-001 | janelas de 5 min por event time e rollups | DuckDB SQL | Rogério | watermark, lag, window count |
 | CMP-DET-001 | approval e latência vs baseline sazonal | SciPy/NumPy | Renato | detector version, candidates/window |
 | CMP-RCA-001 | beam search hierárquico e contribuição causal | Python | Renato | coverage, tested slices, pruning |
@@ -203,6 +207,7 @@ O fluxo geral para leigos e as quatro projeções técnicas por responsável est
 - `UNKNOWN` para resultado de provider ambíguo; nunca converter timeout em decline conhecido;
 - schema inválido, moeda/unidade ambígua ou tempo impossível vai para quarantine;
 - raw é imutável; canonical registra `normalization_version` e `raw_event_id`.
+- produtores publicam somente `CTR-EVT-001`; `CMP-DATA-001` não chama ingestão, DuckDB ou agregação diretamente. `CMP-ING-001` mantém um cursor por listener e faz a deduplicação já prevista após receber o evento.
 
 ### Método estatístico
 
@@ -266,6 +271,7 @@ Somente causa `HUMAN_CONFIRMED` pode ser apresentada como precedente confirmado.
 | ID/versão | Produtor → consumidores | Propósito e timing | Erros/fallback | Owner | Mock/test |
 | --- | --- | --- | --- | --- | --- |
 | CTR-SCN-001 v1 FROZEN | DATA → ING/DET/UI | configuração de baseline/injeção e ground truth isolado | `INVALID_SCENARIO`; fixture local | Renato | `scenario-provider-br.json` |
+| CTR-STR-001 v1 FROZEN | DATA/external producers → Transaction Server → ING | envelope sequencial para `CTR-EVT-001`; publish at-least-once, consume por cursor | broker vazio não é erro; evento inválido é aceito no transporte e vai à quarantine na ingestão; adapter local perde backlog ao reiniciar | Rogério | `tests/test_transaction_server.py` |
 | CTR-EVT-001 v1 FROZEN | DATA → ING | canonical attempt event; at-least-once, event-time | quarantine, dedupe, watermark | Rogério | `canonical-attempt.json` |
 | CTR-AGG-001 v1 FROZEN | AGG → DET/RCA | métricas por janela fechada/revisada | `INSUFFICIENT_VOLUME` | Rogério | schema + fixture no plano de Rogério |
 | CTR-DET-001 v1 FROZEN | DET → RCA/INC | candidato estatístico, nunca narrativa | `NO_ANOMALY`, `DATA_QUALITY_LOW` | Renato | schema + unit fixtures |
@@ -283,6 +289,7 @@ Somente causa `HUMAN_CONFIRMED` pode ser apresentada como precedente confirmado.
 - mudanças incompatíveis exigem v2 e atualização coordenada; campo opcional novo é compatível.
 - chamadas LLM e Neo4j possuem timeout, no máximo uma retry segura e fallback local.
 - `CTR-MEM-001` é uma etapa obrigatória com fallback: recebe todo Incident; `memory_status` nunca modifica `CTR-INC-001.root_cause`; consumidores não inferem falha por lista vazia.
+- `CTR-STR-001` encapsula transporte: cada envelope tem `sequence`, `published_at` e `payload: CTR-EVT-001`; o listener avança o cursor somente após encaminhar cada payload à ingestão. O servidor não interpreta ground truth nem agrega dados.
 - nenhuma autenticação de produção será implementada; serviço local de demo é bindado a localhost.
 
 ## 8. Ownership e colisões
@@ -291,6 +298,7 @@ Somente causa `HUMAN_CONFIRMED` pode ser apresentada como precedente confirmado.
 | --- | --- | --- | --- |
 | `contracts/v1/`, enums e fixtures | Rogério | todos | mudança via CTR + aviso imediato |
 | generator/scenarios | Renato | Rogério, André | não alterar schema canonical |
+| transaction server/listener | Rogério | Renato | `CTR-STR-001` muda somente por change control; produtor usa `TransactionPublisher`, nunca `ingest_event` |
 | detector/RCA | Renato | Rogério | outputs somente CTR-DET/INC |
 | API, DuckDB schema, migrations | Rogério | Renato, Altoé, André | coordenador único |
 | Neo4j schema/retrieval/prompts | Altoé | Rogério | não duplicar source of truth transacional |
@@ -330,7 +338,7 @@ O mapeamento completo e auditado está em `docs/plans/linear-preview.md`.
 
 ```text
 CTR schemas/fixtures
- ├─ generator → ingestion → aggregation → detector → RCA → incident
+ ├─ generator/external producer → transaction server → listener/ingestion → aggregation → detector → RCA → incident
  ├─ incident → memory retrieval → explanation
  └─ incident/explanation → API → dashboard → demo
 ```
@@ -349,7 +357,7 @@ CTR schemas/fixtures
 ## 11. Git e integração
 
 - Branch base: `main`; branches curtas `feat/<ID>-resumo`.
-- Ordem de integração: contratos → generator/ingestion → detector/RCA → incident/API → memory/explainer → UI.
+- Ordem de integração: contratos → transaction server + listener → generator/historical replay → detector/RCA → incident/API → memory/explainer → UI.
 - Cada merge roda schema validation, unit tests afetados e smoke de fixture.
 - Checkpoint H4 roda a fatia completa antes de aprofundar.
 - Mudança em contrato começa neste plano, recebe versionamento e depois atualiza produtor/consumidores.
@@ -397,6 +405,7 @@ CTR schemas/fixtures
 | RSK-007 | memória vaza ground truth | mesma origem/arquivo acessível | stores e interfaces separados | Altoé+Renato/H8 |
 | RSK-008 | external web cria falsa confirmação | fonte genérica | rotular `CORROBORATION`, nunca causa | Altoé/H11 |
 | RSK-009 | trial Railway (30 dias) expira antes da apresentação | build/host indisponível ou cobrança inesperada | migrar para Hobby ($5/mês) ou cair no fallback local de ASM-003 | Rogério/contínuo |
+| RSK-010 | servidor de transações local perde backlog após reinício | `published - listener_cursor > 0` e restart do processo | batch determinístico pode ser republicado; definir broker persistente via change control se isso deixar de ser aceitável | Rogério+Renato/H4 |
 
 ## 14. Parecer do Integration Contract Guardian — modo PLANNING
 
@@ -410,6 +419,8 @@ CTR schemas/fixtures
 - External web, vector rerank e LLM têm fallback e não bloqueiam diagnóstico.
 - A revisão 1.3.0 mantém o grafo acíclico, mas substitui CTR-MEM-001 v1 por v1.1 antes de qualquer implementação: `memory_status` agora é obrigatório e todas as fixtures produtoras/consumidoras foram migradas em conjunto.
 - `ASM-001..003` têm prazo H1 e não alteram contratos públicos.
+- A revisão 1.4.0 mantém o grafo acíclico: `CTR-STR-001` é o único caminho de `CMP-DATA-001` para `CMP-ING-001`; o adapter local possui mock/teste e o servidor HTTP permite produtor externo sem expor DuckDB. O backlog volátil está registrado em `RSK-010` e o contrato pode ganhar adapter persistente sem quebrar `CTR-EVT-001`.
+- Evidência de implementação v1.4.0: 51 testes automatizados, `compileall`, `git diff --check` e o fluxo local `POST /transactions` → listener → backlog zero passaram. Parecer de integração: `READY WITH WARNINGS` somente por `RSK-010`; ver `FL-20260829-RENATO-004`.
 
 ## 15. Estratégia para a banca
 

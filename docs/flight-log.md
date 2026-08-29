@@ -1412,6 +1412,79 @@ Alteração de `CTR-SCN-001`, integração da branch de Rogério ou um consumido
 - **2026-08-29T17:52:00-03:00:** PASS: o adapter aceitou `contracts/fixtures/scenario-provider-br.json`, rejeitou `seed` ausente, campo `ground_truth` e timestamp sem timezone, e preservou o caso permitido pelo schema de filtros vazios. A configuração referencia o schema canônico por `scenario_contract.schema_path`.
 - **2026-08-29T17:55:00-03:00:** `LumenPrep/` permaneceu não rastreado e fora do índice; a branch de Rogério não foi integrada nesta microtarefa. O consumidor futuro pode trocar `ScenarioV1Contract` sem alterar as regras declarativas de distribuição.
 
+### FL-20260829-RENATO-004 — Mediar geração contínua por servidor de transações
+
+- **Timestamp:** 2026-08-29T19:23:01-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Rogério como owner de ingestão/API; Codex como recorder
+- **Categoria:** architecture | contract | data | integration
+- **Escopo:** `LUM2-44` / `TASK-DATA-004`; `CMP-DATA-001`, `CMP-STR-001`, `CMP-ING-001`; `CTR-STR-001` v1 e `CTR-EVT-001` v1
+- **Links:** `docs/plans/system-plan.md` v1.4.0; `docs/plans/people/renato.md`; branch `renato/tarefa44`; `origin/RENATO_CONTINUCAO_ROGERIO`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O pedido atual mudou o fluxo operacional: transações devem ser produzidas continuamente, enviadas a um servidor e consumidas pelo sistema. A branch de Rogério já continha stream, API, ingestão e detectores, mas o stream chamava `ingest_event` diretamente, eliminando a fronteira que os produtores externos precisam usar.
+
+#### Decisão
+
+Introduzir `CTR-STR-001` v1: o gerador histórico/live publica envelopes com payload `CTR-EVT-001` em um servidor de transações; um listener independente lê pelo cursor e chama a ingestão. Para o MVP, o adapter de servidor é local e em memória, exposto pela API para produtores externos, sem alterar o schema canônico ou deixar ground truth no fluxo.
+
+#### Critérios e por que agora
+
+A nova topologia precisa ficar estável antes de implementar os 90 dias, porque publicar diretamente na ingestão tornaria impossível exercitar produtor, backlog e consumo separadamente. O payload canônico existente já é suficiente; versionar apenas o envelope reduz risco para detecção e agregação posteriores.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Servidor local com envelope, cursor e adapter substituível | preserva fronteira real, é executável sem infraestrutura e testa produção/consumo | backlog volátil e processo único | FACT: não foi especificado broker externo; `CTR-EVT-001` v1 já existe | escolhido para o MVP |
+| Manter chamada direta `generator -> ingest_event` | menor diff imediato | contradiz o fluxo exigido e acopla produtor ao storage | FACT: o código do Rogério chama ingestão diretamente | rejeitado |
+| Introduzir Kafka/serviço externo agora | persistência e escala maiores | credenciais, deploy e operação não definidos para a microtarefa | UNKNOWN: infraestrutura/authority para provider externo | adiado atrás do mesmo adapter |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `origin/RENATO_CONTINUCAO_ROGERIO` possui `LiveStreamController` que importava `app.ingestion.ingest_event` diretamente.
+- **FACT:** a issue LUM2-44 pede 90 dias determinísticos, sazonalidade, volume variável, seed e baixa amostra.
+- **TEST:** NOT RUN — a implementação será validada com geração/reprodução, cursor e consumer real.
+- **ASSUMPTION:** um adapter local é suficiente para o ambiente de demo; Renato valida o caminho HTTP e o listener antes do handoff.
+- **UNKNOWN:** retenção, autenticação e semântica de ack do servidor de produção; não são inventadas no MVP.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** produtor desacoplado da ingestão, protocolo explícito e adaptação futura de transporte localizada.
+- **Abrimos mão de:** retenção após reinício e entrega entre processos neste primeiro adapter.
+- **Dívida/limitação:** a API local não oferece autenticação nem persistência de backlog; ambas exigem um contrato operacional posterior.
+- **Risco residual:** se o processo reiniciar, eventos ainda não lidos se perdem; métricas de backlog deixam isso observável na demo.
+
+#### Consequências e propagação
+
+- **Produto/demo:** tráfego normal e cenários chegam pelo mesmo servidor e podem ser consumidos continuamente.
+- **Arquitetura/contratos:** cria `CTR-STR-001` v1 sem quebrar `CTR-EVT-001` v1.
+- **Pessoas/branches:** adapta os componentes posteriores do Rogério; Renato permanece dono do publisher/histórico e Rogério do listener/API.
+- **Plano/Linear:** plano geral e projeção de Renato foram atualizados; o estado no Linear não será alterado sem autorização adicional.
+- **Testes/observabilidade:** testes devem provar sequência determinística, sazonalidade, baixa amostra, publish/consume e que o gerador não importa ingestão.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma mesma seed produz os mesmos payloads; producer publica sem tocar DuckDB e listener os torna visíveis às métricas.
+- **Caminho feliz:** publicar lote histórico e consumi-lo em ordem até `accepted`.
+- **Caso difícil/adverso:** publicar evento inválido e confirmar quarantine sem travar o cursor; reiniciar adapter e declarar backlog perdido.
+- **Resultado observado:** NOT RUN — pendente da implementação.
+- **Fallback:** pausar produção e reproduzir um lote determinístico via endpoint de publish; nenhuma ingestão direta é reintroduzida.
+
+#### Gatilhos de revisão
+
+Definição de broker externo, necessidade de retenção entre processos, requisito de autenticação ou mais de um consumer independente exigem `CTR-STR-001` v2/change control.
+
+#### Adendos
+
+- **2026-08-29T19:37:00-03:00:** PASS: `.venv\\Scripts\\python.exe -m pytest -q` executou 51 testes em 110,60 s; inclui reprodução com mesma seed, sazonalidade horária, janela de baixa amostra, publicação/consumo ordenado, quarantine e o stream legado adaptado. `compileall app` e `git diff --check` passaram.
+- **2026-08-29T19:37:21-03:00:** PASS no navegador local (`http://127.0.0.1:8765/docs`): `POST /transactions` aceitou um `CTR-EVT-001` sintético com `202`, `sequence=1` e `source=transaction_server`; `GET /transactions/health` mostrou `published=1`, `listener_cursor=1` e `backlog=0`. Não houve erros no console. O servidor temporário foi encerrado após o teste.
+- **2026-08-29T19:38:00-03:00:** `code-review-gate`: `PASS`. A revisão encontrou e corrigiu antes do gate um acoplamento indireto do producer ao listener através de imports eager; `app.streaming` agora carrega a ingestão somente quando o listener/runtime é solicitado. Não há achados bloqueantes no diff final.
+- **2026-08-29T19:38:00-03:00:** `integration-contract-guardian` em modo `INTEGRATION`: `READY WITH WARNINGS`. O contrato `CTR-STR-001` v1, o produtor histórico/live, o listener, as rotas HTTP e os testes estão sincronizados; `CTR-EVT-001` permanece inalterado. Aviso aceito: o adapter em memória perde backlog em reinício, com owner e fallback em `RSK-010`.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._
