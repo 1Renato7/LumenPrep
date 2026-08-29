@@ -4,10 +4,11 @@ Este documento explica como as skills se combinam. As instruções executáveis 
 
 ## Ativação
 
-Skills automáticas possuem `allow_implicit_invocation: true` e descrições com gatilhos claros. O `AGENTS.md` também define a ordem obrigatória entre elas. A auditoria de segurança é a única skill explicit-only.
+Skills automáticas possuem `allow_implicit_invocation: true` e descrições com gatilhos claros. O `AGENTS.md` também define a ordem obrigatória entre elas. A auditoria de segurança é a única skill explicit-only. O `flight-log-recorder` é transversal: pode ser acionado dentro de qualquer outra skill quando surgir uma decisão material.
 
 | Skill | Ativação | Quando usar | Entrega principal |
 | --- | --- | --- | --- |
+| `flight-log-recorder` | Automática e transversal | Toda decisão material, alternativa rejeitada, risco aceito ou mudança de rota | Entrada fundamentada em `docs/flight-log.md` |
 | `hackathon-system-planner` | Automática | Descoberta, arquitetura, MVP, divisão ou replanejamento | Plano geral e quatro planos individuais |
 | `integration-contract-guardian` | Automática | Planejamento de fronteiras e antes de integração, merge, rebase ou PR | Mapa de contratos e parecer de prontidão |
 | `linear-microtask-planner` | Automática | Decomposição e sincronização de trabalho no Linear | Parent issues, microtarefas e dependências |
@@ -16,6 +17,20 @@ Skills automáticas possuem `allow_implicit_invocation: true` e descrições com
 | `rag-quality-engineer` | Automática | RAG, embeddings, recuperação, grounding ou citações | Arquitetura e protocolo de avaliação RAG |
 | `agent-payment-safety` | Automática | Agentes ou sistemas que lidam com dinheiro e pagamentos | Invariantes financeiros e testes de falha |
 | `deep-security-audit` | Somente explícita | Auditoria profunda solicitada pelo usuário | Threat model, achados e plano de remediação |
+
+## `flight-log-recorder`
+
+**Serve para:** registrar o raciocínio real do time enquanto as decisões acontecem e preparar uma defesa técnica auditável para a banca.
+
+Ativa automaticamente quando uma escolha muda produto, escopo, arquitetura, contrato, dados, RAG, pagamentos, segurança, UX, qualidade, operação, Git, integração, prazo ou demo; quando uma alternativa plausível é rejeitada; quando um risco é aceito; ou quando evidência obriga mudança de rota. Passos mecânicos e ideias ainda não escolhidas não geram entrada.
+
+Cada entrada usa ID próprio, timestamp, owner, contexto, decisão, critérios, alternativas reais, fatos/testes/hipóteses, trade-offs aceitos, consequências, propagação, trial by fire, fallback e gatilhos de revisão. Decisões revertidas não somem: uma nova entrada substitui a anterior por vínculo explícito.
+
+O único arquivo entregue é `docs/flight-log.md`. Para reduzir conflitos, há lanes de append para Team, André, Altoé, Rogério e Renato; o índice cronológico é consolidado apenas no fechamento. O log histórico não substitui o plano geral nem os contratos atuais.
+
+No modo `FINALIZE`, a skill prepara síntese e prontidão segundo os critérios da banca: profundidade sobre dificuldade, funcionamento sobre promessa e julgamento sobre espetáculo, avaliados pelas lentes de funcionamento, profundidade, problema real, originalidade e experiência/clareza.
+
+Exemplo: `Registre por que cortamos a segunda integração para aprofundar o fluxo ponta a ponta.`
 
 ## `hackathon-system-planner`
 
@@ -124,6 +139,7 @@ Exemplo: `Use $deep-security-audit para auditar o commit atual antes da apresent
 
 ```text
 hackathon-system-planner
+  → flight-log-recorder (a cada DEC-* e trade-off)
   → integration-contract-guardian (planejamento)
   → planos individuais
   → linear-microtask-planner
@@ -133,6 +149,7 @@ hackathon-system-planner
 
 ```text
 implementação
+  → flight-log-recorder (quando houver decisão material)
   → testes automatizados
   → code-review-gate
   → correções
@@ -157,12 +174,14 @@ pedido explícito
 - Não altere contrato apenas no plano individual ou no código.
 - Integre contratos, tipos e mocks cedo.
 - Não deixe revisão, navegador ou integração para os minutos finais.
+- Não deixe o Flight Log para o final: registre a escolha antes que contexto, incerteza e alternativas se percam.
 - Quando uma skill retornar bloqueio, resolva a causa; não contorne o gate removendo contexto.
 
 ## Referências profundas
 
 | Skill | Referências principais |
 | --- | --- |
+| Flight Log | detecção, schema de entrada, colaboração/Git, fechamento para a banca |
 | Planner | descoberta, formatos do plano, quality gates |
 | Guardian | catálogo de contratos, checklist, protocolo de merge |
 | Linear | descoberta/mapeamento, schema de issue, sincronização/idempotência |

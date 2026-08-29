@@ -10,8 +10,8 @@ Transforme entendimento difuso em um plano executável por quatro pessoas sem pe
 ## Fases
 
 1. **Descoberta:** siga [discovery-protocol.md](references/discovery-protocol.md). Capture separadamente fatos, interpretação de cada participante, restrições, ideias, dúvidas e evidências; não converta consenso aparente em requisito.
-2. **Resultado e demo:** defina usuário, job, resultado mensurável, critério de vitória, roteiro da demonstração, não objetivos e menor fatia ponta a ponta que prova valor.
-3. **Decisões e arquitetura:** modele componentes, dados, estados, identidades, integrações, falhas, observabilidade e operações. Registre alternativas e por que foram descartadas.
+2. **Resultado e demo:** defina usuário, job, resultado mensurável, critério de vitória, roteiro da demonstração, não objetivos e menor fatia ponta a ponta executável nas primeiras horas. Planeje o tempo restante para profundidade, casos difíceis e trial by fire.
+3. **Decisões e arquitetura:** modele componentes, dados, estados, identidades, integrações, falhas, observabilidade e operações. Para cada `DEC-*` material, use `$flight-log-recorder` no momento da escolha; registre alternativas reais, trade-offs negativos e prova esperada.
 4. **Contratos:** acione `$integration-contract-guardian` em modo de planejamento para versionar fronteiras, mocks, ownership, testes e ordem de integração.
 5. **Decomposição:** defina quatro objetivos globais com um owner primário cada. Quebre-os em entregáveis e microtarefas independentes, demonstráveis e ligadas a contratos.
 6. **Plano geral:** gere `docs/plans/system-plan.md` com [plan-formats.md](references/plan-formats.md). Não resuma se o detalhe muda decisões de implementação ou integração.
@@ -33,6 +33,8 @@ Transforme entendimento difuso em um plano executável por quatro pessoas sem pe
 - Não invente arquivos, endpoints ou APIs como fatos. Quando a base de código existir, inspecione-a; quando ainda não existir, marque caminhos como propostos.
 - Balanceie carga pelo caminho crítico, complexidade, risco e capacidade, não apenas pelo número de tarefas.
 - Planeje tempo de integração, correção e ensaio; não distribua 100% do evento como implementação paralela.
+- Avalie planos por funcionamento ponta a ponta, profundidade/julgamento, aderência ao problema real, originalidade e experiência/clareza. Não use quantidade de features, integrações ou linhas de código como proxy.
+- Toda decisão `DECIDED` deve apontar para um `FL-*`; toda `ASSUMED` precisa de validação e uma entrada quando se tornar escolha aceita. Decisões abertas não devem ser fabricadas no Flight Log.
 - Se RAG ou pagamentos fizerem parte do desenho, incorpore as restrições das skills especializadas ao plano antes da divisão do trabalho.
 
 ## Atualizações

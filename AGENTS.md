@@ -10,6 +10,7 @@
 
 ## Encadeamento obrigatório das skills
 
+- Ao tomar qualquer decisão material ou aceitar um trade-off real, use `$flight-log-recorder` e atualize `docs/flight-log.md` no momento da escolha. Isso vale durante descoberta, planejamento, implementação, revisão, testes, integração, correção e preparação da demo.
 - Ao descobrir, planejar ou replanejar o sistema, use `$hackathon-system-planner` e depois `$integration-contract-guardian` em modo de planejamento. Gere ou atualize o plano geral antes dos planos individuais.
 - Ao decompor trabalho ou preparar issues, use `$linear-microtask-planner`. Não crie ou altere itens no Linear sem pedido ou autorização explícita do usuário.
 - Ao implementar ou modificar RAG, busca semântica, embeddings, recuperação ou grounding, use `$rag-quality-engineer`.
@@ -31,6 +32,7 @@
 
 ## Planejamento e integração
 
+- Comece pela menor fatia ponta a ponta que funcione ao vivo; depois aprofunde casos difíceis, robustez e trial by fire. Não maximize features, integrações ou linhas de código como proxy de qualidade.
 - Congele contratos mínimos antes de distribuir implementação paralela: tipos, endpoints, eventos, estados, erros, variáveis de ambiente, migrations e ownership de arquivos compartilhados.
 - Cada componente deve declarar entradas, saídas, dependências, consumidor, mock disponível e teste de contrato.
 - Cada pessoa deve receber um objetivo global e microtarefas pequenas, ordenadas e verificáveis.
@@ -47,6 +49,19 @@
 - Em falha parcial de escrita externa, pare, inventarie o que aconteceu e peça direção; não repita cegamente.
 - Use IDs estáveis para correlacionar plano, planos individuais, Linear, contratos, commits e evidências.
 
+## Flight Log e decisões
+
+- `docs/flight-log.md` é o histórico autoritativo do porquê das decisões. Ele não substitui `docs/plans/system-plan.md`, contratos, Linear ou código como fontes do estado atual.
+- Considere material toda escolha que muda escopo, produto, arquitetura, contrato, dados, modelo/RAG, pagamento, segurança, UX, qualidade, operação, ownership, Git, integração, prazo ou demo; toda rejeição de alternativa plausível; e todo risco aceito ou decisão revertida.
+- Não registre comandos mecânicos, formatação, execução de algo já decidido ou ideias ainda não aceitas.
+- Registre imediatamente após a decisão e, quando possível, antes da implementação. Inclua contexto, alternativas reais, evidência/hipóteses, trade-offs negativos, consequências, validação, casos difíceis e gatilhos de revisão.
+- Nomear framework, provider ou feature não constitui decisão fundamentada. Explique por que a escolha venceu neste contexto e o que o time perdeu ao escolhê-la.
+- Nunca invente consenso, evidência ou teste. Use `NOT RUN`, `ASSUMPTION` e `UNKNOWN` quando necessário.
+- O log é append-only. Correções recebem adendo; reversões recebem nova entrada com `supersedes`; nunca apague uma decisão para limpar a narrativa.
+- Cada participante edita sua lane. Decisões transversais usam a lane `Team` e um único recorder. O índice cronológico é consolidado no code freeze.
+- Toda decisão que altera estado operacional deve ser propagada ao plano geral, contratos, planos individuais e Linear afetados com os mesmos IDs.
+- Antes de merge, preserve todas as entradas, valide IDs únicos e trate remoção, duplicação ou decisão de contrato não registrada como bloqueio.
+
 ## Change control
 
 - Mudança de arquitetura, schema, contrato, owner, dependência ou ordem de integração exige atualização do plano geral primeiro.
@@ -57,6 +72,8 @@
 ## Definition of Done
 
 Uma tarefa só está concluída quando seus critérios de aceitação foram atendidos, os testes relevantes passaram, a revisão não possui achados bloqueantes, o comportamento observável foi validado localmente e os contratos/documentos afetados estão sincronizados. Se alguma validação não puder ser executada, registre exatamente o que falta e por quê.
+
+Se a tarefa tomou ou alterou uma decisão material, a Definition of Done também exige uma entrada válida em `docs/flight-log.md` e backlinks sincronizados. Uma decisão sem alternativa real, custo aceito ou evidência honesta não está suficientemente documentada.
 
 `$deep-security-audit` não faz parte automática da Definition of Done. Quando o usuário a solicitar, conduza a auditoria de forma defensiva e read-only por padrão; correções exigem um pedido separado ou autorização explícita para implementar os achados.
 

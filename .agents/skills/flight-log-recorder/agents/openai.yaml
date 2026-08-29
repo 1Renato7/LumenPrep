@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flight Log Recorder"
+  short_description: "Registra decisões e trade-offs para a banca"
+  default_prompt: "Use $flight-log-recorder para registrar esta decisão material no Flight Log do projeto."
+policy:
+  allow_implicit_invocation: true

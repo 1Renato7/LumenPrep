@@ -13,9 +13,9 @@ Este arquivo é o **delimitador de escopo** do time. Ele existe para responder, 
 
 1. O que exatamente o júri avalia? (§1 e §2 — texto oficial, sem interpretação)
 2. Estamos somando pontos ou desperdiçando tempo? (§3 e §4 — placar interno)
-3. Por que decidimos assim? (§6 — log de decisões, que é **entregável obrigatório**)
+3. Por que decidimos assim? ([`docs/flight-log.md`](docs/flight-log.md) — log de decisões, que é **entregável obrigatório**)
 
-**Ritual mínimo:** a cada checkpoint (§8), alguém abre este arquivo, atualiza o placar (§4), marca os entregáveis (§5) e registra as decisões novas (§6). Sem evidência real, não se marca nada como pronto — regra do `AGENTS.md`.
+**Ritual mínimo:** a cada checkpoint (§8), alguém abre este arquivo, atualiza o placar (§4), marca os entregáveis (§5) e registra decisões novas no [`docs/flight-log.md`](docs/flight-log.md). Sem evidência real, não se marca nada como pronto — regra do `AGENTS.md`.
 
 > ⚠️ **Aviso que vem do próprio júri.** Um dos itens explicitamente listados como *"o que não pontua"* é **"building for the rubric"** — times que perseguem as cinco lentes uma a uma acabam rasos nas cinco. Portanto: este documento é um **piso de conformidade e um detector de lacunas**, não um alvo a ser maximizado. Se o placar aqui e a profundidade do produto entrarem em conflito, **a profundidade do produto vence** e o placar é que está errado.
 
@@ -158,51 +158,29 @@ Desafios anunciados 30 min antes do T-ZERO. Depois do freeze: pitches → campe�
 | D2 | Demo (ao vivo) | — | — | ☐ | — |
 | D3 | Repositório GitHub **público** com README | — | — | ☐ | — |
 | D4 | Diagrama de arquitetura | — | — | ☐ | — |
-| D5 | **Decision log** — alternativas consideradas e por que escolhemos o que escolhemos | §6 deste arquivo | — | ☐ | — |
+| D5 | **Decision log** — alternativas consideradas e por que escolhemos o que escolhemos | [`docs/flight-log.md`](docs/flight-log.md) | — | ☐ | — |
 
 **Notas de conformidade:**
 
 - **D3 — "público".** O repositório precisa estar público **antes do freeze**. Verificar também que o README é legível *"por alguém que não estava lá"* (lente 5): o que é, como rodar, como o sistema está desenhado.
-- **D5 — o decision log é dois entregáveis em um.** É item obrigatório da lista **e** é a evidência direta da lente 2 (*"Does the decision log show real trade-offs?"*). Um log com "escolhemos X porque é rápido" não mostra trade-off e não pontua. Formato obrigatório em §6.
+- **D5 — o decision log é dois entregáveis em um.** É item obrigatório da lista **e** é a evidência direta da lente 2 (*"Does the decision log show real trade-offs?"*). Um log com "escolhemos X porque é rápido" não mostra trade-off e não pontua. O formato canônico e colaborativo vive em [`docs/flight-log.md`](docs/flight-log.md); §6 explica a separação.
 - **D2 — demo.** A página `/challenges` admite "live or video", mas `/judging` é inequívoca: *"A polished video of something that doesn't run live"* não pontua, e o trial by fire exige o sistema rodando. **Planejar demo ao vivo.** Vídeo só como plano B de rede/energia, nunca como entrega principal.
 
 ---
 
-## 6. Decision log (entregável D5)
+## 6. Flight Log (entregável D5)
 
-> **Regra:** toda decisão que alguém do time possa ser questionado sobre no Q&A entra aqui, **no momento em que é tomada** — não no domingo de manhã. Reconstruir trade-offs de memória produz exatamente o log raso que a lente 2 penaliza.
->
-> **Formato obrigatório.** Uma decisão sem "alternativa rejeitada" e sem "o que perdemos" não é uma decisão documentada — é uma justificativa.
+O decision log canônico está em [`docs/flight-log.md`](docs/flight-log.md). Esta separação evita que critérios oficiais, placar vivo e histórico append-only disputem o mesmo arquivo e o mesmo protocolo de mudança.
 
-### Modelo
+Regras centrais:
 
-```
-### DEC-000 — <título curto da decisão>
-- **Data/hora:**
-- **Contexto:** que problema forçou a decisão
-- **Escolha:** o que decidimos
-- **Alternativas rejeitadas:** A (por quê não), B (por quê não)
-- **O que ganhamos:**
-- **O que perdemos / dívida aceita:**
-- **Como isso aparece no sistema:** arquivo, endpoint, contrato (ex.: CTR-API-001)
-- **Quem defende no Q&A:**
-- **Lente(s) afetada(s):** L1 / L2 / L3 / L4 / L5
-```
+- toda decisão material entra no Flight Log no momento em que é tomada;
+- uma entrada sem alternativa real, perda aceita e evidência honesta não está completa;
+- IDs `FL-*` ligam decisões a `DEC-*`, contratos, planos, Linear, branches, commits e testes;
+- decisões antigas nunca são apagadas; reversões criam entradas sucessoras;
+- a skill `$flight-log-recorder` e o `AGENTS.md` tornam esse registro automático no Codex.
 
-### Decisões registradas
-
-#### DEC-001 — Adotar este arquivo como delimitador de escopo e decision log do time
-- **Data/hora:** 29/08/2026, antes do T-ZERO
-- **Contexto:** o júri exige um decision log como entregável e avalia se ele mostra trade-offs reais. Sem um lugar único e acordado, cada pessoa registra decisões no seu próprio canal e o log só existiria no domingo, reconstruído de memória.
-- **Escolha:** um único arquivo versionado na raiz do repositório, que reúne critérios oficiais, placar interno e decision log.
-- **Alternativas rejeitadas:** (a) log só nos commits — não mostra alternativas rejeitadas nem trade-off, e o júri lê o log, não o histórico; (b) documento externo (Notion/Docs) — sai do repositório público, que é justamente um dos entregáveis; (c) issues do Linear — ferramenta interna, não entregável, e o júri não terá acesso.
-- **O que ganhamos:** um só lugar para atualizar, versionado, público junto do código, e legível por quem não estava lá.
-- **O que perdemos / dívida aceita:** exige disciplina de atualização durante o evento; se ninguém atualizar nos checkpoints, o arquivo vira ruído.
-- **Como isso aparece no sistema:** `avaliacao.md` na raiz do repositório.
-- **Quem defende no Q&A:** (definir)
-- **Lente(s) afetada(s):** L2, L5
-
-<!-- Próximas decisões: DEC-002 em diante, sempre no formato acima. -->
+A decisão histórica `DEC-001`, criada quando este arquivo reunia avaliação e log, foi preservada e refinada em `FL-20260829-TEAM-001` e `FL-20260829-TEAM-002`. Novas decisões não devem ser adicionadas nesta seção.
 
 ---
 
@@ -247,12 +225,12 @@ Alinhado aos checkpoints de integração já exigidos pelo `AGENTS.md` (contrato
 
 | Checkpoint | Momento | O que se verifica aqui |
 |---|---|---|
-| CP0 | Logo após a escolha do desafio | Preencher §7 (casos feios). Registrar DEC da escolha do desafio e do recorte de escopo. |
+| CP0 | Logo após a escolha do desafio | Preencher §7 (casos feios). Registrar `FL-*` da escolha do desafio e do recorte de escopo. |
 | CP1 | Contratos e esqueletos congelados | Primeira passada no placar (§4). Marcar donos dos entregáveis (§5). |
-| CP2 | **Primeira fatia ponta a ponta rodando** | **Portão duro: L1 ≥ 3.** Se não atingiu, cortar escopo — não adicionar. Registrar o corte como DEC. |
-| CP3 | ~T+16h | Casos feios (§7) e decision log (§6) em dia. L1 deve estar em 4. |
+| CP2 | **Primeira fatia ponta a ponta rodando** | **Portão duro: L1 ≥ 3.** Se não atingiu, cortar escopo — não adicionar. Registrar o corte como `DEC-*` no plano e `FL-*` no Flight Log. |
+| CP3 | ~T+16h | Casos feios (§7) e [`docs/flight-log.md`](docs/flight-log.md) em dia. L1 deve estar em 4. |
 | CP4 | Antes do freeze | Ensaio do trial by fire (T10). Todos os entregáveis (§5) marcados com evidência. Repositório **público**. |
-| CP5 | Após o freeze, antes do pitch | Ensaio cronometrado (7 min, ver §2.7). Cada pessoa sabe qual DEC defende. |
+| CP5 | Após o freeze, antes do pitch | Ensaio cronometrado (7 min, ver §2.7). Cada pessoa sabe quais decisões `FL-*` defende. |
 
 ---
 
@@ -262,7 +240,7 @@ A defesa técnica pesa tanto quanto a demo (princípio C). O Q&A é curto e vem 
 
 | Área do sistema | Quem defende | Decisões que essa pessoa precisa saber explicar | Pronta? |
 |---|---|---|---|
-| — | — | DEC-xxx | ☐ |
+| — | — | FL-xxx / DEC-xxx | ☐ |
 
 **Perguntas que o time deve conseguir responder sem hesitar:**
 

@@ -16,7 +16,7 @@ Enunciado, usuário, job, dor, resultado, critérios de avaliação, critério d
 
 ### 3. Demo e MVP
 
-Roteiro passo a passo, dados de demonstração, resultado esperado por passo, componentes envolvidos, evidência visual, dependência externa e fallback. Identifique a menor fatia vertical e melhorias opcionais.
+Roteiro passo a passo, dados de demonstração, resultado esperado por passo, componentes envolvidos, evidência visual, dependência externa e fallback. Identifique a menor fatia vertical executável nas primeiras horas, casos difíceis, variações para trial by fire e melhorias opcionais posteriores.
 
 ### 4. Arquitetura
 
@@ -24,7 +24,7 @@ Contexto, diagrama textual ou Mermaid quando útil, componentes com IDs, respons
 
 ### 5. Decisões
 
-Para cada `DEC-*`: estado `DECIDED|ASSUMED|OPEN`, contexto, opções, escolha, razão, consequência, owner, prazo e fallback.
+Para cada `DEC-*`: estado `DECIDED|ASSUMED|OPEN`, contexto, opções, escolha, razão, consequência, owner, prazo, fallback e backlink `FL-*` quando decidida. A entrada do Flight Log deve preservar alternativas reais, trade-off negativo, evidência e validação; o plano preserva o estado atual.
 
 ### 6. Catálogo de contratos
 
@@ -73,6 +73,10 @@ Para cada `RSK-*`: probabilidade, impacto, sinal precoce, mitigação, owner, de
 ### 13. Quality gate
 
 Resultado `PLAN READY|PLAN BLOCKED`, checklist, lacunas, perguntas humanas, simulação dos quatro primeiros blocos, simulação de merges e ensaio mental da demo.
+
+### 14. Estratégia para a banca
+
+Mapeie as cinco lentes — funcionamento, profundidade/julgamento, problema real, originalidade e experiência/clareza — para evidências concretas do sistema. Inclua trial by fire, casos difíceis, perguntas prováveis da defesa técnica e decisões `FL-*` que sustentam cada resposta. Não crie features apenas para preencher lentes.
 
 ## `docs/plans/people/<nome-normalizado>.md`
 

@@ -5,6 +5,8 @@
 - usuário e necessidade estão explícitos;
 - critério de vitória é observável;
 - demo possui início, ação, resultado e fallback;
+- a menor fatia ponta a ponta cabe nas primeiras horas e funciona antes de expansões;
+- trial by fire e pelo menos um caso difícil do problema estão definidos;
 - fatos, hipóteses, decisões e não objetivos estão separados;
 - restrições do evento foram incorporadas.
 
@@ -44,5 +46,15 @@ Para cada participante, simule uma nova sessão sem memória da reunião. O plan
 - há checkpoints de contratos, fatia ponta a ponta e integração final;
 - existe contingência para provider, atraso e contrato quebrado;
 - a demo pode ser ensaiada com dados determinísticos.
+
+## Gate 7 — julgamento e Flight Log
+
+- toda decisão material `DECIDED` possui backlink `FL-*` e alternativas reais;
+- nenhuma justificativa se limita a nomear framework, provider ou feature;
+- fatos, testes, hipóteses e desconhecidos estão separados;
+- os principais trade-offs registram ganho, perda, risco residual e gatilho de revisão;
+- decisões se ligam a evidência de funcionamento, caso difícil ou plano explícito de validação;
+- as cinco lentes da banca possuem evidência planejada sem multiplicar features superficialmente;
+- a equipe consegue defender `por que`, `por que não`, `o que falha`, `como sabe` e `o que mudaria`.
 
 Classifique `PLAN READY` somente quando todos os itens aplicáveis estiverem satisfeitos. Em `PLAN BLOCKED`, liste lacuna, impacto, decisão necessária, opções, owner e prazo limite.

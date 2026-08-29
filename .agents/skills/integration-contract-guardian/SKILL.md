@@ -32,8 +32,9 @@ Use quando código ou plano precisar alterar um contrato já distribuído.
 2. Classifique a mudança como compatível, incompatível ou comportamentalmente arriscada.
 3. Proponha migração: nova versão, período de compatibilidade, adapter, feature flag, ordem de atualização e fallback.
 4. Obtenha decisão do owner/coordenador quando houver escolha transversal.
-5. Atualize primeiro o plano geral, depois planos individuais, mocks/testes e issues. Só então implemente.
-6. Não permita que um consumidor descubra a mudança apenas no merge.
+5. Registre a escolha transversal e seus trade-offs com `$flight-log-recorder`, citando contrato e versões.
+6. Atualize primeiro o plano geral, depois planos individuais, mocks/testes e issues. Só então implemente.
+7. Não permita que um consumidor descubra a mudança apenas no merge.
 
 ## Modo de integração
 
@@ -42,8 +43,10 @@ Use quando código ou plano precisar alterar um contrato já distribuído.
 3. Verifique consumidores, compatibilidade, migrations, env vars, imports/exports, build, testes de contrato e arquivos compartilhados.
 4. Reconstrua a cadeia upstream/downstream e confira se o handoff prometido no plano individual realmente existe no diff.
 5. Procure conflitos semânticos mesmo quando o Git não relata conflito textual.
-6. Execute preflight, checagens proporcionais ao risco e smoke test do checkpoint. Não faça merge, rebase, push ou alteração externa sem autorização correspondente.
-7. Classifique o resultado como `READY`, `READY WITH WARNINGS` ou `BLOCKED`, usando [a checklist](references/integration-checklist.md).
+6. Confirme que decisões materiais do diff possuem entrada `FL-*`; preserve todas as entradas do log, IDs únicos e backlinks. Remoção, duplicação ou decisão contratual não registrada bloqueia integração.
+7. Quando resolver conflito semântico, aceitar warning ou mudar ordem de integração exigir escolha real, registre-a com `$flight-log-recorder`.
+8. Execute preflight, checagens proporcionais ao risco e smoke test do checkpoint. Não faça merge, rebase, push ou alteração externa sem autorização correspondente.
+9. Classifique o resultado como `READY`, `READY WITH WARNINGS` ou `BLOCKED`, usando [a checklist](references/integration-checklist.md).
 
 ## Sincronização documental
 
