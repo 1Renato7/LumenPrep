@@ -1,8 +1,4 @@
-"""TASK-API-003: local demo scenario injection boundary.
-
-TODO(TASK-DATA-006): replace fixture acknowledgement with the data owner's
-public injection function once its package and signature are delivered.
-"""
+"""TASK-API-003: local demo scenario injection boundary."""
 
 from __future__ import annotations
 
@@ -13,9 +9,23 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.config import settings
+from app.simulation import LiveStreamController, ScenarioV1Contract, load_generator_config
+from app.simulation.scenario_contract import ScenarioContractError
 
 router = APIRouter()
 _SCENARIOS = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
+_GENERATOR_CONFIG = Path(__file__).resolve().parents[2] / "config" / "generator" / "v1" / "default.json"
+_SCENARIO_SCHEMA = Path(__file__).resolve().parents[2] / "contracts" / "v1" / "scenario.schema.json"
+
+_controller: LiveStreamController | None = None
+_scenario_contract = ScenarioV1Contract(_SCENARIO_SCHEMA)
+
+
+def _get_controller() -> LiveStreamController:
+    global _controller
+    if _controller is None:
+        _controller = LiveStreamController(load_generator_config(_GENERATOR_CONFIG))
+    return _controller
 
 
 def _load_scenario(scenario_id: str) -> dict[str, Any] | None:
@@ -29,16 +39,30 @@ def _load_scenario(scenario_id: str) -> dict[str, Any] | None:
 
 @router.post("/demo/scenarios/{scenario_id}/inject", status_code=202)
 def inject_scenario(scenario_id: str) -> dict[str, Any]:
-    """Accept only known synthetic scenarios while DEMO_MODE is enabled."""
+    """Accept only known synthetic scenarios while DEMO_MODE is enabled.
+
+    Injeta de verdade: gera trafego via app.simulation (TASK-DATA-006),
+    aplica os effects de CTR-SCN-001 nas tentativas que casam os filters,
+    e ingere via app.ingestion.ingest_event real — reflete em
+    /metrics/current e nos incidentes na sequencia.
+    """
     if not settings.demo_mode:
         raise HTTPException(status_code=403, detail="DEMO_MODE_REQUIRED")
-    scenario = _load_scenario(scenario_id)
-    if scenario is None:
+    payload = _load_scenario(scenario_id)
+    if payload is None:
         raise HTTPException(status_code=404, detail="SCENARIO_NOT_FOUND")
+
+    try:
+        scenario = _scenario_contract.parse(payload)
+    except ScenarioContractError as error:
+        raise HTTPException(status_code=422, detail=f"SCENARIO_CONTRACT_INVALID: {error}") from error
+    result = _get_controller().inject_scenario(scenario)
+
     return {
         "status": "ACCEPTED",
-        "scenario_id": scenario["scenario_id"],
-        "correlation_id": f"demo:{scenario['scenario_id']}",
-        "source": "fixture_fallback",
-        "integration_pending": "TASK-DATA-006",
+        "scenario_id": result.scenario_id,
+        "correlation_id": result.correlation_id,
+        "source": "live_stream",
+        "matched_attempts": result.matched_attempts,
+        "events_ingested": result.events_ingested,
     }
