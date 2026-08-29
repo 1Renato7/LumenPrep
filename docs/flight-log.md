@@ -2554,7 +2554,7 @@ Mudança nos schemas `CTR-TXN/TXL`, falha de equivalência entre harness e batch
 
 #### Adendos
 
-- **2026-08-29T20:03:55-03:00:** conflitos de merge de `renato/tarefa44@602ae9d` foram resolvidos preservando o plano transaction-first da `main`; o código foi integrado exclusivamente como `CMP-HARNESS-001`. `CTR-TXN/TXL/API v3` não foram promovidos nem alterados por este merge. A validação integrada (testes, revisão e smoke) é o gate antes do push; `LUM2-61/62` permanecem as tarefas de adapter/lifecycle.
+- **2026-08-29T20:10:32-03:00:** conflitos de merge de `renato/tarefa44@602ae9d` foram resolvidos preservando o plano transaction-first da `main`; o código foi integrado exclusivamente como `CMP-HARNESS-001` no commit `6d6e0b4`. `CTR-TXN/TXL/API v3` não foram promovidos nem alterados. PASS: revisão sem bloqueadores, `python -m pytest -x -vv` com 59 testes aprovados e smoke do Swagger com `POST /transactions` = `202`, `listener_cursor=1` e `backlog=0`, sem erros de console. `LUM2-61/62` permanecem as tarefas de adapter/lifecycle.
 
 ## Prontidão para a banca
 
