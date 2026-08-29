@@ -116,4 +116,4 @@ Um único integrador edita `web/package.json`, lockfile, layout raiz e env. Inte
 
 ## Linear
 
-Parent: [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-narrativa-dashboard-e-demo-executiva). Atualizações 2.0 estão apenas no preview até confirmação explícita; não presumir que o Linear já reflete este plano.
+Parent: [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-frontend-transaction-first-vercel-e-demo). `LUM2-9`–`14` foram replanejadas para o fluxo 2.0. Dependências novas principais: `TASK-TXN-API-001`→`LUM2-58`, `TASK-DEPLOY-API-001`→`LUM2-60` e `TASK-EXP-004`→`LUM2-63`.

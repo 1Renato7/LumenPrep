@@ -70,4 +70,4 @@ Evals de grounding/no-answer/injection/leakage passam; review gate sem bloqueant
 
 ## Linear
 
-Parent: [LUM2-5](https://linear.app/lumenhack/issue/LUM2-5/entregar-memoria-graphrag-e-explicacao-grounded). Atualizações LUM2-23/25 e nova `TASK-EXP-004` aguardam confirmação do preview 2.0.
+Parent: [LUM2-5](https://linear.app/lumenhack/issue/LUM2-5/entregar-memoria-graphrag-e-explicacao-grounded). `LUM2-23` foi atualizada; `TASK-EXP-004`→`LUM2-63`. Como `LUM2-25` já estava `Done`, ela foi preservada e a extensão transacional virou `TASK-MEM-009`→`LUM2-64`.
