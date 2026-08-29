@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "seed": 29082026,
+  "transactions": [
+    {"client_reference": "sample-29082026-1", "occurred_at": null, "merchant_id": "merchant_br_01", "provider_id": "provider_alpha", "issuer_bank": "bank_br_a", "country": "BR", "currency": "BRL", "amount_minor": 12990, "payment_method_category": "CARD", "card_brand": "MASTERCARD", "card_type": "CREDIT", "provider_connection_id": "conn_br_primary", "channel": "WEB"},
+    {"client_reference": "sample-29082026-2", "occurred_at": null, "merchant_id": "merchant_br_01", "provider_id": "provider_beta", "issuer_bank": "bank_br_b", "country": "BR", "currency": "BRL", "amount_minor": 7990, "payment_method_category": "CARD", "card_brand": "VISA", "card_type": "DEBIT", "provider_connection_id": "conn_br_secondary", "channel": "MOBILE"},
+    {"client_reference": "sample-29082026-3", "occurred_at": null, "merchant_id": "merchant_br_01", "provider_id": "provider_alpha", "issuer_bank": "bank_br_c", "country": "BR", "currency": "BRL", "amount_minor": 21990, "payment_method_category": "DIGITAL_WALLET", "card_brand": null, "card_type": "NOT_APPLICABLE", "provider_connection_id": "conn_br_primary", "channel": "MOBILE"}
+  ],
+  "correlation_id": "corr_demo_sample_0001"
+}

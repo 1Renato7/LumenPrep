@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/transaction-record.schema.json",
+  "title": "CTR-TXL-001 Transaction Record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "transaction_id", "batch_id", "created_at", "updated_at", "status", "input", "processing", "outcome", "classification", "correlation_id"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "transaction_id": {"type": "string", "minLength": 1},
+    "batch_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["PROCESSING", "SUCCEEDED", "FAILED", "UNKNOWN"]},
+    "input": {"$ref": "transaction-input.schema.json"},
+    "processing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "progress_percent"],
+      "properties": {
+        "stage": {"enum": ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING", "COMPLETE", "PIPELINE_FAILED"]},
+        "progress_percent": {"type": "integer", "minimum": 0, "maximum": 100},
+        "failure_code": {"type": ["string", "null"]}
+      }
+    },
+    "outcome": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["result", "provider_response_code", "normalized_decline_code", "latency_ms"],
+      "properties": {
+        "result": {"enum": ["SUCCEEDED", "FAILED", "UNKNOWN"]},
+        "provider_response_code": {"type": ["string", "null"]},
+        "normalized_decline_code": {"type": ["string", "null"]},
+        "latency_ms": {"type": "integer", "minimum": 0}
+      }
+    },
+    "classification": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["category", "reason", "confidence", "evidence_ids", "related_incident_ids"],
+      "properties": {
+        "category": {"enum": ["APPROVED", "ISSUER_DECLINE", "PROVIDER_ERROR", "TIMEOUT", "DATA_QUALITY", "UNKNOWN"]},
+        "reason": {"type": "string", "minLength": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "related_incident_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      }
+    },
+    "correlation_id": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "PROCESSING"}}},
+      "then": {
+        "properties": {
+          "processing": {"properties": {"stage": {"enum": ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING"]}, "progress_percent": {"maximum": 99}}},
+          "outcome": {"type": "null"},
+          "classification": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "SUCCEEDED"}}},
+      "then": {
+        "properties": {
+          "processing": {"properties": {"stage": {"const": "COMPLETE"}, "progress_percent": {"const": 100}}},
+          "outcome": {"type": "object", "properties": {"result": {"const": "SUCCEEDED"}}},
+          "classification": {"type": "object", "properties": {"category": {"const": "APPROVED"}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "FAILED"}}},
+      "then": {
+        "properties": {
+          "processing": {"properties": {"stage": {"const": "COMPLETE"}, "progress_percent": {"const": 100}}},
+          "outcome": {"type": "object", "properties": {"result": {"const": "FAILED"}}},
+          "classification": {"type": "object", "properties": {"category": {"not": {"const": "APPROVED"}}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "UNKNOWN"}}},
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "processing": {"properties": {"stage": {"const": "COMPLETE"}, "progress_percent": {"const": 100}}},
+              "outcome": {"type": "object", "properties": {"result": {"const": "UNKNOWN"}}},
+              "classification": {"type": "object", "properties": {"category": {"const": "UNKNOWN"}}}
+            }
+          },
+          {
+            "properties": {
+              "processing": {"properties": {"stage": {"const": "PIPELINE_FAILED"}, "progress_percent": {"const": 100}, "failure_code": {"type": "string", "minLength": 1}}},
+              "outcome": {"type": "null"},
+              "classification": {"type": "null"}
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

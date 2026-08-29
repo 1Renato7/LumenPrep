@@ -42,6 +42,26 @@ CREATE TABLE IF NOT EXISTS quarantine (
     reason VARCHAR,
     raw_json VARCHAR
 );
+CREATE TABLE IF NOT EXISTS transaction_batches (
+    batch_id VARCHAR PRIMARY KEY,
+    idempotency_key VARCHAR UNIQUE NOT NULL,
+    payload_fingerprint VARCHAR NOT NULL,
+    accepted_at TIMESTAMP NOT NULL,
+    correlation_id VARCHAR NOT NULL
+);
+CREATE TABLE IF NOT EXISTS transaction_records (
+    transaction_id VARCHAR PRIMARY KEY,
+    batch_id VARCHAR NOT NULL,
+    batch_position INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    status VARCHAR NOT NULL,
+    input_json VARCHAR NOT NULL,
+    processing_json VARCHAR NOT NULL,
+    outcome_json VARCHAR,
+    classification_json VARCHAR,
+    correlation_id VARCHAR NOT NULL
+);
 """
 
 _connection: duckdb.DuckDBPyConnection | None = None

@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "max_batch_size": 100,
+  "merchants": ["merchant_br_01", "merchant_mx_01"],
+  "providers": ["provider_alpha", "provider_beta"],
+  "issuer_banks": ["bank_br_a", "bank_br_b", "bank_br_c", "bank_mx_a"],
+  "countries": ["BR", "MX"],
+  "currencies": ["BRL", "MXN"],
+  "payment_method_categories": ["CARD", "DIGITAL_WALLET", "BANK_TRANSFER"],
+  "card_brands": ["MASTERCARD", "VISA"],
+  "card_types": ["CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE"],
+  "correlation_id": "corr_demo_catalog_0001"
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "idempotency_key": "demo-batch-0001",
+  "transactions": [
+    {
+      "client_reference": "checkout-1001",
+      "occurred_at": "2026-08-29T18:00:00Z",
+      "merchant_id": "merchant_br_01",
+      "provider_id": "provider_alpha",
+      "issuer_bank": "bank_br_a",
+      "country": "BR",
+      "currency": "BRL",
+      "amount_minor": 12990,
+      "payment_method_category": "CARD",
+      "card_brand": "MASTERCARD",
+      "card_type": "CREDIT",
+      "provider_connection_id": "conn_br_primary",
+      "channel": "WEB"
+    },
+    {
+      "client_reference": "checkout-1002",
+      "occurred_at": "2026-08-29T18:00:01Z",
+      "merchant_id": "merchant_br_01",
+      "provider_id": "provider_alpha",
+      "issuer_bank": "bank_br_b",
+      "country": "BR",
+      "currency": "BRL",
+      "amount_minor": 25990,
+      "payment_method_category": "DIGITAL_WALLET",
+      "card_brand": null,
+      "card_type": "NOT_APPLICABLE",
+      "provider_connection_id": "conn_br_primary",
+      "channel": "MOBILE"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/transaction-list.schema.json",
+  "title": "CTR-TXL-001 Transaction List v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "items", "next_cursor", "correlation_id"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "items": {"type": "array", "items": {"$ref": "transaction-record.schema.json"}},
+    "next_cursor": {"type": ["string", "null"]},
+    "correlation_id": {"type": "string", "minLength": 1}
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "batch_demo_0001",
+  "accepted_at": "2026-08-29T18:00:02Z",
+  "status": "PROCESSING",
+  "transaction_ids": ["txn_demo_1001", "txn_demo_1002"],
+  "correlation_id": "corr_demo_batch_0001"
+}
