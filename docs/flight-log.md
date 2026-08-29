@@ -2222,6 +2222,75 @@ Reabrir se Renato retomar qualquer uma das 6 tarefas assumidas (risco de trabalh
 
 - Nenhum.
 
+### FL-20260829-ROGERIO-004 — Retomar a entrega transaction-first exclusivamente na branch de plataforma
+
+- **Timestamp:** 2026-08-29T20:06:30-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério e Codex
+- **Categoria:** Git/integration | operations
+- **Escopo:** `OBJ-ROGERIO-001`; `TASK-TXN-API-001`, `TASK-TXN-WORKER-001`, `TASK-DEPLOY-API-001`; branch `feat/OBJ-ROGERIO-001-platform-core`
+- **Links:** `docs/plans/system-plan.md` v2.0.0; `docs/plans/people/rogerio.md`; commits `067546e`, `45202d6`; `FL-20260829-ROGERIO-003`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+As alterações locais da frente de dados/detecção permanecem em `RENATO_CONTINUCAO_ROGERIO`, enquanto o plano 2.0 exige mudanças em contratos, API, lifecycle e deploy sob o ownership de Rogério. Era necessário escolher onde retomar o trabalho sem misturar duas frentes independentes nem perder o plano aprovado, pois a branch de plataforma ainda continha somente o plano 1.3.1.
+
+#### Decisão
+
+Executar exclusivamente no worktree da branch `feat/OBJ-ROGERIO-001-platform-core`. Trazer para ela apenas os commits documentais aprovados do replanejamento 2.0 (`067546e` e `45202d6`) e preservar, sem alteração, a working tree e a branch `RENATO_CONTINUACAO_ROGERIO`.
+
+#### Critérios e por que agora
+
+O plano 2.0 nomeia Rogério como owner de `CMP-API-001`, `CMP-TXN-001` e `CMP-DEPLOY-001`; trabalhar em outra branch criaria atribuição e integração ambíguas. A documentação 2.0 é a fonte de verdade e precisa estar no mesmo histórico do código que a implementará.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Branch de plataforma com somente os commits documentais 2.0 | ownership e plano coerentes; preserva trabalho paralelo | requer validar a integração documental antes do código | FACT: a branch estava limpa e os commits são somente docs | escolhida |
+| Continuar em `RENATO_CONTINUACAO_ROGERIO` | evita trocar de worktree | mistura ownership e mudanças locais não relacionadas | FACT: há alterações não commitadas nessa working tree | viola a separação solicitada |
+| Mesclar a branch inteira do Renato | disponibiliza também dados/detecção | integra código fora do escopo e antecipa conflitos semânticos | FACT: o plano mantém `TASK-DATA-008` sob Renato | fora do escopo desta retomada |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `feat/OBJ-ROGERIO-001-platform-core` estava limpa em `cd7c293`; a worktree do Renato tem alterações locais em API, dependências, testes e documentação.
+- **TEST:** PASS — cherry-picks documentais concluídos em `067546e` e `45202d6`; `git diff --check HEAD~2..HEAD` passou.
+- **ASSUMPTION:** os contratos frozen do draft `cc24c7a` serão integrados por microtarefa, não copiados sem validação. Owner: Rogério; gatilho: início de `TASK-TXN-API-001`.
+- **UNKNOWN:** o Linear atualmente conectado não contém o projeto ou as issues `LUM2-*` registradas no plano; requer preview e confirmação antes de recriação/sincronização externa.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** fronteira de ownership auditável e código futuro alinhado ao plano 2.0.
+- **Abrimos mão de:** integrar imediatamente o adapter de outcome ainda pertencente a Renato.
+- **Dívida/limitação:** a sincronização de status no Linear fica bloqueada até o projeto/questões ausentes serem recriados ou o workspace correto ser conectado.
+- **Risco residual:** o contrato draft pode divergir da base atual; cada microtarefa terá testes de schema, contrato e revisão antes de ser aceita.
+
+#### Consequências e propagação
+
+- **Produto/demo:** nenhuma mudança pública nesta etapa documental.
+- **Arquitetura/contratos:** aplica `CTR-TXN-001`, `CTR-TXL-001` e `CTR-API-001 v3` como especificações frozen para a implementação subsequente.
+- **Pessoas/branches:** Rogério trabalha em `feat/OBJ-ROGERIO-001-platform-core`; a branch de Renato permanece inalterada.
+- **Plano/Linear:** planos 2.0 e preview foram trazidos à branch; Linear permanece `NOT SYNCED` no workspace conectado até decisão explícita de recriação.
+- **Testes/observabilidade:** cada microtarefa exige testes focados, `code-review-gate` e validação de integração; browser gate quando houver fluxo consumidor executável.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** alterações de `TASK-TXN-*` aparecem somente no histórico e no worktree de plataforma, preservando a working tree de Renato.
+- **Caminho feliz:** API v3 e worker serão implementados e testados na branch de plataforma.
+- **Caso difícil/adverso:** dependência de outcome indisponível; worker permanece bloqueado por interface/fixture, sem substituir o módulo de Renato.
+- **Resultado observado:** PASS para isolamento de branch e sincronização documental; implementação ainda `NOT RUN`.
+- **Fallback:** manter os endpoints v1 apenas como harness interno e usar fixtures de contrato até o handoff de `TASK-DATA-008`.
+
+#### Gatilhos de revisão
+
+Qualquer necessidade de modificar um contrato frozen, integrar código da branch de Renato ou recriar o Linear sem preview aprovado exige novo change control.
+
+#### Adendos
+
+- Nenhum.
+
 ## Renato
 
 <!-- RENATO: faça append de novas entradas ao final desta seção. -->
