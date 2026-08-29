@@ -2,7 +2,7 @@
 
 ## Missão
 
-- **Plano geral:** 1.3.0
+- **Plano geral:** 1.3.1
 - **Objetivo:** `OBJ-ANDRE-001`
 - **Papel:** frontend, experiência da demo, recorder transversal e pitch.
 - **Orçamento:** 6–7h de implementação; H15–H19 prioritariamente integração visual, acceptance, ensaio e pitch.
