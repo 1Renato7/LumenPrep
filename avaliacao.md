@@ -198,7 +198,7 @@ Desafios anunciados 30 min antes do T-ZERO. Depois do freeze: pitches → campe�
 - **Alternativas rejeitadas:** (a) log só nos commits — não mostra alternativas rejeitadas nem trade-off, e o júri lê o log, não o histórico; (b) documento externo (Notion/Docs) — sai do repositório público, que é justamente um dos entregáveis; (c) issues do Linear — ferramenta interna, não entregável, e o júri não terá acesso.
 - **O que ganhamos:** um só lugar para atualizar, versionado, público junto do código, e legível por quem não estava lá.
 - **O que perdemos / dívida aceita:** exige disciplina de atualização durante o evento; se ninguém atualizar nos checkpoints, o arquivo vira ruído.
-- **Como isso aparece no sistema:** `avaliação.md` na raiz do repositório.
+- **Como isso aparece no sistema:** `avaliacao.md` na raiz do repositório.
 - **Quem defende no Q&A:** (definir)
 - **Lente(s) afetada(s):** L2, L5
 
