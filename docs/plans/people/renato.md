@@ -106,5 +106,6 @@ Nenhum texto causal livre. Sem evidência: zero candidates ou candidato marcado 
 ## Sincronização Linear
 
 - Parent: [LUM2-7](https://linear.app/lumenhack/issue/LUM2-7/entregar-dados-sinteticos-deteccao-e-rca).
-- Microtarefas: `TASK-DATA-001`→`LUM2-43`, `TASK-DATA-002`→`LUM2-44`, `TASK-DATA-003`→`LUM2-45`, `TASK-DATA-004`→`LUM2-46`, `TASK-DATA-005`→`LUM2-47`, `TASK-DATA-006`→`LUM2-48`, `TASK-DATA-007`→`LUM2-49`, `TASK-DET-001`→`LUM2-50`, `TASK-DET-002`→`LUM2-51`, `TASK-DET-003`→`LUM2-52`, `TASK-DET-004`→`LUM2-53`, `TASK-RCA-001`→`LUM2-54`, `TASK-RCA-002`→`LUM2-55`, `TASK-EVAL-001`→`LUM2-56`, `TASK-EVAL-002`→`LUM2-57`.
+- Microtarefas: `TASK-DATA-001`→`LUM2-43`, `TASK-DATA-002`→`LUM2-45`, `TASK-DATA-003`→`LUM2-46`, `TASK-DATA-004`→`LUM2-44`, `TASK-DATA-005`→`LUM2-47`, `TASK-DATA-006`→`LUM2-48`, `TASK-DATA-007`→`LUM2-49`, `TASK-DET-001`→`LUM2-50`, `TASK-DET-002`→`LUM2-51`, `TASK-DET-003`→`LUM2-52`, `TASK-DET-004`→`LUM2-53`, `TASK-RCA-001`→`LUM2-54`, `TASK-RCA-002`→`LUM2-55`, `TASK-EVAL-001`→`LUM2-56`, `TASK-EVAL-002`→`LUM2-57`.
+- **Correção (2026-08-29):** o campo "ID estável" dentro de `LUM2-44/45/46` no Linear está rotacionado (cada um cita o ID errado dos três) — confiar no título real da issue e neste mapa, não no texto interno da issue. `LUM2-44` = "Gerar 90 dias com sazonalidade" (`TASK-DATA-004`); `LUM2-45` = "Gerar outcomes condicionais e retries" (`TASK-DATA-002`); `LUM2-46` = "Gerar latências e decline codes coerentes" (`TASK-DATA-003`).
 - Fonte completa de dependências: `docs/plans/linear-preview.md`.

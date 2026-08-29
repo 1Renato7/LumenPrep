@@ -52,10 +52,16 @@ class OutcomeGenerator:
         self._random = Random(config.seed ^ 0x5A5A5A5A)
         self._reference_time = reference_time or datetime(2026, 8, 29, 14, 0, 0, tzinfo=timezone.utc)
         self._sequence = 0
+        # Namespace pelo reference_time: cada instancia nova (ex.: um controller por
+        # dia/sessao) precisa gerar IDs unicos mesmo sem estado compartilhado entre
+        # instancias — sem isso, dois OutcomeGenerator com sequence=0 colidem em
+        # event_id e o segundo vira DUPLICATE inteiro no dedupe (bug real achado
+        # no smoke de integracao completo).
+        self._id_namespace = int(self._reference_time.timestamp())
 
     def _next_id(self, prefix: str) -> str:
         self._sequence += 1
-        return f"{prefix}_{self._sequence:09d}"
+        return f"{prefix}_{self._id_namespace}_{self._sequence:06d}"
 
     def generate_payment(self) -> list[GeneratedAttempt]:
         payment_id = self._next_id("pay")
