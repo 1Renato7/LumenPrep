@@ -2,7 +2,7 @@
 
 ## Missão
 
-- **Plano geral:** 1.3.0
+- **Plano geral:** 1.3.1
 - **Objetivo:** `OBJ-ALTOE-001`
 - **Papel:** Neo4j, memória recorrente, Graph RAG, explicação grounded e corroboration externa.
 - **Orçamento:** 13–14h de implementação; H15–H19 integração/validação/pitch support.
