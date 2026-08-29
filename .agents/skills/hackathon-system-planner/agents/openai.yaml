@@ -1,0 +1,7 @@
+interface:
+  display_name: "Hackathon System Planner"
+  short_description: "Transforme a descoberta em um plano integrado"
+  default_prompt: "Use $hackathon-system-planner para conduzir este trabalho."
+
+policy:
+  allow_implicit_invocation: true

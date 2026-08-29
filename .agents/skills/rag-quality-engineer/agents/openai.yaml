@@ -1,0 +1,7 @@
+interface:
+  display_name: "RAG Quality Engineer"
+  short_description: "Projete e avalie sistemas RAG confiáveis"
+  default_prompt: "Use $rag-quality-engineer para conduzir este trabalho."
+
+policy:
+  allow_implicit_invocation: true

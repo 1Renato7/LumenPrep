@@ -1,0 +1,7 @@
+interface:
+  display_name: "Code Review Gate"
+  short_description: "Revise diffs antes da validação funcional"
+  default_prompt: "Use $code-review-gate para conduzir este trabalho."
+
+policy:
+  allow_implicit_invocation: true

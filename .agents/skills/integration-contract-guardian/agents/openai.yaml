@@ -1,0 +1,7 @@
+interface:
+  display_name: "Integration Contract Guardian"
+  short_description: "Proteja contratos no planejamento e no merge"
+  default_prompt: "Use $integration-contract-guardian para conduzir este trabalho."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Browser Acceptance Gate"
+  short_description: "Valide fluxos reais no navegador local"
+  default_prompt: "Use $browser-acceptance-gate para conduzir este trabalho."
+
+policy:
+  allow_implicit_invocation: true

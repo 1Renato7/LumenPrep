@@ -1,0 +1,7 @@
+interface:
+  display_name: "Linear Microtask Planner"
+  short_description: "Converta o plano em microtarefas no Linear"
+  default_prompt: "Use $linear-microtask-planner para conduzir este trabalho."
+
+policy:
+  allow_implicit_invocation: true

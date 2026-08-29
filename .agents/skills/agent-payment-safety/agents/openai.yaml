@@ -1,0 +1,7 @@
+interface:
+  display_name: "Agent Payment Safety"
+  short_description: "Proteja agentes e fluxos de pagamento"
+  default_prompt: "Use $agent-payment-safety para conduzir este trabalho."
+
+policy:
+  allow_implicit_invocation: true
