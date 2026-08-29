@@ -2194,6 +2194,101 @@ Adicionar rerank, conectar Neo4j, receber holdout ou observar falso precedente e
 - Nenhum.
 
 
+### FL-20260829-ALTOE-005 — Exigir vínculo triplo para traçar transação até incidente
+
+- **Timestamp:** 2026-08-29T20:06:13-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex; Rogério e André como consumidores futuros
+- **Categoria:** AI/RAG | contract | quality
+- **Escopo:** TASK-EXP-002 / LUM2-23; `CMP-MEM/EXP-001`; CTR-INC-001 e CTR-TXL-001 v1
+- **Links:** LUM2-23, LUM2-63, CTR-INC-001 v1, CTR-TXL-001 v1, CTR-LLM-001 v1
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O plano 2.0 exige navegar de uma transação até uma explicação de incidente,
+mas proíbe narrar falha isolada como incidente e vazar evidência de outra
+transação. Os contratos já trazem `related_incident_ids`, `evidence_ids` e
+`correlation_id`, sem precisar de novo campo público.
+
+#### Decisão
+
+Resolver uma ligação somente quando os três sinais concordarem: a classificação
+da transação referencia o Incident, contém ao menos um `evidence_id` próprio e
+o `correlation_id` é igual. Os IDs de evidência transacional e agregada podem
+ter namespaces diferentes; evidência de memória histórica não é atribuída a
+uma transação corrente.
+
+#### Critérios e por que agora
+
+Esta regra entrega rastreabilidade auditável para a API/UI futura sem uma nova
+chamada LLM, sem mudança de schema e sem depender da implementação da API v3.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Confiar apenas em `related_incident_ids` | Implementação curta | Permite referência sem prova de evidência | FACT: campo é uma lista de IDs | Não protege grounding |
+| Inferir por escopo ou semelhança | Cobre registros incompletos | Pode ligar uma falha isolada ao incidente errado | FACT: RAG não classifica transações | Proibido pelo guardrail |
+| Exigir Incident + evidência da classificação + correlação | Auditável e compatível | Pode retornar vazio para dado incompleto | TEST: pendente | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** CTR-TXL-001 v1 expõe os três campos necessários; os fixtures v2
+  usam IDs de evento na transação e IDs agregados no Incident.
+- **TEST:** NOT RUN — testes da resolução serão executados após a implementação.
+- **ASSUMPTION:** produtor da API v3 preservará a mesma `correlation_id` entre
+  transação e Incident relacionado.
+- **UNKNOWN:** o formato de apresentação do trace pelo frontend; o resolver
+  permanece interno e retorna IDs estáveis.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** nenhuma associação sem prova local e reproduzível.
+- **Abrimos mão de:** mostrar relações quando o produtor não fornecer evidência.
+- **Dívida/limitação:** a regra não reconstrói links perdidos no histórico.
+- **Risco residual:** producer com `correlation_id` inconsistente produz vazio,
+  que é seguro e observável pelos testes.
+
+#### Consequências e propagação
+
+- **Produto/demo:** uma transação isolada permanece sem narrativa de incidente.
+- **Arquitetura/contratos:** sem alteração de schema; interpreta os campos
+  congelados de CTR-INC-001/CTR-TXL-001.
+- **Pessoas/branches:** Rogério recebe a regra de resolução; André recebe IDs
+  já autorizados para o detalhe.
+- **Plano/Linear:** LUM2-23 em progresso; LUM2-63 consumirá o resolver.
+- **Testes/observabilidade:** cobrir um, múltiplos, ausente e cross-transaction.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** somente transações com vínculo triplo aparecem.
+- **Caminho feliz:** duas transações possuem evidência de classificação e
+  apontam para o mesmo Incident.
+- **Caso difícil/adverso:** ID de incidente sem evidência ou correlação cruzada
+  não é exposto.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** trace vazio; ExplanationBundle do Incident continua válido.
+
+#### Gatilhos de revisão
+
+Novo contrato que separe correlation por subfluxo, ou necessidade de explicar
+evidência agregada sem transação individual, exige change control antes de
+relaxar a regra.
+
+#### Adendos
+
+- **2026-08-29T20:06:13-03:00:** PASS: 22 testes focados passaram, incluindo
+  múltiplas transações, correlação divergente, Incident diferente, evidência
+  ausente e `INCONCLUSIVE` sem promoção. `scripts/validate_contracts.py` e
+  `compileall` passaram. A revisão descobriu que os fixtures v2 usam
+  namespaces distintos para evidência transacional e agregada; a regra foi
+  corrigida antes do gate para validar evidência da classificação, não igualdade
+  textual entre esses namespaces.
+- **2026-08-29T20:06:13-03:00:** PASS: a suíte completa executou 57 testes
+  sem falhas depois da correção.
+
 ## Rogério
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->
