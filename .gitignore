@@ -6,6 +6,7 @@ __pycache__/
 *.py[cod]
 *.duckdb
 .env
+.env.docker
 .pytest_cache/
 .coverage
 build/
