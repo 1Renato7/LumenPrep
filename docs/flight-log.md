@@ -174,7 +174,7 @@ Exigência oficial de nome/localização, conflitos recorrentes, backlinks quebr
 
 #### Adendos
 
-- **2026-08-29T16:49:29-03:00:** o schema passou a impor as invariantes de estado: `MATCH_FOUND` exige ao menos um match; `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` exigem lista vazia. O parse das quatro fixtures e a checagem dessas invariantes passaram; teste de aplicação continua `NOT RUN`.
+- Nenhum.
 
 ### FL-20260829-TEAM-003 — Colocar precisão causal e memória recorrente no núcleo do MVP
 
@@ -866,6 +866,7 @@ Consumidor inferindo status por `matches.length`, necessidade de erro HTTP parci
 #### Adendos
 
 - **2026-08-29T16:50:00-03:00:** validação pós-migração passou para quatro fixtures de memória, três fixtures causais/explicativas, parse de todos os JSON, OpenAPI YAML, cinco diagramas, versões 1.3.0 dos quatro planos individuais, 12 IDs únicos no Flight Log e `git diff --check`.
+- **2026-08-29T16:49:29-03:00:** o schema passou a impor as invariantes de estado: `MATCH_FOUND` exige ao menos um match; `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` exigem lista vazia. O parse das quatro fixtures e a checagem dessas invariantes passaram; teste de aplicação continua `NOT RUN`.
 
 ## André
 
@@ -877,7 +878,111 @@ _Nenhuma decisão registrada._
 
 <!-- ALTOE: faça append de novas entradas imediatamente antes da próxima seção. -->
 
-_Nenhuma decisão registrada._
+### FL-20260829-ALTOE-001 — Usar recuperação estruturada precision-first antes do rerank vetorial
+
+- **Timestamp:** 2026-08-29T17:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Categoria:** AI/RAG | quality | architecture
+- **Escopo:** TASK-MEM-005, TASK-MEM-006, CTR-MEM-001 v1.1
+
+#### Contexto e pergunta
+
+A memória precisa reconhecer a recorrência Mastercard sem apresentar um precedente apenas porque alguns sinais genéricos coincidem. Embeddings ainda são opcionais e não podem ser a base inicial da demonstração.
+
+#### Decisão
+
+Implementar primeiro recuperação determinística: somente incidentes HUMAN_CONFIRMED, janela inicial de 30 dias, ao menos uma dimensão de escopo compartilhada e score estruturado de escopo, decline profile e forma temporal. O threshold inicial é 0,80 e o desempate é por score, recência e ID. Rerank vetorial continua posterior e opcional.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Threshold baixo e recall amplo | mais matches aparentes | falso precedente e ancoragem indevida | rejeitada |
+| Vector-first | semântica flexível | dependência externa e menor rastreabilidade | adiada |
+| Score estruturado precision-first | resultado rastreável e fallback local | pode perder match parcial | escolhida |
+
+#### Evidência, hipóteses e limitações
+
+- **TEST:** 15 testes unitários passaram: D-2 top-1, idempotência, candidatos não confirmados, recência, escopo, desempate, auto-match, falhas e fallback.
+- **ASSUMPTION:** 30 dias e 0,80 são baseline adequados até os evals; não constituem threshold final.
+- **UNKNOWN:** recall de recorrências parciais no holdout.
+- **Limitação:** não houve teste de aplicação integrada, Neo4j real ou embedding real nesta etapa.
+
+#### Consequências e gatilhos de revisão
+
+A memória retorna NO_PRECEDENT em vez de forçar um match e nunca muda a causa atual. Recalibrar pesos ou threshold somente após os evals de TASK-MEM-008; queda de precision@1 ou perda de recurrence válida dispara revisão.
+
+
+### FL-20260829-ALTOE-002 — Adiar geração OpenAI até existir proveniência por afirmação versionada
+
+- **Timestamp:** 2026-08-29T17:21:29-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex; revisão independente de memória
+- **Categoria:** AI/RAG | contract | quality | scope
+- **Escopo:** CTR-LLM-001 v1, explicação operacional e integração opcional OpenAI
+- **Links:** CTR-LLM-001, contracts/v1/explanation-bundle.schema.json, codex/altoe-incident-memory
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A API OpenAI está disponível para o projeto, e um adapter com Structured Outputs foi prototipado na branch. A revisão mostrou que CTR-LLM-001 v1 aceita apenas evidence_ids agregados: não transporta a evidência que sustenta cada afirmação narrativa. A pergunta é se vale publicar geração textual antes de a UI conseguir auditar cada claim.
+
+#### Decisão
+
+Manter a explicação determinística e grounded como único caminho publicado no MVP atual. Adiar o adapter OpenAI até uma versão de contrato, acordada com os consumidores, carregar proveniência por afirmação e permitir validação/UI correspondente. A indisponibilidade ou não uso de LLM continua transparente por model_version=deterministic-template.
+
+#### Critérios e por que agora
+
+Precisão causal e auditabilidade superam variedade textual. O contrato v1 tem additionalProperties: false; adicionar proveniência unilateralmente quebraria API/UI, e manter a informação apenas interna não permitiria defesa da origem de cada frase.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Publicar o adapter com IDs agregados | Texto mais variado | Claim causal pode não ser auditável por campo | FACT: CTR-LLM v1 não possui campo de citações por claim | Rejeitada por grounding incompleto |
+| Alterar CTR-LLM v1 unilateralmente | Permite enviar proveniência | Quebra consumidores e exige coordenação de contrato | FACT: schema v1 proíbe propriedades extras | Fora da autoridade local |
+| Template determinístico e extensão versionada futura | Rastreável e compatível | Menos flexibilidade narrativa agora | TEST: 15 testes do núcleo passaram sem dependência LLM | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o schema vigente exige exatamente os campos de CTR-LLM v1 e não inclui mapa de citações por claim.
+- **TEST:** um protótipo com Responses API, strict JSON schema e fallback foi exercitado localmente; a revisão identificou que a proveniência seria descartada na resposta v1. O protótipo foi removido antes de integração.
+- **ASSUMPTION:** uma extensão versionada poderá expor citações por campo sem prejudicar a demo; alinhar com Rogério e André antes de implementar.
+- **UNKNOWN:** formato mínimo de proveniência que a UI consegue apresentar sem poluir a explicação.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** explicação reproduzível, HUMAN_ONLY e sem claim não auditável.
+- **Abrimos mão de:** reescrita generativa no MVP atual.
+- **Dívida/limitação:** a opção de usar créditos OpenAI fica pendente de contrato e integração.
+- **Risco residual:** o template pode ser menos natural; a clareza factual é preferível no prazo do hackathon.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a demo mostra explicação determinística e citações agregadas existentes; não promete geração por LLM.
+- **Arquitetura/contratos:** CTR-LLM-001 v1 permanece inalterado; uma proposta futura deve ser versão nova, nunca propriedade extra silenciosa.
+- **Pessoas/branches:** Rogério e André precisam participar antes que novo campo alcance API/UI; Altoé retoma o adapter após esse acordo.
+- **Plano/Linear:** não há alteração imediata, pois o uso efetivo de OpenAI é opcional no plano; registrar o bloqueio ao priorizá-lo.
+- **Testes/observabilidade:** manter testes de grounding determinístico; a integração futura deve incluir teste de proveniência por claim de ponta a ponta.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** sem adapter LLM, cada explicação v1 continua válida contra o schema e só referencia evidência conhecida.
+- **Caminho feliz:** Incident + memória retornam ExplanationBundle determinístico validado.
+- **Caso difícil/adverso:** API OpenAI falha ou devolve claim não suportado; não há caminho generativo publicado que possa alterar a resposta.
+- **Resultado observado:** PASS em 15 testes unitários do núcleo; NOT RUN para integração ponta a ponta com FastAPI/UI/Neo4j real.
+- **Fallback:** GroundedExplainer determinístico, sem dependência de rede ou chave.
+
+#### Gatilhos de revisão
+
+Reabrir quando o time aprovar CTR-LLM versionado com proveniência por claim e os consumidores puderem exibi-la/validá-la, ou se a banca exigir explicitamente geração por LLM auditável.
+
+#### Adendos
+
+- 2026-08-29T17:21:29-03:00 — Codex: adapter e testes opcionais criados na branch foram removidos antes de merge; nenhum contrato compartilhado foi alterado.
+
 
 ## Rogério
 
