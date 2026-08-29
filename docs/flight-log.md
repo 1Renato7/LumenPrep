@@ -1128,7 +1128,143 @@ Adicionar rerank, conectar Neo4j, receber holdout ou observar falso precedente e
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->
 
-_Nenhuma decisão registrada._
+### FL-20260829-ROGERIO-001 — Rodar o backend (API + Streamlit) no Railway
+
+- **Timestamp:** 2026-08-29T17:46:44-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério e Claude (segunda opinião)
+- **Categoria:** operations
+- **Escopo:** CMP-API-001, CMP-UI-001; hospedagem de CMP-MEM-001 (Neo4j) permanece separada
+- **Links:** DEC-003, DEC-013, `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O plano (DEC-003) fixou FastAPI + DuckDB embutido + Neo4j + Streamlit como stack, mas nenhuma decisão registrada dizia onde essa API roda durante e depois do hackathon. Era preciso escolher uma plataforma antes de a demo depender de um host improvisado.
+
+#### Decisão
+
+Hospedar a API FastAPI (e o Streamlit, se ficar no mesmo processo/monorepo) no Railway, via Docker (já assumido disponível em `ASM-003`). Neo4j continua em serviço dedicado (Aura Free), independente da escolha de host da API — Railway não hospeda o grafo.
+
+#### Critérios e por que agora
+
+Suporta Docker e volume persistente para o arquivo DuckDB, tem plano gratuito (trial) suficiente para a janela do hackathon, e configuração de env vars (`NEO4J_URI`, `OPENAI_API_KEY`) mais simples que alternativas equivalentes. Precisava travar antes de gastar tempo de integração em H15–H19 (DEC-008) configurando infra às pressas.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Render (free web service) | também suporta Docker, tier grátis | disco efêmero a cada redeploy | FACT: documentado pela Render | perde estado do DuckDB entre deploys, pior para demo repetida |
+| Vercel (serverless functions) | já disponível neste ambiente via MCP | sem processo long-running nem volume persistente nativo; Neo4j driver e DuckDB embutido não combinam bem com serverless stateless | ASSUMPTION: baseado no modelo de execução serverless da Vercel | stack assume processo único com estado local (DuckDB) |
+| Execução local sem host (fallback de ASM-003) | zero custo, zero setup externo | não demonstrável remotamente para a banca fora do horário da apresentação | FACT: ASM-003 já prevê esse fallback | só serve como plano B se Docker/host falhar |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Railway oferece $5 de crédito trial sem cartão (30 dias) e plano Hobby a $5/mês com $5 de uso incluído (railway.com/pricing, consultado 2026-08-29).
+- **TEST:** NOT RUN — deploy real ainda não executado nesta branch.
+- **ASSUMPTION:** o trial cobre a janela do hackathon; se o projeto continuar depois, migrar para Hobby. Owner: Rogério, gatilho: trial expirar ou hackathon encerrar.
+- **UNKNOWN:** se Streamlit vai no mesmo serviço Railway que a API ou em serviço separado dentro do mesmo projeto Railway.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** host único com Docker, volume e env vars simples; sem reescrever a stack para serverless.
+- **Abrimos mão de:** tier realmente gratuito e permanente (Railway não tem mais free tier sem expiração).
+- **Dívida/limitação:** custo recorrente pequeno ($5/mês) se o projeto sobreviver ao hackathon.
+- **Risco residual:** trial de 30 dias pode expirar antes da apresentação final; ver RSK-009.
+
+#### Consequências e propagação
+
+- **Produto/demo:** demo pode ser acessada por URL pública em vez de apenas localhost.
+- **Arquitetura/contratos:** nenhum contrato muda; é escolha de hospedagem, não de stack (DEC-003 permanece).
+- **Pessoas/branches:** quem for integrar em H15–H19 (DEC-008) usa o serviço Railway como alvo de deploy, não infra própria.
+- **Plano/Linear:** nenhuma tarefa nova criada nesta conversa; se necessário, abrir microtask de deploy no Linear separadamente.
+- **Testes/observabilidade:** `/health` (já previsto em DEC-003) deve ser checado contra a URL pública do Railway, não só localhost.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** a API sobe no Railway com as mesmas env vars do `.env.example` e responde `/health` publicamente.
+- **Caminho feliz:** deploy via Docker, health check verde, UI acessando a API pela URL do Railway.
+- **Caso difícil/adverso:** trial expira, crédito acaba, ou build Docker falha por dependência do DuckDB/Neo4j driver.
+- **Resultado observado:** NOT RUN — decisão de plataforma, deploy ainda não executado.
+- **Fallback:** execução local (ASM-003) para a apresentação, se o deploy remoto falhar em cima da hora.
+
+#### Gatilhos de revisão
+
+Reabrir se o trial expirar antes do fim do hackathon sem migração para Hobby decidida, ou se o build Docker no Railway falhar de forma não trivial.
+
+#### Adendos
+
+- 2026-08-29 — Claude: `Dockerfile` + `.dockerignore` prontos e validados sem Docker local (install + start real do `CMD` numa cópia isolada do build context, `/health` e `/metrics/current` responderam 200). Deploy real em si ainda não executado — Rogério decidiu adiar pra mais pra frente. Runbook manual dos passos que só a conta Railway consegue fazer: `docs/deploy-railway.md`.
+
+### FL-20260829-ROGERIO-002 — Não travar as chaves de `scope` em CTR-INC-001 agora
+
+- **Timestamp:** 2026-08-29T18:12:19-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Altoé (levantou o ponto), Claude (investigação e recomendação), Rogério (decisão)
+- **Categoria:** contract
+- **Escopo:** `contracts/v1/incident.schema.json` (`CTR-INC-001`), `app/memory/*` (Altoé)
+- **Links:** `CTR-INC-001`, `CTR-MEM-001 v1.1`, commits `fe7ff28` (fix real relacionado), `docs/plans/people/rogerio.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Altoé reportou que `scope.provider` (usado internamente por `app/memory`) e `scope.provider_id` (usado pelo resto do sistema desde `CTR-EVT-001`) eram nomes divergentes pro mesmo dado. Investigação confirmou dois bugs reais de leitura de chave (`app/memory/seed.py` e `app/memory/neo4j_repository.py`), já corrigidos. Ele propôs, como item 4 de 5, travar/documentar no schema quais chaves `scope` aceita, hoje totalmente livre (`additionalProperties: {type: array...}`). Pergunta: travar agora ou deixar aberto?
+
+#### Decisão
+
+Manter `scope` sem enum de chaves fixas em `CTR-INC-001` por enquanto. Não editar o schema `FROZEN` para essa restrição nesta fase do hackathon.
+
+#### Critérios e por que agora
+
+O schema JSON valida a *forma* dos dados, não qual código lê qual chave de um dicionário — um enum não teria pego nenhum dos dois bugs reais encontrados (ambos eram Python lendo `scope.get("provider", ...)` em vez de `scope.get("provider_id", ...)`, em dados que já validavam contra o schema de qualquer jeito). A proteção que efetivamente pegou o problema foi teste de integração cross-boundary (`test_upsert_reads_provider_id_into_providers_cypher_param`), não validação de schema. Travar agora também arrisca bloquear `TASK-DET-001..004`/`RCA-001..002` (Renato, ainda não iniciado) caso o detector precise fatiar por dimensão fora do conjunto atual (`provider_id`, `country`, `card_brand`).
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Enum fechado (`provider_id`, `country`, `card_brand`, ...) em `CTR-INC-001` | erro explícito de schema se alguém digitar chave nova errada | bloqueia Renato se o detector real usar dimensão fora do conjunto hoje conhecido | ASSUMPTION: conjunto final de dimensões do detector ainda não existe | risco de travar contrato antes do dado real existir |
+| Enum + validação, mas revisitando quando RCA existir | mesmo ganho, sem o risco acima | atraso deliberado — trabalho fica pendente até lá | FACT: `TASK-DET-001..004`/`RCA-001/002` (Renato) 100% `Todo`, sem branch | **escolhida** — ver Gatilhos de revisão |
+| Nada (manter aberto pra sempre) | zero esforço | mesma classe de bug pode se repetir sem teste equivalente em cada novo ponto de leitura | FACT: já aconteceu 2x nesta sessão | rejeitada — vira ambiguidade permanente, exatamente o que Altoé alertou |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `contracts/v1/incident.schema.json` define `scope` como `{"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}}` — nenhuma chave é exigida ou proibida.
+- **TEST:** `test_upsert_reads_provider_id_into_providers_cypher_param` (commit `fe7ff28`) — PASS, prova que `provider_id` chega certo no Cypher hoje; não prova nada sobre chaves futuras.
+- **ASSUMPTION:** o conjunto de dimensões usado pelo RCA real de Renato será um superconjunto ou igual a `{provider_id, country, card_brand}`. Owner: Rogério, gatilho: `TASK-DET-004`/`RCA-001` produzirem `AnomalyCandidate.slice` real.
+- **UNKNOWN:** se Renato vai precisar de dimensões como `merchant_id`, `issuer_bank_id` ou `payment_method_category` no `scope` do incidente.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** zero risco de bloquear a integração de Renato por um contrato travado cedo demais.
+- **Abrimos mão de:** uma camada de proteção de schema contra typo de chave em fixtures futuras.
+- **Dívida/limitação:** a mesma classe de bug (chave certa vs errada num dict) pode se repetir num terceiro ponto de leitura ainda não escrito, sem um teste equivalente ao de `neo4j_repository.py`.
+- **Risco residual:** baixo — o par `provider`/`provider_id` já foi caçado nos dois lugares que existem hoje (`grep` cobriu `app/memory/`, `graph/`, `contracts/v1/incident.schema.json`); risco reaparece só em código novo.
+
+#### Consequências e propagação
+
+- **Produto/demo:** nenhuma — decisão é sobre rigidez de contrato, não muda comportamento observável.
+- **Arquitetura/contratos:** `CTR-INC-001` continua v1 sem essa restrição.
+- **Pessoas/branches:** Altoé sabe que o ponto foi investigado e parcialmente aceito (itens 1/2/3/5 do pedido dele já implementados; item 4 explicitamente adiado, não esquecido).
+- **Plano/Linear:** nenhuma tarefa nova criada.
+- **Testes/observabilidade:** cobertura atual (`test_neo4j_repository.py`, `scripts/validate_contracts.py`) é o que garante a convenção `provider_id` até o enum existir.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** quando `TASK-DET-004`/`RCA-001` (Renato) existirem, o conjunto real de chaves de `scope` estará conhecido e o enum poderá ser adicionado sem quebrar ninguém.
+- **Caminho feliz:** Renato usa só `provider_id`/`country`/`card_brand` (ou um superconjunto conhecido); enum vira formalidade de baixo risco.
+- **Caso difícil/adverso:** Renato precisa de uma dimensão nova no meio da integração final (H13–H17); sem enum, isso simplesmente funciona sem change control extra — é o cenário que esta decisão protege.
+- **Resultado observado:** NOT RUN — decisão de adiar, nada a executar agora.
+- **Fallback:** se um terceiro bug de chave divergente aparecer antes do RCA existir, resolver como os dois primeiros (grep + teste de integração pontual), sem esperar o enum.
+
+#### Gatilhos de revisão
+
+Reabrir quando `TASK-DET-004` ou `TASK-RCA-001` (Renato) produzirem `AnomalyCandidate`/`Incident.scope` reais — nesse momento, fechar o enum de `CTR-INC-001.scope` com o conjunto real de dimensões, via change control normal (system-plan primeiro).
+
+#### Adendos
+
+- Nenhum.
 
 ## Renato
 

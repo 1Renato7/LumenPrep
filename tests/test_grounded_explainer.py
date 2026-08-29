@@ -63,7 +63,7 @@ class GroundedExplainerTest(unittest.TestCase):
         payload = {
             "incident_id": "INC-WITHOUT-EVIDENCE",
             "detected_at": "2026-08-29T15:00:00Z",
-            "scope": {"provider": ["stripe"], "country": ["BR"], "card_brand": ["MASTERCARD"]},
+            "scope": {"provider_id": ["stripe"], "country": ["BR"], "card_brand": ["MASTERCARD"]},
             "metrics": {"decline_codes": ["DO_NOT_HONOR"], "temporal_shape": "sudden_approval_drop"},
             "root_cause": {"status": "SUPPORTED", "category": "ISSUER_OUTAGE"},
             "evidence": [],

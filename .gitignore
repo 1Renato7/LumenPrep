@@ -4,6 +4,8 @@
 .python-runtime/
 __pycache__/
 *.py[cod]
+*.duckdb
+.env
 .pytest_cache/
 .coverage
 build/

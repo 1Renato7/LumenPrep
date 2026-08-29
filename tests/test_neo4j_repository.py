@@ -69,6 +69,21 @@ class Neo4jIncidentRepositoryTest(unittest.TestCase):
         upsert_parameters = next(parameters for query, parameters in driver.session_instance.calls if "MERGE (incident:Incident" in query)
         self.assertEqual(upsert_parameters["timeout"], 2.0)
 
+    def test_upsert_reads_provider_id_into_providers_cypher_param(self) -> None:
+        """scope.provider_id (contrato) -> $providers (Cypher) -> (:Provider {provider_id: ...}).
+        Regressao: o adapter lia scope["provider"] (chave errada) e nunca criava o node Provider."""
+        driver = FakeDriver()
+        repository = Neo4jIncidentRepository(driver)
+
+        repository.upsert(mastercard_d2_precedent(now=datetime(2026, 8, 29, tzinfo=timezone.utc)))
+
+        query, parameters = next(
+            call for call in driver.session_instance.calls if "MERGE (incident:Incident" in call[0]
+        )
+        self.assertEqual(parameters["providers"], ["stripe"])
+        self.assertIn("MERGE (provider:Provider {provider_id: provider_id})", query)
+        self.assertIn("FOREACH (provider_id IN $providers", query)
+
 
 if __name__ == "__main__":
     unittest.main()

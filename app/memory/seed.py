@@ -14,7 +14,7 @@ def mastercard_d2_precedent(*, now: datetime | None = None) -> HistoricalInciden
         incident_id="INC-HIST-002D-MASTERCARD",
         occurred_at=reference - timedelta(days=2),
         scope={
-            "provider": ("stripe",),
+            "provider_id": ("stripe",),
             "country": ("BR",),
             "card_brand": ("MASTERCARD",),
         },

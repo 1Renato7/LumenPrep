@@ -135,6 +135,8 @@ O diagnóstico corrente é produzido exclusivamente por métricas atuais, baseli
 | DEC-010 | SUPERSEDED | Descoberta causal atual é o núcleo; memória é enriquecimento posterior para reconhecer recorrência e reaproveitar playbook validado | refinada para cobrir explicitamente incidentes atuais inconclusivos | substituída por DEC-011 | Team | FL-20260829-TEAM-010 |
 | DEC-011 | DECIDED | Consultar memória para todo incidente `SUPPORTED` ou `INCONCLUSIVE`, mantendo independentes a força da causa atual e a existência de precedente | um incidente humano anterior pode orientar a investigação mesmo quando os dados atuais ainda não isolam a causa | `INCONCLUSIVE + MATCH` mostra precedente e playbook como contexto, sem promover a causa atual; somente `INCONCLUSIVE + NO_PRECEDENT` encerra sem causa nem precedente | Team | FL-20260829-TEAM-011 |
 | DEC-012 | DECIDED | Tornar `memory_status` obrigatório em CTR-MEM-001 v1.1 e expor Incident + memória + explicação separadamente na API | lista vazia não distingue ausência real de precedente de falha do Neo4j/fallback | migração coordenada das fixtures antes da implementação; UI nunca infere indisponibilidade por `matches=[]` | Team | FL-20260829-TEAM-012 |
+| DEC-013 | DECIDED | Hospedar CMP-API-001/CMP-UI-001 (FastAPI + Streamlit) no Railway via Docker; Neo4j continua em Aura, fora do Railway | Docker/volume/env vars simples e trial de 30 dias cobre a janela do hackathon | migrar para Hobby ($5/mês) se o trial expirar antes da apresentação; fallback local de ASM-003 se o deploy falhar | Rogério | FL-20260829-ROGERIO-001 |
+| DEC-014 | DECIDED | Não travar as chaves de `scope` em `CTR-INC-001` (schema livre) até o RCA real de Renato existir | enum não teria pego os bugs reais (leitura de chave errada em Python, não dado inválido); travar cedo arrisca bloquear dimensões que o detector ainda vai definir | revisar quando `TASK-DET-004`/`RCA-001` produzirem `Incident.scope` real; até lá, `provider_id` é convenção garantida por teste, não por schema | Rogério | FL-20260829-ROGERIO-002 |
 
 ## 5. Arquitetura
 
@@ -394,6 +396,7 @@ CTR schemas/fixtures
 | RSK-006 | frontend vira caminho crítico | API/UI mismatch | fixture local e deterministic demo mode | André/H4 |
 | RSK-007 | memória vaza ground truth | mesma origem/arquivo acessível | stores e interfaces separados | Altoé+Renato/H8 |
 | RSK-008 | external web cria falsa confirmação | fonte genérica | rotular `CORROBORATION`, nunca causa | Altoé/H11 |
+| RSK-009 | trial Railway (30 dias) expira antes da apresentação | build/host indisponível ou cobrança inesperada | migrar para Hobby ($5/mês) ou cair no fallback local de ASM-003 | Rogério/contínuo |
 
 ## 14. Parecer do Integration Contract Guardian — modo PLANNING
 
