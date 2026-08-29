@@ -1057,6 +1057,75 @@ Reabrir se o trial expirar antes do fim do hackathon sem migração para Hobby d
 
 - 2026-08-29 — Claude: `Dockerfile` + `.dockerignore` prontos e validados sem Docker local (install + start real do `CMD` numa cópia isolada do build context, `/health` e `/metrics/current` responderam 200). Deploy real em si ainda não executado — Rogério decidiu adiar pra mais pra frente. Runbook manual dos passos que só a conta Railway consegue fazer: `docs/deploy-railway.md`.
 
+### FL-20260829-ROGERIO-002 — Não travar as chaves de `scope` em CTR-INC-001 agora
+
+- **Timestamp:** 2026-08-29T18:12:19-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Altoé (levantou o ponto), Claude (investigação e recomendação), Rogério (decisão)
+- **Categoria:** contract
+- **Escopo:** `contracts/v1/incident.schema.json` (`CTR-INC-001`), `app/memory/*` (Altoé)
+- **Links:** `CTR-INC-001`, `CTR-MEM-001 v1.1`, commits `fe7ff28` (fix real relacionado), `docs/plans/people/rogerio.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Altoé reportou que `scope.provider` (usado internamente por `app/memory`) e `scope.provider_id` (usado pelo resto do sistema desde `CTR-EVT-001`) eram nomes divergentes pro mesmo dado. Investigação confirmou dois bugs reais de leitura de chave (`app/memory/seed.py` e `app/memory/neo4j_repository.py`), já corrigidos. Ele propôs, como item 4 de 5, travar/documentar no schema quais chaves `scope` aceita, hoje totalmente livre (`additionalProperties: {type: array...}`). Pergunta: travar agora ou deixar aberto?
+
+#### Decisão
+
+Manter `scope` sem enum de chaves fixas em `CTR-INC-001` por enquanto. Não editar o schema `FROZEN` para essa restrição nesta fase do hackathon.
+
+#### Critérios e por que agora
+
+O schema JSON valida a *forma* dos dados, não qual código lê qual chave de um dicionário — um enum não teria pego nenhum dos dois bugs reais encontrados (ambos eram Python lendo `scope.get("provider", ...)` em vez de `scope.get("provider_id", ...)`, em dados que já validavam contra o schema de qualquer jeito). A proteção que efetivamente pegou o problema foi teste de integração cross-boundary (`test_upsert_reads_provider_id_into_providers_cypher_param`), não validação de schema. Travar agora também arrisca bloquear `TASK-DET-001..004`/`RCA-001..002` (Renato, ainda não iniciado) caso o detector precise fatiar por dimensão fora do conjunto atual (`provider_id`, `country`, `card_brand`).
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Enum fechado (`provider_id`, `country`, `card_brand`, ...) em `CTR-INC-001` | erro explícito de schema se alguém digitar chave nova errada | bloqueia Renato se o detector real usar dimensão fora do conjunto hoje conhecido | ASSUMPTION: conjunto final de dimensões do detector ainda não existe | risco de travar contrato antes do dado real existir |
+| Enum + validação, mas revisitando quando RCA existir | mesmo ganho, sem o risco acima | atraso deliberado — trabalho fica pendente até lá | FACT: `TASK-DET-001..004`/`RCA-001/002` (Renato) 100% `Todo`, sem branch | **escolhida** — ver Gatilhos de revisão |
+| Nada (manter aberto pra sempre) | zero esforço | mesma classe de bug pode se repetir sem teste equivalente em cada novo ponto de leitura | FACT: já aconteceu 2x nesta sessão | rejeitada — vira ambiguidade permanente, exatamente o que Altoé alertou |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `contracts/v1/incident.schema.json` define `scope` como `{"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}}` — nenhuma chave é exigida ou proibida.
+- **TEST:** `test_upsert_reads_provider_id_into_providers_cypher_param` (commit `fe7ff28`) — PASS, prova que `provider_id` chega certo no Cypher hoje; não prova nada sobre chaves futuras.
+- **ASSUMPTION:** o conjunto de dimensões usado pelo RCA real de Renato será um superconjunto ou igual a `{provider_id, country, card_brand}`. Owner: Rogério, gatilho: `TASK-DET-004`/`RCA-001` produzirem `AnomalyCandidate.slice` real.
+- **UNKNOWN:** se Renato vai precisar de dimensões como `merchant_id`, `issuer_bank_id` ou `payment_method_category` no `scope` do incidente.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** zero risco de bloquear a integração de Renato por um contrato travado cedo demais.
+- **Abrimos mão de:** uma camada de proteção de schema contra typo de chave em fixtures futuras.
+- **Dívida/limitação:** a mesma classe de bug (chave certa vs errada num dict) pode se repetir num terceiro ponto de leitura ainda não escrito, sem um teste equivalente ao de `neo4j_repository.py`.
+- **Risco residual:** baixo — o par `provider`/`provider_id` já foi caçado nos dois lugares que existem hoje (`grep` cobriu `app/memory/`, `graph/`, `contracts/v1/incident.schema.json`); risco reaparece só em código novo.
+
+#### Consequências e propagação
+
+- **Produto/demo:** nenhuma — decisão é sobre rigidez de contrato, não muda comportamento observável.
+- **Arquitetura/contratos:** `CTR-INC-001` continua v1 sem essa restrição.
+- **Pessoas/branches:** Altoé sabe que o ponto foi investigado e parcialmente aceito (itens 1/2/3/5 do pedido dele já implementados; item 4 explicitamente adiado, não esquecido).
+- **Plano/Linear:** nenhuma tarefa nova criada.
+- **Testes/observabilidade:** cobertura atual (`test_neo4j_repository.py`, `scripts/validate_contracts.py`) é o que garante a convenção `provider_id` até o enum existir.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** quando `TASK-DET-004`/`RCA-001` (Renato) existirem, o conjunto real de chaves de `scope` estará conhecido e o enum poderá ser adicionado sem quebrar ninguém.
+- **Caminho feliz:** Renato usa só `provider_id`/`country`/`card_brand` (ou um superconjunto conhecido); enum vira formalidade de baixo risco.
+- **Caso difícil/adverso:** Renato precisa de uma dimensão nova no meio da integração final (H13–H17); sem enum, isso simplesmente funciona sem change control extra — é o cenário que esta decisão protege.
+- **Resultado observado:** NOT RUN — decisão de adiar, nada a executar agora.
+- **Fallback:** se um terceiro bug de chave divergente aparecer antes do RCA existir, resolver como os dois primeiros (grep + teste de integração pontual), sem esperar o enum.
+
+#### Gatilhos de revisão
+
+Reabrir quando `TASK-DET-004` ou `TASK-RCA-001` (Renato) produzirem `AnomalyCandidate`/`Incident.scope` reais — nesse momento, fechar o enum de `CTR-INC-001.scope` com o conjunto real de dimensões, via change control normal (system-plan primeiro).
+
+#### Adendos
+
+- Nenhum.
+
 ## Renato
 
 <!-- RENATO: faça append de novas entradas ao final desta seção. -->
