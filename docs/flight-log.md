@@ -988,7 +988,74 @@ Reabrir quando o time aprovar CTR-LLM versionado com proveniência por claim e o
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->
 
-_Nenhuma decisão registrada._
+### FL-20260829-ROGERIO-001 — Rodar o backend (API + Streamlit) no Railway
+
+- **Timestamp:** 2026-08-29T17:46:44-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério e Claude (segunda opinião)
+- **Categoria:** operations
+- **Escopo:** CMP-API-001, CMP-UI-001; hospedagem de CMP-MEM-001 (Neo4j) permanece separada
+- **Links:** DEC-003, DEC-013, `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O plano (DEC-003) fixou FastAPI + DuckDB embutido + Neo4j + Streamlit como stack, mas nenhuma decisão registrada dizia onde essa API roda durante e depois do hackathon. Era preciso escolher uma plataforma antes de a demo depender de um host improvisado.
+
+#### Decisão
+
+Hospedar a API FastAPI (e o Streamlit, se ficar no mesmo processo/monorepo) no Railway, via Docker (já assumido disponível em `ASM-003`). Neo4j continua em serviço dedicado (Aura Free), independente da escolha de host da API — Railway não hospeda o grafo.
+
+#### Critérios e por que agora
+
+Suporta Docker e volume persistente para o arquivo DuckDB, tem plano gratuito (trial) suficiente para a janela do hackathon, e configuração de env vars (`NEO4J_URI`, `OPENAI_API_KEY`) mais simples que alternativas equivalentes. Precisava travar antes de gastar tempo de integração em H15–H19 (DEC-008) configurando infra às pressas.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Render (free web service) | também suporta Docker, tier grátis | disco efêmero a cada redeploy | FACT: documentado pela Render | perde estado do DuckDB entre deploys, pior para demo repetida |
+| Vercel (serverless functions) | já disponível neste ambiente via MCP | sem processo long-running nem volume persistente nativo; Neo4j driver e DuckDB embutido não combinam bem com serverless stateless | ASSUMPTION: baseado no modelo de execução serverless da Vercel | stack assume processo único com estado local (DuckDB) |
+| Execução local sem host (fallback de ASM-003) | zero custo, zero setup externo | não demonstrável remotamente para a banca fora do horário da apresentação | FACT: ASM-003 já prevê esse fallback | só serve como plano B se Docker/host falhar |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Railway oferece $5 de crédito trial sem cartão (30 dias) e plano Hobby a $5/mês com $5 de uso incluído (railway.com/pricing, consultado 2026-08-29).
+- **TEST:** NOT RUN — deploy real ainda não executado nesta branch.
+- **ASSUMPTION:** o trial cobre a janela do hackathon; se o projeto continuar depois, migrar para Hobby. Owner: Rogério, gatilho: trial expirar ou hackathon encerrar.
+- **UNKNOWN:** se Streamlit vai no mesmo serviço Railway que a API ou em serviço separado dentro do mesmo projeto Railway.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** host único com Docker, volume e env vars simples; sem reescrever a stack para serverless.
+- **Abrimos mão de:** tier realmente gratuito e permanente (Railway não tem mais free tier sem expiração).
+- **Dívida/limitação:** custo recorrente pequeno ($5/mês) se o projeto sobreviver ao hackathon.
+- **Risco residual:** trial de 30 dias pode expirar antes da apresentação final; ver RSK-009.
+
+#### Consequências e propagação
+
+- **Produto/demo:** demo pode ser acessada por URL pública em vez de apenas localhost.
+- **Arquitetura/contratos:** nenhum contrato muda; é escolha de hospedagem, não de stack (DEC-003 permanece).
+- **Pessoas/branches:** quem for integrar em H15–H19 (DEC-008) usa o serviço Railway como alvo de deploy, não infra própria.
+- **Plano/Linear:** nenhuma tarefa nova criada nesta conversa; se necessário, abrir microtask de deploy no Linear separadamente.
+- **Testes/observabilidade:** `/health` (já previsto em DEC-003) deve ser checado contra a URL pública do Railway, não só localhost.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** a API sobe no Railway com as mesmas env vars do `.env.example` e responde `/health` publicamente.
+- **Caminho feliz:** deploy via Docker, health check verde, UI acessando a API pela URL do Railway.
+- **Caso difícil/adverso:** trial expira, crédito acaba, ou build Docker falha por dependência do DuckDB/Neo4j driver.
+- **Resultado observado:** NOT RUN — decisão de plataforma, deploy ainda não executado.
+- **Fallback:** execução local (ASM-003) para a apresentação, se o deploy remoto falhar em cima da hora.
+
+#### Gatilhos de revisão
+
+Reabrir se o trial expirar antes do fim do hackathon sem migração para Hobby decidida, ou se o build Docker no Railway falhar de forma não trivial.
+
+#### Adendos
+
+- Nenhum.
 
 ## Renato
 
