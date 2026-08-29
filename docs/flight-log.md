@@ -174,7 +174,7 @@ Exigência oficial de nome/localização, conflitos recorrentes, backlinks quebr
 
 #### Adendos
 
-- Nenhum.
+- **2026-08-29T18:13:16-03:00:** validação final em `127.0.0.1:8516` confirmou o estado padrão com `LOCAL FIXTURE FALLBACK` e sem `status: live`; `?fixture=inconclusive` renderiza `INCONCLUSIVE`, aviso causal não-confirmatório, métricas da fixture (82% → 67%, BRL 1.940,00) e conteúdo em inglês. O parâmetro desconhecido retorna ao incidente suportado. Browser acceptance em 375, 768, 1024 e 1440 px registrou zero overflow horizontal e zero card/texto fora do content box; drill-down expande e console não contém erros. `py_compile`, assertions focadas e `git diff --check` passaram; code review `PASS` sem achados bloqueantes.
 
 ### FL-20260829-TEAM-003 — Colocar precisão causal e memória recorrente no núcleo do MVP
 
@@ -868,11 +868,829 @@ Consumidor inferindo status por `matches.length`, necessidade de erro HTTP parci
 - **2026-08-29T16:50:00-03:00:** validação pós-migração passou para quatro fixtures de memória, três fixtures causais/explicativas, parse de todos os JSON, OpenAPI YAML, cinco diagramas, versões 1.3.0 dos quatro planos individuais, 12 IDs únicos no Flight Log e `git diff --check`.
 - **2026-08-29T16:49:29-03:00:** o schema passou a impor as invariantes de estado: `MATCH_FOUND` exige ao menos um match; `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` exigem lista vazia. O parse das quatro fixtures e a checagem dessas invariantes passaram; teste de aplicação continua `NOT RUN`.
 
+### FL-20260829-TEAM-013 — Expor combinações de cenário por construtor visual, não por casos prontos
+
+- **Timestamp:** 2026-08-29T17:59:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como recorder e planejador
+- **Categoria:** product | UX | contract | demo
+- **Escopo:** `DEC-013`, `CTR-SCN-001 v1.1`, `CTR-API-001 v1.1`, `CMP-DATA-001`, `CMP-API-001`, `CMP-UI-001`, `TASK-DATA-006`, `TASK-API-003`, `TASK-UI-005`
+- **Links:** `docs/plans/system-plan.md` v1.4.0, `contracts/v1/scenario*.schema.json`, `contracts/v1/api.openapi.yaml`, `docs/plans/people/{andre,rogerio,renato}.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O plano mostrava cenários demonstrativos nomeados e a UI chamaria IDs existentes. André pediu que a banca pudesse escolher qualquer combinação que o sistema suporta, pela interface e sem inserir código, e que os casos prontos desaparecessem do fluxo. Era preciso manter o trial by fire sem permitir combinações impossíveis ou vazar a verdade da causa.
+
+#### Decisão
+
+Substituir a lista de casos prontos por um construtor visual abastecido em tempo de execução por um catálogo de dimensões, valores, limites de efeitos, duração e capacidade simultânea. A UI envia apenas uma request validável; API e gerador criam `scenario_id`, `correlation_id`, seed e timestamps. A verdade da causa permanece isolada do catálogo, request, UI e diagnóstico. O fluxo inclui catálogo, criação, acompanhamento de status e incidentes filtráveis por correlação.
+
+#### Critérios e por que agora
+
+O requisito explícito da banca de variar combinações precisa ser observável sem depender de código ou assistência da equipe. Como o repositório ainda não implementou a API de injeção, a mudança coordenada de contrato agora não cria migração de consumidores em produção.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter botões de cenários fixos | Roteiro mais rápido e previsível | Não permite escolha real da banca; parece hardcoded | FACT: André pediu remover os casos prontos | Não atende ao requisito |
+| Aceitar JSON ou código livre | Máxima liberdade para teste | Permite valores impossíveis, aumenta erro operacional e revela detalhes técnicos desnecessários | INFERENCE: banca não deve precisar programar | Sem guardrails suficientes para demo ao vivo |
+| Formulário baseado em catálogo do gerador | Escolha real dentro do domínio suportado; validação e UX claras | Requer novos endpoints, mocks e estados | FACT: `CTR-SCN-001` já modela filtros/efeitos e `FACT-002` prevê combinação nova | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o plano já afirma que a banca pode injetar uma nova combinação dentro do schema conhecido; `TASK-RENATO-002` já prevê nova combinação sem código.
+- **TEST:** NOT RUN — apenas schemas, OpenAPI e planos foram atualizados; não há API integrada neste momento.
+- **ASSUMPTION:** o catálogo pode representar todo domínio permitido pelo gerador, incluindo o limite de cenários ativos; Renato valida no contract test de `TASK-DATA-006`.
+- **UNKNOWN:** quais valores exatos estarão presentes no catálogo final, pois dependem das dimensões que o gerador efetivamente produzir; a UI não pode hardcodá-los.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** trial by fire conduzido pela banca, sem código e com combinações realmente suportadas.
+- **Abrimos mão de:** um roteiro de um clique e da simplicidade de somente chamar IDs conhecidos.
+- **Dívida/limitação:** o catálogo fixture inicial é apenas mock; o gerador precisa se tornar sua fonte autoritativa antes da integração.
+- **Risco residual:** uma combinação válida pode terminar em `INCONCLUSIVE` ou não gerar incidente; a UI deve declarar esse resultado, não tratá-lo como falha.
+
+#### Consequências e propagação
+
+- **Produto/demo:** construtor vazio substitui casos prontos; a banca escolhe dimensões, efeitos e duração visualmente.
+- **Arquitetura/contratos:** `CTR-SCN-001` passa a v1.1 com catálogo e request; `CTR-API-001` passa a v1.1 com `GET /demo/scenario-catalog`, `POST /demo/scenarios`, `GET /demo/scenarios/{scenario_id}` e filtro de correlação em incidents.
+- **Pessoas/branches:** Renato produz catálogo/validação; Rogério publica a API/status; André consome catálogo e renderiza estados; Altoé não altera retrieval.
+- **Plano/Linear:** plano geral 1.4.0, três planos individuais e preview foram atualizados. As issues externas LUM2-12, LUM2-40 e LUM2-48 precisam de sincronização autorizada; nenhuma escrita externa foi feita.
+- **Testes/observabilidade:** contract tests cobrem catálogo/request, `403/409/422`, idempotência por `request_id`, sigilo de ground truth e status; browser acceptance cobre formulário e estados.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma pessoa seleciona uma combinação oferecida pela UI, injeta sem código e recebe `SUPPORTED`, `INCONCLUSIVE` ou estado de falha honesto vinculado à correlação.
+- **Caminho feliz:** catalogar opções → enviar request → acompanhar `PENDING/EMITTING` → localizar incidentes por `correlation_id`.
+- **Caso difícil/adverso:** banca tenta valor fora do catálogo, excede a capacidade simultânea ou cria combinação de baixa evidência; API/UI respondem respectivamente `422`, `409` e `INCONCLUSIVE` sem ground truth.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** se a API não responder em 2 s, usar fixture local marcada `DEMO FALLBACK`; ela não oferece seletor de casos prontos nem se apresenta como live.
+
+#### Gatilhos de revisão
+
+Catálogo incapaz de expressar uma dimensão gerada, UI com valores hardcoded, vazamento de ground truth, endpoint fora de demo mode, ou feedback da banca de que o construtor é lento demais para o tempo de pitch.
+
+#### Adendos
+
+- **2026-08-29T17:59:00-03:00:** mudança documental e de contrato preparada; validação executável e browser acceptance ainda pendentes da implementação.
+- **2026-08-29T17:59:00-03:00:** revisão de contrato corrigiu duas lacunas antes da aceitação do plano: catálogo agora só pode publicar as mesmas chaves de dimensão aceitas pela request, e filtros vazios são válidos para permitir a queda global/difusa do roteiro. A validação de sintaxe e invariantes das fixtures passou; execução de API/browser continua `NOT RUN`.
+- **2026-08-29T17:59:00-03:00:** o change control classificou a retirada do endpoint de IDs e a restrição de dimensões como incompatíveis. Os nomes `v1.1` acima foram um rascunho não implementado; o estado operacional canônico é `CTR-SCN-001 v2` e `CTR-API-001 v2`, com mocks atualizados diretamente e sem adapter legado.
+- **2026-08-29T19:35:00-03:00:** após comparar com a `main`, o rótulo `DEC-013` usado nesta experiência local foi identificado como colisão com a decisão Railway já publicada em `FL-20260829-ROGERIO-001`. O ID canônico `DEC-013` pertence ao deploy Railway; esta experiência não recebe novo DEC e seu escopo público foi substituído por `DEC-015`.
+
+### FL-20260829-TEAM-014 — Ensaiar o construtor por fixture local com dois streams e cancelamento
+
+- **Timestamp:** 2026-08-29T18:15:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como implementador
+- **Categoria:** UX | demo | contract
+- **Escopo:** `DEC-014`, `CMP-UI-001`, `CTR-API-001 v2.1`, `TASK-UI-005`
+- **Links:** `app/ui/dashboard.py`, `contracts/fixtures/scenario-catalog.json`, `docs/plans/system-plan.md` v1.5.0
+- **Supersedes / superseded by:** complementa FL-20260829-TEAM-013
+
+#### Contexto e pergunta
+
+O construtor precisava ser utilizável antes da API, e André definiu campos do plano geral, seleção única, dois cenários ativos, cancelamento, inglês, explicação de incerteza e detalhes técnicos recolhidos.
+
+#### Decisão
+
+Implementar primeiro um construtor Streamlit por fixture local. Cada dimensão aceita `Any` ou um único valor; dois streams podem ficar ativos; encerrar um preserva o histórico. O resultado local é explicitamente um fallback demonstrativo e explica em inglês quando não consegue isolar causa.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Esperar API | Resultado real imediato | Bloqueia UI e ensaio | FACT: André pediu local primeiro | Não atende ao fluxo escolhido |
+| Permitir múltiplos valores por campo | Mais combinações por clique | Interface e leitura da banca ficam ambíguas | FACT: André recusou múltipla seleção | Não atende ao requisito |
+| Fixture local com seleção única | Ensaiável e diretamente migrável ao contrato | Não calcula evidência real | FACT: catálogo e fallback já existem | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **TEST:** NOT RUN no momento deste registro; validação de browser e fluxo local seguem após implementação.
+- **ASSUMPTION:** o catálogo final terá as mesmas chaves do fixture local; API substitui o adapter sem mudar a UI.
+- **UNKNOWN:** tempo real de detecção do gerador integrado.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** demo e acceptance independentes da API.
+- **Abrimos mão de:** métricas calculadas a partir do cenário escolhido nesta primeira etapa.
+- **Risco residual:** jurado pode confundir fixture com live; badge e textos de fallback tornam a limitação explícita.
+
+#### Consequências e propagação
+
+- **Produto/demo:** construtor em inglês, correlação recolhida, mensagem honesta para `INCONCLUSIVE`.
+- **Arquitetura/contratos:** API v2.1 adiciona `CANCELLED` e `DELETE` para manter a transição direta.
+- **Pessoas/branches:** André inicia por fixture; Rogério implementa espelho HTTP; Renato mantém catálogo autoritativo.
+- **Testes/observabilidade:** code review e browser acceptance do construtor são obrigatórios antes de aceitar o código.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** jurado adiciona dois cenários sem código, encerra um e entende o estado sem abrir detalhes técnicos.
+- **Caso difícil/adverso:** cenário amplo gera `INCONCLUSIVE` com explicação em vez de causa inventada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** manter o construtor local rotulado `LOCAL FIXTURE FALLBACK`.
+
+#### Gatilhos de revisão
+
+Qualquer opção hardcoded, terceiro stream ativo, seleção múltipla por campo, falta de explicação de incerteza ou API incompatível.
+
+#### Adendos
+
+- **2026-08-29T18:15:00-03:00:** `py_compile` e `git diff --check` passaram. Browser acceptance permanece BLOCKED porque `streamlit` não está instalado neste ambiente (`ModuleNotFoundError`); nenhuma afirmação de interação no navegador foi feita.
+- **2026-08-29T19:35:00-03:00:** após comparar com a `main`, o rótulo `DEC-014` usado nesta experiência local foi identificado como colisão com a decisão de `Incident.scope` já publicada em `FL-20260829-ROGERIO-002`. O ID canônico `DEC-014` pertence à decisão de scope; o construtor local permanece protótipo e seu escopo público foi substituído por `DEC-015`.
+
+### FL-20260829-TEAM-015 — Tornar transações, batches e samples a entrada pública do produto
+
+- **Timestamp:** 2026-08-29T19:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como recorder e planejador
+- **Categoria:** product | UX | contract | data
+- **Escopo:** `DEC-015`, `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CMP-WEB-001`, `CMP-TXN-001`
+- **Links:** `docs/plans/system-plan.md` v2.0.0, `contracts/v1/transaction-*.schema.json`, `contracts/v1/api.openapi.yaml`
+- **Supersedes / superseded by:** supersedes o escopo público de `FL-20260829-TEAM-013` e `FL-20260829-TEAM-014`; o construtor de cenários é preservado como harness interno
+
+#### Contexto e pergunta
+
+O protótipo pedia que a pessoa configurasse efeitos como queda de approval e latência. André identificou que esses valores são outputs do sistema: o usuário só deve fornecer fatos da transação. Também pediu múltiplos inputs e geração aleatória para não montar cada linha durante a demo.
+
+#### Decisão
+
+A entrada pública passa a aceitar batches atômicos de 1 a 100 transações. O Railway oferece catálogo e geração de samples por quantidade e seed; samples preenchem linhas editáveis e não são persistidos até `Submit batch`. Input proíbe status, decline, taxas, efeitos, causa, ground truth, PAN, CVV e PII. Outcomes, métricas, classificação e incidentes são derivados depois.
+
+#### Critérios e por que agora
+
+O modelo transaction-first representa o trabalho real do usuário e permite demonstrar automação, enquanto seed fixa torna o ensaio reproduzível. A decisão antecede a implementação final do frontend e evita consolidar a API v2 errada.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter formulário de efeitos | Usa o protótipo atual | Usuário calcula o que o produto deveria descobrir | FACT: requisito explícito de André | Contradiz o produto |
+| Gerar linhas aleatórias hardcoded no browser | Muito rápido | catálogo diverge; demo não é reproduzível nem governada pelo backend | INFERENCE: opções mudarão durante integração | Fonte de verdade errada |
+| Railway gera inputs por catálogo/seed e usuário revisa | rápido, reproduzível e sem antecipar resultado | adiciona endpoint e um clique antes do submit | FACT: todos os dados devem passar pelo backend Railway | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** contratos anteriores aceitavam multipliers de approval/latency e o Streamlit expunha scenario builder.
+- **TEST:** schemas e fixtures preparados; validação executável ainda `NOT RUN` neste registro.
+- **ASSUMPTION:** batch máximo 100 é suficiente para a demo; revisar com teste de carga.
+- **UNKNOWN:** volume mínimo para cada caso gerar anomalia; o harness de fundo cobre a demo sem falsificar o input.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** narrativa coerente, batch rápido, reprodutibilidade e separação entre input/fato derivado.
+- **Abrimos mão de:** controle público direto sobre o efeito e resultado previsível em qualquer lote pequeno.
+- **Dívida/limitação:** a banca pode gerar um lote sem incidente; a UI deve explicar isso honestamente.
+- **Risco residual:** valores aleatórios pouco diversos; testes do catálogo/seed devem medir cobertura básica.
+
+#### Consequências e propagação
+
+- **Produto/UI:** novas rotas de input, log e detalhe; samples por quantidade/seed.
+- **Contrato/API:** novos CTR-TXN/TXL e API v3; cenário v2 deixa a API pública.
+- **Dados:** Renato produz sample/outcome adapters; Rogério persiste/processa; André apresenta; Altoé só recebe Incident.
+- **Plano/Linear:** plano geral e quatro planos atualizados; Linear aguarda confirmação do preview 2.0.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** três inputs gerados com seed fixa podem ser revisados, submetidos e acompanhados individualmente.
+- **Caminho feliz:** gerar → revisar → submit → processing → outcomes → logs/detail.
+- **Caso difícil/adverso:** 101 itens, mesma idempotency key com payload diferente, campo PII ou lote sem anomalia.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** fixture de sample/batch claramente rotulada até a API estar live.
+
+#### Gatilhos de revisão
+
+Necessidade real de mais de 100 itens, catálogo incapaz de gerar inputs válidos, sample vazando outcome/ground truth ou latência de batch incompatível com a demo.
+
+#### Adendos
+
+- **2026-08-29T19:10:00-03:00:** schemas, fixtures e projeções foram preparados; implementação e Linear permanecem pendentes.
+
+### FL-20260829-TEAM-016 — Separar frontend Vercel do data plane Railway
+
+- **Timestamp:** 2026-08-29T19:20:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como recorder e planejador
+- **Categoria:** architecture | deployment | security | integration
+- **Escopo:** `DEC-016`, `CTR-DEP-001 v1`, `CMP-WEB-001`, `CMP-API-001`, `CMP-DEPLOY-001`
+- **Links:** `docs/plans/deployment-vercel-railway.md`, `docs/plans/architecture-diagrams.md`
+- **Supersedes / superseded by:** supersedes Streamlit como frontend final em `FL-20260829-TEAM-014`; Streamlit permanece fallback local
+
+#### Contexto e pergunta
+
+André definiu Vercel para o frontend e Railway para o backend e pediu que todos os dados passem pelo mesmo servidor. Era necessário impedir acesso direto do navegador a DuckDB, Neo4j ou secrets e explicitar a fronteira de rede.
+
+#### Decisão
+
+Next.js roda na Vercel e consome somente a API HTTPS FastAPI do Railway. Como a Vercel não participa da private network Railway, a API recebe domínio público com CORS allowlist para origins Vercel/local. Worker, volume, stores, agent credentials e ground truth permanecem privados.
+
+#### Critérios e por que agora
+
+A separação viabiliza deploy independente sem duplicar lógica no frontend. Fixar env, CORS e ownership antes do código reduz falhas de integração e vazamento de credenciais.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Hospedar tudo no Railway | menos CORS | contraria deploy Vercel solicitado; UI e backend acoplados | FACT: Vercel + Railway foi definido | Não atende |
+| Vercel acessar banco/Neo4j | elimina alguns endpoints | secrets e stores chegam ao browser/runtime errado | segurança por design | Rejeitada |
+| Vercel → API pública Railway com allowlist | fronteira única e contratos testáveis | exige CORS e health por ambiente | documentação oficial Railway/Vercel consultada | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Railway documenta domínio público para FastAPI e private networking apenas entre serviços do projeto.
+- **FACT:** Vercel usa environment variables por ambiente para a base URL.
+- **TEST:** deploy/CORS `NOT RUN`; somente plano preparado.
+- **UNKNOWN:** URLs finais de preview e production; serão preenchidas no deploy, nunca inventadas no repo.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** fronteira de dados única, frontend stateless e deploys claros.
+- **Abrimos mão de:** rede integralmente privada entre browser-facing frontend e API.
+- **Dívida/limitação:** previews exigem atualização controlada de allowlist.
+- **Risco residual:** env/CORS incorreto bloqueia a demo; smoke deployed é obrigatório.
+
+#### Consequências e propagação
+
+- **Frontend:** `NEXT_PUBLIC_API_BASE_URL` é a única config pública.
+- **Backend:** domínio HTTPS, health, CORS e error states explícitos.
+- **Segurança:** stores/secrets nunca são públicos; wildcard CORS não é aceito.
+- **Operação:** ordem Railway primeiro, Vercel preview depois, production por último.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** Vercel production/preview autorizadas acessam `/v1`; uma origin aleatória é negada.
+- **Caso difícil/adverso:** backend down, origin nova e env apontando para localhost.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** UI mostra `BACKEND UNAVAILABLE`; fixture local não se apresenta como live.
+
+#### Gatilhos de revisão
+
+Necessidade de auth real, private ingress/edge proxy, múltiplos tenants ou restrições de compliance.
+
+#### Adendos
+
+- **2026-08-29T19:20:00-03:00:** topologia e runbook registrados; URLs e smoke aguardam serviços reais.
+
+### FL-20260829-TEAM-017 — Persistir progresso no Railway e preservar DuckDB e o gerador como adapters
+
+- **Timestamp:** 2026-08-29T19:30:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team, proposto por Codex para minimizar quebra
+- **Participantes:** André; Codex como recorder e planejador
+- **Categoria:** architecture | reliability | scope | integration
+- **Escopo:** `DEC-017`, `CMP-TXN-001`, `CMP-HARNESS-001`, Railway Volume, `CTR-TXL-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.0.0, `docs/plans/deployment-vercel-railway.md`
+- **Supersedes / superseded by:** complementa `FL-20260829-TEAM-015`; reclassifica o gerador público de `013/014` como interno
+
+#### Contexto e pergunta
+
+O log precisa mostrar processamento verdadeiro e sobreviver a refresh/restart. Ao mesmo tempo, migrar imediatamente todo o trabalho concluído de DuckDB para Postgres ou apagar o scenario generator aumentaria muito o risco da hackathon.
+
+#### Decisão
+
+O worker Railway persiste stage/progress e usa polling 1–2s no MVP. DuckDB/Parquet ficam em Railway Volume com uma réplica aceita; o persistence adapter preserva futura migração para Postgres. O scenario generator vira harness interno e envia tráfego pela mesma batch API, sem escrita direta no banco.
+
+#### Critérios e por que agora
+
+Progresso backend-authored é necessário para uma UI honesta. Volume + adapter reaproveita ingestão/agregação existentes; polling tem menor complexidade que SSE. Passar o harness pela API prova a mesma rota usada pelo usuário.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Timer de progresso no frontend | implementação mínima | mente sobre estágio e quebra após refresh | requisito de log real | Rejeitada |
+| Postgres + queue externa imediatamente | escala/replicas melhores | reescreve store já concluído e expande escopo | Railway Postgres é alternativa viável, não necessária ao MVP | Adiada |
+| DuckDB Volume + lifecycle durável + polling | reaproveita trabalho e torna estado observável | uma réplica e pequena indisponibilidade no deploy | documentação Railway Volume | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Railway Volume mantém dados, mas limita o serviço a uma réplica.
+- **FACT:** o repositório já possui contratos e tarefas concluídas orientadas a DuckDB/Parquet e scenario generator.
+- **TEST:** restart, lease, polling e deploy `NOT RUN`.
+- **ASSUMPTION:** uma réplica e polling bastam para a carga de demo.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** mínimo retrabalho, estado real e uma fatia integrada cedo.
+- **Abrimos mão de:** horizontal scaling e push realtime no MVP.
+- **Dívida/limitação:** migração Postgres/SSE se carga ou disponibilidade exigirem.
+- **Risco residual:** job preso após crash; lease/reconciliation e smoke de restart são obrigatórios.
+
+#### Consequências e propagação
+
+- **Contrato:** lifecycle tipado e separação entre outcome failed e pipeline failed.
+- **Backend:** persist before `202`, idempotência e worker retomável.
+- **Frontend:** polling somente enquanto processing; sem incremento local.
+- **Dados:** harness e samples compartilham domínio, mas só batch persiste/processa.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um item permanece visível e retoma após restart sem duplicar evento/métrica.
+- **Caso difícil/adverso:** crash entre persistência e classificação, reentrega duplicada e progress regressivo.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** marcar `PIPELINE_FAILED`/degraded e permitir retry idempotente; nunca converter em decline.
+
+#### Gatilhos de revisão
+
+Necessidade de mais de uma réplica, lock contention, volume insuficiente, latência do polling ou recuperação inconsistente após restart.
+
+#### Adendos
+
+- **2026-08-29T19:30:00-03:00:** decisão documental aceita; testes operacionais ficam bloqueados até a implementação Railway.
+
+### FL-20260829-TEAM-018 — Publicar primeiro somente o replanejamento 2.0 na main
+
+- **Timestamp:** 2026-08-29T20:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Participantes:** André; Codex como integrador e recorder
+- **Categoria:** Git/integration | scope | coordination
+- **Escopo:** `main`, documentação 2.0, branch `codex/andre-dashboard-pitch@cc24c7a`
+- **Links:** `docs/plans/system-plan.md` v2.0.0, `docs/plans/people/*.md`, `docs/plans/linear-preview.md`, `docs/plans/deployment-vercel-railway.md`
+- **Supersedes / superseded by:** complementa `FL-20260829-ANDRE-006`; não muda DEC-015..017
+
+#### Contexto e pergunta
+
+O replanejamento estava visível apenas na branch do André. André pediu que o time recebesse imediatamente na `main` o que precisa refazer, mas restringiu a publicação às documentações novas.
+
+#### Decisão
+
+Publicar na `main` somente README e `docs/`: plano geral, quatro projeções individuais, diagramas, runbook, preview Linear e Flight Log. Não publicar neste commit protótipo, schemas, fixtures, OpenAPI nem validator. Marcar contratos v3 como `FROZEN SPEC / IMPLEMENTATION PENDING` e apontar o draft executável `cc24c7a`, evitando representar a main como já migrada.
+
+#### Critérios e por que agora
+
+O time precisa mudar de direção antes de continuar implementando a API anterior. Separar coordenação de implementação reduz o diff na main e mantém ownership/review dos contratos e código com seus responsáveis.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter tudo só na branch | nenhum risco à main | time não vê novo escopo por padrão | FACT: André pediu visibilidade na main | rejeitada |
+| Merge completo da branch | mocks disponíveis imediatamente | mistura protótipo/contratos não implementados e aparenta migração concluída | gate: branch é handoff, não produto merge-ready | adiada |
+| Commit somente documental | comunica owners/tarefas e preserva código atual | divergência temporária plano↔implementação precisa estar explícita | change control permite plano primeiro | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `main@f1f0d84` contém a implementação anterior e decisões DEC-013/014 preservadas.
+- **FACT:** draft executável e gates permanecem no commit `cc24c7a` da branch do André.
+- **TEST:** checagem de links, IDs e diff documental será executada antes do push.
+- **UNKNOWN:** ordem exata em que as microtarefas v3 serão integradas; o caminho crítico está no preview.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** fonte de verdade e to-dos visíveis para todos sem incorporar código prematuro.
+- **Abrimos mão de:** mocks v3 imediatamente presentes na main.
+- **Dívida/limitação:** plano e implementação divergem de forma deliberada e rotulada até as tasks v3.
+- **Risco residual:** alguém implementar contra a API antiga; cabeçalhos nos planos e status dos contratos mitigam.
+
+#### Consequências e propagação
+
+- **Git:** um commit documental direto na main; branch do André permanece intacta.
+- **Pessoas:** cada plano explica o novo trabalho e onde consultar os drafts.
+- **Linear:** continua `NOT RUN` até confirmação explícita do preview 2.0.
+- **Integração:** contratos/código entram depois por branches curtas e gates próprios.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** ao abrir a main, cada pessoa identifica sua mudança sem concluir que API v3 já funciona.
+- **Caminho feliz:** system plan → people plan → preview Linear → draft branch quando necessário.
+- **Caso difícil/adverso:** procurar schema v3 na main; documentação informa que ainda está no commit `cc24c7a`.
+- **Resultado observado:** NOT RUN neste registro.
+- **Fallback:** reverter apenas o commit documental se houver inconsistência; branch fonte permanece recuperável.
+
+#### Gatilhos de revisão
+
+Primeira microtarefa v3 integrada, sincronização do Linear, alteração do contrato ou mudança de estratégia de deploy.
+
+#### Adendos
+
+- **2026-08-29T20:00:00-03:00:** publicação limitada por pedido explícito de André; nenhum arquivo fora de README/docs entra no commit.
+
 ## André
 
 <!-- ANDRE: faça append de novas entradas imediatamente antes da próxima seção. -->
 
-_Nenhuma decisão registrada._
+### FL-20260829-ANDRE-001 — Adopt Yuno blue and an Apple-like light UI for the fixture dashboard
+
+- **Timestamp:** 2026-08-29T17:15:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo
+- **Escopo:** `CMP-UI-001`, `TASK-UI-001`, `app/ui/dashboard.py`
+- **Links:** `TASK-UI-001`, `CMP-UI-001`, `docs/plans/people/andre.md`, branch `codex/andre-dashboard-pitch`, [Yuno Brand Guidelines](https://yuno-payments.com/en/brand-guidelines/)
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O shell inicial apresentava o gráfico com roxo desconectado do restante e cópia em português. André pediu interface integralmente em inglês, cores fiéis à Yuno e linguagem visual Apple-like.
+
+#### Decisão
+
+Usar Yuno Blue `#3E4FE0` como cor de dados/ação, Harmony Lilac `#E8EAF5` como superfície informativa e neutros claros com tipografia de sistema, cartões brancos e cantos amplos. Todo texto de interface e o texto visível das fixtures usadas neste shell será apresentado em inglês; IDs e referências técnicas permanecem intactos.
+
+#### Critérios e por que agora
+
+Coerência com a marca, leitura de apresentação e unidade visual do dashboard dominam. O gráfico é parte central da narrativa executiva e não pode parecer um componente de outra aplicação.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter dark navy e roxo | Menor mudança de código | Destoa da marca e do feedback visual | FACT: feedback do usuário no gráfico | Não atende ao pedido explícito |
+| Usar azul Yuno em UI dark | Mantém contraste do shell anterior | Menos Apple-like e maior densidade visual | ASSUMPTION: o dashboard será projetado em ambiente claro | Não maximiza a direção de design solicitada |
+| Superfície clara Apple-like com azul Yuno | Coerente, legível e focaliza o incidente | Menos adequada para salas muito escuras | FACT: Brand Guidelines definem `#3E4FE0` e `#E8EAF5` | Melhor atende à solicitação atual |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** as Brand Guidelines oficiais da Yuno definem Yuno Blue `#3E4FE0` e Harmony Lilac `#E8EAF5`.
+- **TEST:** NOT RUN no momento do registro; repetir browser acceptance após a implementação.
+- **ASSUMPTION:** o shell continuará a usar somente estas duas fixtures até a integração da API.
+- **UNKNOWN:** preferência da banca entre ambiente claro e escuro em um projetor específico.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** unidade visual, legibilidade e consistência de marca.
+- **Abrimos mão de:** contraste OLED do shell anterior.
+- **Dívida/limitação:** a tradução é localizada para as fixtures deste shell; a API integrada deverá prover copy de apresentação em inglês.
+- **Risco residual:** contraste em um projetor com brilho muito baixo; validar no ensaio.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a narrativa fica integralmente em inglês e mais coesa no pitch.
+- **Arquitetura/contratos:** nenhuma alteração em `CTR-INC-001` ou fixtures.
+- **Pessoas/branches:** Rogério deve preservar identificadores e referências se trocar a fixture por API.
+- **Plano/Linear:** nenhum estado de Linear é alterado.
+- **Testes/observabilidade:** browser acceptance deve cobrir gráfico, impacto, evidência e responsividade.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** a tela e o gráfico compartilham a mesma linguagem visual e permanecem legíveis em desktop e mobile.
+- **Caminho feliz:** incidente, gráfico, impacto e evidência aparecem em inglês e sem console errors.
+- **Caso difícil/adverso:** fixture indisponível mantém mensagem de erro visível; viewport 375 px não gera overflow.
+- **Resultado observado:** NOT RUN no momento do registro.
+- **Fallback:** a fixture local continua marcada como demo mode sem backend.
+
+#### Gatilhos de revisão
+
+Feedback de baixa legibilidade em projetor, novas Brand Guidelines ou integração com uma API que forneça copy localizado.
+
+#### Adendos
+
+- **2026-08-29T17:25:00-03:00:** browser acceptance em `127.0.0.1:8505` confirmou incidente, gráfico, impacto e evidência em inglês; console limpo e viewport móvel sem overflow.
+
+### FL-20260829-ANDRE-002 — Adopt the dark electric-blue event identity for the dashboard
+
+- **Timestamp:** 2026-08-29T17:40:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo
+- **Escopo:** `CMP-UI-001`, `TASK-UI-001`, `app/ui/dashboard.py`
+- **Links:** `TASK-UI-001`, `CMP-UI-001`, branch `codex/andre-dashboard-pitch`, user-supplied event reference image
+- **Supersedes / superseded by:** supersedes `FL-20260829-ANDRE-001`
+
+#### Contexto e pergunta
+
+No mobile, a superfície clara criou encaixes confusos, contraste insuficiente no aviso de demo e textos próximos aos limites. André forneceu uma referência escura, preta e azul elétrica e exigiu validação de padding, margens, contraste, contenção e overflow.
+
+#### Decisão
+
+Adotar hero dark com blue glow elétrico e textura técnica discreta; cartões escuros translúcidos; badge de demo de alto contraste; padding explícito no container real do Streamlit, no card e nas métricas; quebra de texto e clipping para os componentes críticos.
+
+#### Critérios e por que agora
+
+Fidelidade à referência, leitura em mobile e contenção do conteúdo dominam. A UI do pitch não pode depender do espaçamento padrão do framework.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Ajustar apenas o padding claro | Menor diff | Mantém contraste e identidade desalinhados | FACT: comentários do usuário | Não atende ao briefing |
+| Dark genérico sem textura | Simples | Perde a linguagem visual fornecida | FACT: imagem possui gradientes/padrão técnico | Não reproduz a intenção |
+| Dark elétrico com guardrails | Coerência e leitura | CSS mais específico ao Streamlit | TEST de browser | Melhor equilíbrio |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** screenshots apontam sobreposição, baixo contraste e falta de respiro.
+- **TEST:** validação de browser concluída no adendo abaixo.
+- **ASSUMPTION:** CSS sem ativo externo evoca a referência sem copiar seus assets.
+- **UNKNOWN:** comportamento em projetor físico; validar no ensaio.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** contraste, hierarquia e aderência ao briefing.
+- **Abrimos mão de:** a paleta clara Apple-like anterior.
+- **Dívida/limitação:** seletores internos do Streamlit podem exigir revisão após upgrade.
+- **Risco residual:** glow pode ser sutil em telas ruins, mas o texto continua legível sem ele.
+
+#### Consequências e propagação
+
+- **Produto/demo:** hero e componentes passam a compartilhar a identidade visual.
+- **Arquitetura/contratos:** nenhuma alteração de contrato ou fixture.
+- **Pessoas/branches:** não afeta backend.
+- **Plano/Linear:** nenhum estado externo alterado.
+- **Testes/observabilidade:** acceptance mede contraste, margens, bounds e overflow.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** nenhum texto vaza ou se sobrepõe e os elementos críticos preservam contraste.
+- **Caminho feliz:** hero, incidente, métricas, gráfico, impacto e evidência permanecem nos cartões.
+- **Caso difícil/adverso:** viewport estreito, título longo e badge de demo sem clipping ou overflow.
+- **Resultado observado:** PASS no adendo abaixo.
+- **Fallback:** remover somente a textura decorativa, preservando contraste e espaçamento.
+
+#### Gatilhos de revisão
+
+Falha em mobile, baixo contraste observado, mudança do Streamlit ou novo feedback visual.
+
+#### Adendos
+
+- **2026-08-29T17:55:00-03:00:** browser acceptance em `127.0.0.1:8508` confirmou 48 px de padding lateral desktop, 32 px no card e 18,4 px nas métricas; zero containers fora dos bounds, sem overflow horizontal, evidência expansível e console limpo. Viewport móvel também registrou zero containers/textos fora dos limites.
+- **2026-08-29T18:08:00-03:00:** correção estrutural em `127.0.0.1:8512` removeu o estilo dos wrappers técnicos do Streamlit e substituiu o incidente/status por exatamente dois cards explícitos. Browser acceptance em 375, 768, 1221 e 1440 px registrou zero cards aninhados, zero elementos fora do content box, zero textos fora do card, `scrollWidth == viewport`, drill-down funcional, interface em inglês e console limpo. Contraste calculado: badge 16,38:1, texto secundário 9,65:1 e texto principal 18,6:1. Code review sem achados bloqueantes; `py_compile`, assertions dos formatadores e `git diff --check` passaram.
+- **2026-08-29T17:52:15-03:00:** refinamento de spacing em `127.0.0.1:8514` removeu alturas mínimas dos cards, padronizou alinhamento à esquerda/centro vertical e preservou 16 px entre cards adjacentes. Browser acceptance em 375, 593, 768, 1024 e 1440 px confirmou alturas naturais conforme o conteúdo, zero overflow, zero nesting, 16 px de inset nas três evidências, touch target de 45,4 px, foco visível, conteúdo expandido contido e console limpo. Code review `PASS`; `py_compile`, assertions e `git diff --check` passaram.
+
+### FL-20260829-ANDRE-003 — Expor o limite causal e o fallback local como estados explícitos da demo
+
+- **Timestamp:** 2026-08-29T18:05:46-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo | quality
+- **Escopo:** `TASK-UI-001`, `CMP-UI-001`, `app/ui/dashboard.py`
+- **Links:** `TASK-UI-001` / `LUM2-8`, `CTR-INC-001`, branch `codex/andre-dashboard-pitch`, `incident-inconclusive-with-precedent.json`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O shell mostrava `status: live` embora estivesse isolado em fixtures locais, e o estado `INCONCLUSIVE` previsto no contrato não possuía uma apresentação demonstrável.
+
+#### Decisão
+
+Declarar o fallback local no hero e renderizar `INCONCLUSIVE` com status visual distinto e mensagem explícita de que o precedente orienta a investigação, mas não confirma a causa atual. Expor o caso real já versionado por `?fixture=inconclusive`, sem backend, schema novo ou fixture inventada.
+
+#### Critérios e por que agora
+
+Honestidade operacional e a capacidade de demonstrar o no-answer do MVP têm prioridade sobre uma aparência de produção que a tela não possui.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter `live` e apenas mudar a cor | Menor diff | Mantém uma afirmação operacional falsa | FACT: a tela usa somente fixtures | Não atende ao pedido |
+| Mostrar `INCONCLUSIVE` apenas por CSS morto | Simples | Não prova o fluxo com dados reais | FACT: fixture inconclusiva existe | Não permite acceptance real |
+| Fallback explícito + fixture inconclusiva selecionável | Demonstra os dois estados honestamente | Adiciona uma rota de demo local | TEST pendente | Melhor equilíbrio |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `incident-inconclusive-with-precedent.json` traz `state` e `root_cause.status` iguais a `INCONCLUSIVE`.
+- **TEST:** NOT RUN no momento do registro; executar browser acceptance nos dois modos.
+- **ASSUMPTION:** o query parameter permanecerá exclusivo do shell local até a integração da API.
+- **UNKNOWN:** a convenção final de navegação entre cenários virá em `TASK-UI-002/005`.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** transparência e prova visual de no-answer.
+- **Abrimos mão de:** hero com aparência de operação live.
+- **Dívida/limitação:** seleção por URL é mecanismo de demo, não controle final de produto.
+- **Risco residual:** um usuário pode abrir a URL inconclusiva sem contexto; o próprio hero informa fallback local.
+
+#### Consequências e propagação
+
+- **Produto/demo:** fallback e limite causal passam a ser visíveis.
+- **Arquitetura/contratos:** apenas consome fixtures existentes de `CTR-INC-001`; sem mudança de contrato.
+- **Pessoas/branches:** Rogério pode substituir o selector local por `CTR-API-001` sem mudar semântica.
+- **Plano/Linear:** `LUM2-8` recebe evidência complementar, sem alterar dependências.
+- **Testes/observabilidade:** validar default e `?fixture=inconclusive`, além de console e responsividade.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** os estados `SUPPORTED` e `INCONCLUSIVE` são legíveis e o fallback nunca parece uma conexão live.
+- **Caminho feliz:** abrir a fixture padrão e a inconclusiva, conferindo status e mensagem.
+- **Caso difícil/adverso:** parâmetro desconhecido mantém o fallback padrão sem buscar recursos externos.
+- **Resultado observado:** NOT RUN no momento do registro.
+- **Fallback:** parâmetro ausente ou desconhecido exibe a fixture suportada.
+
+#### Gatilhos de revisão
+
+Integração de `CTR-API-001`, novo estado contratual ou mudança na semântica de no-answer.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-ANDRE-004 — Mostrar recorrência como evidência comparável, sem esconder a incerteza causal
+
+- **Timestamp:** 2026-08-29T18:30:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo
+- **Escopo:** `TASK-UI-004` / `LUM2-11`, `CMP-UI-001`, `app/ui/dashboard.py`
+- **Links:** `CTR-MEM-001 v1.1`, `CTR-INC-001 v1`, `TASK-MEM-006`, `TASK-UI-003`, `TASK-UI-006`, `FL-20260829-TEAM-011`, `FL-20260829-TEAM-012`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A tela já apresentava diagnóstico e evidências, mas não explicava ao mesmo tempo a utilidade executiva e o detalhe operacional de um precedente. Era necessário decidir se a recorrência ficaria escondida em uma tela técnica, se os scores ficariam ocultos e como evitar que o playbook histórico parecesse uma ação automática ou uma confirmação da causa atual.
+
+#### Decisão
+
+Adicionar um bloco de recorrência destacado e expansível. Seu resumo mostra o precedente humano, tempo relativo e sinais iguais/diferentes com ícones vetoriais; o detalhe público traz tabela responsiva, scores estruturado e semântico, IDs de evidência e dois CTAs: abrir a comparação e consultar o guia de investigação. Em `INCONCLUSIVE + MATCH`, a copy mantém explicitamente a causa atual inconclusiva. `MEMORY_UNAVAILABLE` aparece como aviso discreto, sem alterar o diagnóstico atual.
+
+#### Critérios e por que agora
+
+Clareza simultânea para executivo e operações, auditabilidade e honestidade causal dominam. A tarefa `TASK-UI-004` existe para entregar essa leitura antes da validação final do dashboard, e os contratos/fixtures necessários já estão congelados.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Esconder recorrência em detalhe técnico | Interface inicial mais curta | Executivo não percebe o valor da memória; comparação fica difícil de demonstrar | FACT: usuário pediu bloco destacado | Não atende à narrativa de demo |
+| Mostrar só mensagem e playbook | Implementação curta | Esconde fatores, scores e evidências; aumenta risco de falsa certeza | FACT: CTR-MEM-001 expõe fatores e scores | Não prova groundedness |
+| Bloco destacado + detalhe expansível | Atende os dois públicos e preserva rastreabilidade | Adiciona densidade e exige responsividade | FACT: decisão explícita do usuário | Melhor equilíbrio atual |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `CTR-MEM-001 v1.1` distingue `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE`; lista vazia não significa falha.
+- **FACT:** o usuário escolheu bloco destacado expansível, tabela com resumo visual, CTAs combinados, scores públicos e aviso discreto.
+- **TEST:** NOT RUN no momento do registro; executar `py_compile`, code review e browser acceptance nas quatro combinações.
+- **ASSUMPTION:** a API final preservará os campos e IDs das fixtures; owner de validação: Rogério ao integrar `CTR-API-001`.
+- **UNKNOWN:** o limite ideal de matches simultâneos além do primeiro; o MVP apresenta o top-1 disponível na fixture.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** leitura imediata da recorrência e profundidade auditável sem esconder os scores.
+- **Abrimos mão de:** uma tela inicial minimalista e de uma lista completa de precedentes.
+- **Dívida/limitação:** os CTAs são guias locais no shell de fixture, não links para um executor ou mecanismo de decisão.
+- **Risco residual:** tabela pode ser densa em telas pequenas; a implementação precisa manter coluna responsiva e validação em mobile.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a demo pode defender por que a recorrência é provável e por que ela não é prova causal.
+- **Arquitetura/contratos:** consome, sem alterar, `CTR-INC-001 v1` e `CTR-MEM-001 v1.1`.
+- **Pessoas/branches:** Altoé revisa a semântica da memória; Rogério preserva `memory_status` e evidence IDs na API.
+- **Plano/Linear:** o plano já atribui autonomia de layout/copy a André; não há mudança de contrato, dependência ou escrita externa no Linear.
+- **Testes/observabilidade:** validar match suportado, match inconclusivo, sem precedente, memória indisponível, expansão, CTAs, console e mobile.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma pessoa identifica em poucos segundos o precedente e distingue similaridade de causa atual; um operador encontra fatores, scores e guia sem perder a evidência.
+- **Caminho feliz:** match suportado exibe resumo, comparação e guia `HUMAN_ONLY`.
+- **Caso difícil/adverso:** `INCONCLUSIVE + MATCH` não promove a causa; memória indisponível não parece ausência de precedente; tela de 375 px não vaza tabela.
+- **Resultado observado:** NOT RUN no momento do registro.
+- **Fallback:** fixtures locais versionadas mantêm todos os quatro estados sem Neo4j, API ou executor de playbook.
+
+#### Gatilhos de revisão
+
+API que altere `CTR-MEM-001`, avaliação que mostre confusão entre score e confiança causal, ou feedback de overflow/baixa legibilidade em projetor ou mobile.
+
+#### Adendos
+
+- **2026-08-29T18:42:00-03:00:** browser acceptance em `127.0.0.1:8520` passou para `SUPPORTED + MATCH`, `INCONCLUSIVE + MATCH`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE`; a comparação expandiu e exibiu ambos os scores, o guia permaneceu `HUMAN_ONLY` e o console ficou sem erros. Em 375 px, os dois controles de recorrência mediram 44 px, a tabela ficou visível, `scrollWidth == clientWidth` e o resumo passou a uma coluna. As assertions focadas de tempo/fatores/mensagem inconclusiva e `git diff --check` passaram. A validação de teclado por `Enter` não abriu o controle no driver do navegador, embora o clique real tenha aberto; o foco visível permanece coberto pelo CSS e deve ser repetido manualmente no ensaio final.
+
+### FL-20260829-ANDRE-005 — Consolidar detalhe e guia dentro do card de recorrência
+
+- **Timestamp:** 2026-08-29T18:50:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo
+- **Escopo:** `TASK-UI-004` / `LUM2-11`, `CMP-UI-001`, `app/ui/dashboard.py`
+- **Links:** `FL-20260829-ANDRE-004`, `CTR-MEM-001 v1.1`, `CTR-INC-001 v1`
+- **Supersedes / superseded by:** substitui a decisão de dois CTAs em `FL-20260829-ANDRE-004`; demais decisões permanecem válidas
+
+#### Contexto e pergunta
+
+O review visual mostrou três controles consecutivos para uma única área: botão para abrir, expansível e botão para o guia. Isso fragmentava a leitura e deslocava o detalhe para fora do card de recorrência.
+
+#### Decisão
+
+Remover os dois botões. O expansível é o único controle de abertura e fica dentro do card de recorrência. O guia de investigação `HUMAN_ONLY` aparece ao final do detalhe aberto, próximo dos scores, tabela e evidence IDs.
+
+#### Critérios e por que agora
+
+Reduzir redundância e manter contexto visual sem reduzir auditabilidade. O feedback do usuário identificou diretamente a repetição antes de a UI ser integrada à API.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter dois botões | Ações explicitamente nomeadas | Cria passos duplicados e conteúdo fora do card | FACT: review visual do usuário | Rejeitada |
+| Mostrar guia sempre no resumo | Menos interação | Aumenta densidade e mistura recomendação com síntese executiva | ASSUMPTION: resumo deve ser escaneável | Rejeitada |
+| Um expansível interno com guia no detalhe | Um único ponto de interação e contexto completo | Exige abrir para ver o guia | FACT: escolha explícita do usuário | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o usuário pediu a remoção dos dois botões e o detalhe dentro do card.
+- **TEST:** NOT RUN no momento do registro; validar abertura, guia e mobile após a alteração.
+- **ASSUMPTION:** o playbook não é a informação primária de um executivo; ele pertence ao detalhe operacional.
+- **UNKNOWN:** não aplicável; contratos e dados não mudam.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** leitura mais direta e card autocontido.
+- **Abrimos mão de:** atalho visível para o guia sem abrir detalhes.
+- **Dívida/limitação:** nenhuma além da expansão intencional.
+- **Risco residual:** o usuário pode não abrir o detalhe; o resumo continua dizendo que há playbook a validar.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a recorrência vira uma única unidade visual expansível.
+- **Arquitetura/contratos:** nenhum contrato muda.
+- **Pessoas/branches:** não altera API, memória ou schema.
+- **Plano/Linear:** o plano já permite decisão local de layout; sem escrita externa.
+- **Testes/observabilidade:** validar remoção dos botões, expansão e guia no card em mobile.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o usuário abre um único expansível e encontra comparação e guia sem sair do card.
+- **Caminho feliz:** abrir detalhe → ver scores/tabela → ler guia `HUMAN_ONLY`.
+- **Caso difícil/adverso:** 375 px mantém todo conteúdo contido após expansão.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** conteúdo permanece disponível por fixture quando a API/memória não estiverem integradas.
+
+#### Gatilhos de revisão
+
+Feedback de que o guia ficou difícil de descobrir ou que o card perdeu legibilidade em mobile.
+
+#### Adendos
+
+- **2026-08-29T18:58:00-03:00:** browser acceptance em `127.0.0.1:8520` confirmou zero botões `Open detailed comparison`/`View the investigation guide`; abrir o único expansível mostrou scores, tabela e guia `HUMAN_ONLY`. Em 483 px, `scrollWidth == clientWidth`, o guia permaneceu dentro do detalhe e o console não registrou erros. Sintaxe e `git diff --check` passaram.
+
+### FL-20260829-ANDRE-006 — Rebasear o replanejamento sobre a main integrada antes de publicar
+
+- **Timestamp:** 2026-08-29T19:45:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Participantes:** André; Codex como integrador e recorder
+- **Categoria:** Git/integration | quality | scope
+- **Escopo:** branch `codex/andre-dashboard-pitch`, `origin/main@f1f0d84`, plano 2.0, contracts e validator
+- **Links:** `DEC-015`–`017`, `scripts/validate_contracts.py`, `docs/plans/linear-preview.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Antes do push, o fetch mostrou que a branch de André estava 80 commits atrás da main, que já continha runtime, ingestion, aggregation, detection, simulation, incidents, memory, API e Docker, além de `DEC-013/014` oficiais. Publicar sem integrar apagaria contexto e criaria colisões de IDs.
+
+#### Decisão
+
+Commitar a mudança recuperável, rebasear sobre `origin/main@f1f0d84`, resolver conflitos preservando as decisões e módulos publicados e atualizar o validador oficial para incluir todos os contratos 2.0. A branch é `READY TO HAND OFF`, não `READY TO MERGE` como produto completo: a implementação existente ainda expõe o fluxo v1/v2 e precisa das novas microtarefas.
+
+#### Critérios e por que agora
+
+O push precisava carregar o trabalho atual do time e uma diferença pequena/explicável sobre a main. O rebase antes da publicação evita pedir que cada colega reconcilie uma base obsoleta.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Push da base antiga | imediato | 80 commits de divergência e decisões sobrescritas | FACT: `git rev-list` mostrou `80 0` | insegura |
+| Merge commit sem revisar conflitos | preserva ancestrais | plano duplicado e IDs colididos | FACT: main já possuía DEC-013/014 | insuficiente |
+| Rebase com resolução e gates | branch linear e base atual | exige reconciliar planos/testes | evidência Git e contratos | escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** rebase concluiu sobre `f1f0d84`; 33 IDs de Flight Log são únicos.
+- **TEST:** contract validator passou todos os schemas/fixtures/OpenAPI; 53 testes passaram em Python 3.12.13.
+- **TEST:** 1 teste de ambiente falhou porque exige Python 3.14.4; não é falha funcional observada.
+- **UNKNOWN:** runtime/deploy 3.14.4 e browser Vercel → Railway ainda não foram executados nesta branch.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** base atual, decisões preservadas e validação central completa.
+- **Abrimos mão de:** declarar a branch pronta para merge do produto antes da implementação v3.
+- **Dívida/limitação:** repetir suíte em Python 3.14.4 e browser gate quando frontend/worker existirem.
+- **Risco residual:** código v1/v2 e contrato v3 coexistem temporariamente; Linear e implementação tornam a migração explícita.
+
+#### Consequências e propagação
+
+- **Git:** branch contém um commit sobre a main atual.
+- **Contratos:** CI local passa a conhecer 27 fixtures e referências v3.
+- **Planos:** DEC-013/014 publicados foram preservados; DEC-015..017 carregam a reformulação.
+- **Integração:** não mergear como feature completa até API/worker/Next migrarem; pode ser usada imediatamente para handoff e branches curtas.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um colega parte da branch e encontra código atual da main mais contratos/planos 2.0 sem conflito.
+- **Caminho feliz:** checkout → contract validator → iniciar microtarefa pelo mock.
+- **Caso difícil/adverso:** executar em Python 3.12; somente o teste de runtime exato falha, enquanto contratos e 53 testes funcionais passam.
+- **Resultado observado:** PASS parcial conforme evidências acima.
+- **Fallback:** usar Python 3.14.4 oficial e repetir a suíte; não afrouxar o teste para esconder versão.
+
+#### Gatilhos de revisão
+
+Nova mudança na main antes do merge, falha de contrato em branch consumidora, decisão de trocar DuckDB por Postgres ou implementação v3 incompatível com os mocks.
+
+#### Adendos
+
+- **2026-08-29T19:45:00-03:00:** Linear permanece `NOT RUN` até confirmação explícita do preview 2.0.
 
 ## Altoé
 

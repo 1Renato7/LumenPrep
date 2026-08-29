@@ -2,435 +2,278 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 1.3.1
+- **Versão:** 2.0.0
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
-- **Janela:** 19 horas totais; 15 horas para construção e 4 horas protegidas para integração, validação, ensaio e pitch.
-- **Participantes:** André, Altoé, Rogério e Renato.
-- **Fonte de verdade:** este arquivo.
-- **Escopo:** MVP demonstrável de monitoramento, diagnóstico causal e memória de incidentes para uma plataforma fictícia de payment orchestration.
-- **Base analisada:** inicialmente sem aplicação, apenas documentação e skills de planejamento; a v1.3.1 adiciona a ambientação Python e o esqueleto vazio compartilhado.
-- **Fontes externas:** documentação oficial da Yuno, DuckDB, Neo4j e OpenAI, listadas no fim.
-- **Changelog:** 1.0.0 cria arquitetura, contratos, MVP, ownership, cronograma e planos individuais. 1.1.0 reafirma descoberta de causas novas como objetivo principal e posiciona memória como braço posterior para reconhecer recorrência e reaproveitar, com validação, o playbook anteriormente usado. 1.2.0 torna a consulta à memória obrigatória para todo incidente detectado, inclusive quando a evidência atual é inconclusiva, mantendo separados o status causal atual e o precedente histórico. 1.3.0 tipa o resultado da memória para diferenciar `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` na API/UI. 1.3.1 fixa o runtime de desenvolvimento em Python 3.14.4 e adiciona a ambientação compartilhada antes da implementação.
+- **Change class:** `MAJOR`; muda a entrada pública, a API, o frontend final e o deployment.
+- **Fonte de verdade:** este arquivo; planos em `docs/plans/people/` são projeções.
+- **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
+- **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
+- **Base implementada preservada:** runtime Python 3.14.4, Docker/Railway, ingestion, aggregation, detection, simulation, incidents, memory/explanation e API já presentes na `main` em 2026-08-29; a revisão 2.0 estende essa base.
+- **Escopo desta publicação na `main`:** documentação e coordenação apenas. Os drafts executáveis de `CTR-TXN/TXL/API v3`, fixtures e protótipo permanecem em `codex/andre-dashboard-pitch@cc24c7a` até suas microtarefas serem implementadas/revisadas.
+- **Changelog 2.0.0:** substitui o construtor público de efeitos por entrada de uma ou várias transações; métricas, outcomes, classificação e anomalias passam a ser derivados pelo backend; Streamlit vira protótipo/fallback; o gerador existente vira harness interno.
 
-## 2. Problema e produto
+## 2. Problema, usuário e critério de vitória
 
-### Usuários e job
+Operações de pagamentos precisa registrar transações, acompanhar o processamento e entender se cada uma funcionou ou falhou e por quê. O sistema deve ainda transformar o conjunto de logs em métricas, detectar degradações, investigar o menor slice causal e recuperar precedentes confirmados.
 
-- **Operações de pagamentos:** descobrir rapidamente o que caiu, onde, por quê e qual ação humana investigar.
-- **Executivo:** entender em uma linha o GMV local estimado em risco e o alcance.
+O MVP vence quando uma pessoa:
 
-### Critério de vitória
-
-O sistema recebe uma nova combinação de dimensões não codificada previamente, detecta a anomalia, aponta o menor slice causal sustentado pelos dados, separa incidentes simultâneos e mostra evidências recalculáveis. Quando existir precedente, recupera o incidente confirmado e prioriza a solução anterior somente após validar sua aplicabilidade; sem precedente, continua com a causa nova e recomenda um playbook atual sem executar ação.
-
-### Prioridades, em ordem
-
-1. Precisão da causa raiz.
-2. Evidência e honestidade (`INCONCLUSIVE` quando necessário).
-3. Separação/priorização de incidentes simultâneos.
-4. Memória de recorrência com explicação do porquê da similaridade.
-5. Clareza operacional e executiva.
-6. Tempo de detecção razoável para a demo, sem tratá-lo como métrica dominante.
+1. adiciona uma ou várias transações sem calcular métricas nem informar a resposta esperada;
+2. recebe IDs duráveis e acompanha progresso real por transação;
+3. filtra o log por `PROCESSING`, `SUCCEEDED`, `FAILED` ou `UNKNOWN`;
+4. abre uma transação e vê input, outcome normalizado, classificação, evidências e incidentes relacionados;
+5. observa approval rate, baseline, anomalias e explicações calculados automaticamente a partir dos logs.
 
 ### Fatos
 
-- `FACT-001`: a banca exige detecção, diagnóstico dimensional, evidência, impacto, recomendação humana e trial by fire.
-- `FACT-002`: a banca pode injetar qualquer nova combinação dentro do schema conhecido e alterar conversão, latência e/ou provider simultaneamente.
-- `FACT-003`: não existe dataset; serão produzidos pelo menos 90 dias de histórico sintético.
-- `FACT-004`: memória de incidente recorrente foi fortemente indicada pelo juiz e pertence ao MVP.
-- `FACT-005`: antifraude completo e reinforcement learning são próximos passos, não MVP.
-- `FACT-006`: recomendações vêm de catálogo de playbooks e nunca são executadas pelo agente.
-- `FACT-007`: a verdade da causa do cenário é validada por humano; o detector não acessa `ground_truth`.
+- `FACT-001`: a entrada pública representa fatos de uma transação, não parâmetros de anomalia.
+- `FACT-002`: o usuário pode submeter de 1 a 100 transações no mesmo lote ou pedir que o Railway gere inputs sintéticos válidos para preencher o lote.
+- `FACT-003`: approval rate, payment conversion, latência, timeout share, baseline, impacto e causa são outputs do sistema.
+- `FACT-004`: o frontend será publicado na Vercel e consumirá somente a API HTTPS do Railway.
+- `FACT-005`: o backend deve persistir cada item antes de responder `202` e publicar seu próprio progresso.
+- `FACT-006`: memória e RAG explicam incidentes derivados; não classificam cada transação bruta nem alteram fatos calculados.
+- `FACT-007`: recomendações permanecem `HUMAN_ONLY`; o sistema não autoriza, reprocessa, roteia nem executa pagamentos.
 
 ### Hipóteses controladas
 
-- `ASM-001`: André será o owner de frontend e pitch, pois as especialidades informadas reservam Altoé para RAG/banco, Rogério para backend e Renato para computação. Validar no checkpoint H0:30; fallback: trocar somente ownership de `CMP-UI-001`, sem alterar contratos.
-- `ASM-002`: haverá uma chave da OpenAI e uma instância Neo4j acessível. Validar até H1; fallback: explicação por template e memória em grafo local/in-memory usando o mesmo contrato.
-- `ASM-003`: Python 3.14.4 e Docker estarão disponíveis. Validar em H0:30; fallback: execução local sem containers. A ambientação compartilhada está registrada em `FL-20260829-RENATO-001`.
+- `ASM-001`: André permanece owner do frontend; validada pelo protótipo entregue e pelo plano 2.0. Troca de owner exige change control.
+- `ASM-002`: haverá OpenAI e Neo4j acessíveis; fallback por template/repositório local já existe e continua obrigatório.
+- `ASM-003`: Python 3.14.4 e Docker estão disponíveis; ambiente e Dockerfile já foram validados na `main`.
+- `ASM-004`: o MVP pode operar com um único serviço Railway e volume persistente para DuckDB/Parquet. Validar no primeiro deploy 2.0; se insuficiente, migrar o adapter para Railway Postgres sem mudar contratos públicos.
+- `ASM-005`: polling a cada 1–2 segundos é suficiente para a demo. Se o teste de carga mostrar custo ou atraso excessivo, adicionar SSE depois da fatia básica.
+- `ASM-006`: transações são integralmente sintéticas/tokenizadas. Se dados reais entrarem em escopo, autenticação, tenant isolation, PCI/PII e retenção exigem novo change control.
 
-### Não objetivos do MVP
+### Não objetivos
 
-- executar rerouting, retry, bloqueio, refund ou qualquer ação financeira;
-- construir antifraude, ledger, reconciliação ou routing optimizer;
-- treinar reinforcement learning;
-- armazenar todas as transações no Neo4j;
-- suportar providers reais ou dados pessoais reais;
-- provar causalidade externa somente por notícia ou status page;
-- criar seis agentes independentes por dimensão.
+- aceitar PAN, CVV, nome, e-mail ou outra PII real;
+- deixar o usuário informar approval rate, queda esperada, latency multiplier, decline esperado, causa ou ground truth;
+- fazer checkout, autorização, captura, refund, retry ou rerouting reais;
+- usar Neo4j como event store ou usar LLM para calcular métricas;
+- publicar DuckDB, Neo4j, OpenAI ou Railway Volume diretamente para o navegador;
+- concluir pitch antes da fatia funcional de frontend.
 
-### Glossário operacional
+## 3. Experiência pública
 
-- **Payment:** intenção comercial única.
-- **Attempt:** tentativa de autorização enviada a um provider.
-- **Event:** atualização de estado de um attempt.
-- **Approval rate por attempt:** attempts aprovados / attempts elegíveis; métrica primária do detector de provider.
-- **Payment conversion:** payments finalmente aprovados / payments únicos; métrica secundária para mostrar efeito de fallback.
-- **Slice:** predicado sobre uma ou mais dimensões.
-- **Incident signature:** representação estruturada de escopo, métricas, códigos, forma temporal e causa confirmada.
+### `/transactions/new` — adicionar transações
 
-## 3. Demo e MVP
+- Uma linha inicial e controles `Add transaction`, `Duplicate` e `Remove`.
+- O catálogo vem de `GET /v1/transaction-catalog`; nenhum option ID fica hardcoded.
+- `Generate sample transactions` recebe quantidade de 1 a 100 e seed opcional, chama `POST /v1/transaction-samples` e preenche linhas editáveis. A resposta nunca inclui outcome, status, métricas, causa ou ground truth.
+- Campos: referência opcional, timestamp opcional, merchant, provider, banco emissor, país, moeda, valor em unidade mínima, método, bandeira/tipo quando aplicáveis e conexão opcional.
+- Um `Submit batch` envia de 1 a 100 itens com `Idempotency-Key`.
+- A resposta `202` redireciona para `/transactions?batch_id=...`; erro preserva os dados digitados.
 
-### Três capacidades essenciais
+### `/transactions` — log vivo
 
-1. **Detectar:** observar fluxo acelerado e distinguir ruído sazonal de queda relevante em approval rate e/ou latência.
-2. **Diagnosticar:** explorar `merchant × provider × method × country × issuer × brand × decline_code`, separar incidentes e produzir causa suportada ou `INCONCLUSIVE`.
-3. **Lembrar e acelerar a resposta:** depois de formar o incidente atual como `SUPPORTED` ou `INCONCLUSIVE`, recuperar incidentes humanos confirmados no Neo4j, justificar a similaridade e, quando as precondições observáveis ainda forem válidas, recomendar ao humano o playbook que funcionou antes como orientação de investigação.
+- Tabela newest-first com status, progresso/etapa, valor, merchant, provider, banco, método e horário.
+- Filtros por todos, sucesso, falha, processando e desconhecido; paginação por cursor.
+- Polling somente enquanto houver item `PROCESSING`; a UI não inventa timers nem progresso.
+- Loading, vazio, erro e stale state têm texto, ícone e contraste; cor nunca é o único sinal.
 
-O objetivo primário é descobrir problemas atuais, inclusive combinações nunca vistas. Memória é um braço de enriquecimento e aceleração operacional; não é o mecanismo de descoberta nem uma condição para produzir diagnóstico.
+### `/transactions/[transaction_id]` — detalhe
 
-### Menor fatia vertical — pronta até H4
+- Input imutável, lifecycle, outcome do provider, motivo normalizado e evidências.
+- “Falha da transação” é diferente de `processing.failure_code`, que representa falha técnica da pipeline.
+- Incidentes correlacionados apontam para `/incidents/[incident_id]`; um item isolado pode corretamente não ter incidente.
 
-1. Gerar baseline determinístico de 90 dias e fluxo normal.
-2. Injetar `provider=stripe AND country=BR` com queda de approval e aumento de latência.
-3. Gerar um `Incident` estruturado com slice, evidência, confiança e impacto.
-4. Mostrar no dashboard um card operacional, uma linha executiva e um playbook.
+### `/incidents` — diagnóstico agregado
 
-### Roteiro final da demo
+- Preserva o dashboard de incidentes, métricas, causa atual, memória e recomendações humanas.
+- `SUPPORTED|INCONCLUSIVE` e `MATCH_FOUND|NO_PRECEDENT|MEMORY_UNAVAILABLE` continuam eixos independentes.
 
-| Passo | Ação | Resultado esperado | Evidência |
-| --- | --- | --- | --- |
-| D1 | Iniciar stream normal | Nenhum alerta apesar de sazonalidade/ruído | gráfico + contador de janelas avaliadas |
-| D2 | Injetar provider degradado somente no Brasil | Incidente isolado em provider × país | current vs baseline, n, p95, declines |
-| D3 | Injetar emissor mexicano para um merchant | Segundo incidente independente | dois cards e contribuição separada |
-| D4 | Repetir assinatura Mastercard de dois dias antes | Sistema aponta recorrência provável e recupera a solução anterior | ID passado, causa/playbook confirmados, precondições e fatores coincidentes/divergentes |
-| D5 | Injetar queda difusa/baixo volume | Sistema usa `INCONCLUSIVE` | limitações e evidência faltante |
-| D6 | Jurado escolhe nova combinação válida | Diagnóstico sem regra hardcoded | configuração secreta comparada após resposta |
+## 4. Decisões materiais
 
-### Caso obrigatório de memória
+| ID | Estado | Decisão | Consequência | Flight Log |
+| --- | --- | --- | --- | --- |
+| DEC-001..012 | DECIDED | Mantêm modelagem Payment/Attempt/Event, detector estatístico, RCA, memória independente e agente read-only | detalhes preservados nos contratos v1 e entradas anteriores | `FL-20260829-TEAM-003`–`012` |
+| DEC-013 | PARTIALLY SUPERSEDED | Hospedar FastAPI + Streamlit no Railway via Docker | FastAPI/Railway/Docker permanecem; frontend final muda para Vercel em DEC-016 | `FL-20260829-ROGERIO-001` |
+| DEC-014 | DECIDED | Manter chaves de `Incident.scope` abertas até o RCA real estabilizar dimensões | convenção/testes protegem `provider_id`; revisar depois de RCA integrado | `FL-20260829-ROGERIO-002` |
+| DEC-015 | DECIDED | Entrada pública transaction-first em batch, com sample generation por quantidade/seed; analytics e classificação automáticos | cria `CTR-TXN-001`, `CTR-TXL-001` e `CTR-API-001 v3` | `FL-20260829-TEAM-015` |
+| DEC-016 | DECIDED | Next.js/Vercel consome uma única API FastAPI/Railway | Railway é data plane; CORS allowlist; sem acesso direto a stores | `FL-20260829-TEAM-016` |
+| DEC-017 | DECIDED | Progresso é persistido pelo backend; preservar DuckDB/Volume e gerador como harness interno | polling honesto, uma réplica no MVP e mínimo retrabalho; adapter permite Postgres/SSE posterior | `FL-20260829-TEAM-017` |
 
-O seed inclui `INC-HIST-002D-MASTERCARD`, ocorrido exatamente dois dias antes, confirmado por humano. O incidente atual compartilha `card_brand=MASTERCARD`, slice estrutural, perfil de decline codes e forma de queda. A UI deve dizer “recorrência provável”, nunca “mesma causa” sem evidência atual, e mostrar:
-
-- incidente anterior, tempo e status `HUMAN_CONFIRMED`;
-- fatores que coincidem e fatores que divergem;
-- score estruturado e score semântico separados;
-- causa anterior e playbook anterior como precedente, não autoridade;
-- evidências atuais que sustentam o diagnóstico corrente;
-- precondições atuais que tornam o playbook anterior aplicável ou contraindicado.
-
-### Regra de independência entre diagnóstico e memória
-
-O diagnóstico corrente é produzido exclusivamente por métricas atuais, baseline, detector e RCA. A busca de memória acontece para **todo incidente detectado**, depois que ele já contém `root_cause.status`, confiança, evidências e limitações próprias — inclusive quando esse status é `INCONCLUSIVE`.
-
-- `SUPPORTED + MATCH`: mantém a causa atual suportada, relata a recorrência e pode priorizar o playbook anterior após validar suas precondições;
-- `SUPPORTED + NO_PRECEDENT`: mantém a causa atual suportada e relata que pode ser um problema novo;
-- `INCONCLUSIVE + MATCH`: mantém a causa atual inconclusiva, mostra a causa humana confirmada e o playbook do precedente, explica fatores iguais/diferentes e usa o playbook somente como roteiro de investigação; o precedente não confirma a causa atual;
-- `INCONCLUSIVE + NO_PRECEDENT`: relata ausência simultânea de causa atual sustentada e precedente semelhante, portanto o resultado final é inconclusivo e explicita os dados faltantes;
-- `MEMORY_UNAVAILABLE`: acrescenta limitação operacional, mas não altera `root_cause.status`;
-- o explainer recebe separadamente `current_diagnosis` e `memory_context`, evitando tratar precedente como prova atual ou ausência de memória como ausência de evidência transacional.
-
-## 4. Decisões
-
-| ID | Estado | Decisão | Razão | Consequência/Fallback | Owner | Flight Log |
-| --- | --- | --- | --- | --- | --- | --- |
-| DEC-001 | DECIDED | Precisão causal e memória recorrente pertencem ao MVP | são o núcleo e o bônus mais valorizado | cortar primeiro busca web, nunca RCA/memória | Team | FL-20260829-TEAM-003 |
-| DEC-002 | DECIDED | Modelar Payment, Attempt e Event; detectar provider por approval por attempt e exibir conversion por payment | retries não podem distorcer a métrica | ambos têm nomes e denominadores explícitos | Team | FL-20260829-TEAM-003 |
-| DEC-003 | DECIDED | Modular monolith Python com FastAPI, DuckDB/Parquet, Neo4j e Streamlit | menor risco de integração em 19h | adapters mantêm troca posterior possível | Team | FL-20260829-TEAM-004 |
-| DEC-004 | DECIDED | Gerar linhas por NumPy/Polars, seed e regras; LLM gera apenas cenários/narrativas | volume, reprodutibilidade e ground truth | templates locais substituem LLM | Team | FL-20260829-TEAM-005 |
-| DEC-005 | DECIDED | Detector hierárquico estatístico, não agentes por dimensão nem covariância como núcleo | dados categóricos, baixas contagens e trial by fire | covariância vira experimento pós-MVP | Team | FL-20260829-TEAM-006 |
-| DEC-006 | DECIDED | Graph RAG híbrido: Cypher + similaridade estruturada + embedding rerank; somente incidentes confirmados | memória explicável e fallback determinístico | vetor é opcional; Cypher continua | Team | FL-20260829-TEAM-007 |
-| DEC-007 | DECIDED | Um agente read-only explica e recomenda via Structured Output; código calcula fatos/confiança | reduz alucinação e preserva autoridade | template determinístico se API falhar | Team | FL-20260829-TEAM-007 |
-| DEC-008 | DECIDED | Reservar H15–H19 para integração, acceptance, pitch e demo | working beats promised | cortes em ordem explícita em H10/H13 | Team | FL-20260829-TEAM-008 |
-| DEC-009 | DECIDED | André recebe menos implementação e assume UI/pitch; demais owners seguem especialidades | protege comunicação sem abandonar integração | matriz abaixo | Team | FL-20260829-TEAM-008 |
-| DEC-010 | SUPERSEDED | Descoberta causal atual é o núcleo; memória é enriquecimento posterior para reconhecer recorrência e reaproveitar playbook validado | refinada para cobrir explicitamente incidentes atuais inconclusivos | substituída por DEC-011 | Team | FL-20260829-TEAM-010 |
-| DEC-011 | DECIDED | Consultar memória para todo incidente `SUPPORTED` ou `INCONCLUSIVE`, mantendo independentes a força da causa atual e a existência de precedente | um incidente humano anterior pode orientar a investigação mesmo quando os dados atuais ainda não isolam a causa | `INCONCLUSIVE + MATCH` mostra precedente e playbook como contexto, sem promover a causa atual; somente `INCONCLUSIVE + NO_PRECEDENT` encerra sem causa nem precedente | Team | FL-20260829-TEAM-011 |
-| DEC-012 | DECIDED | Tornar `memory_status` obrigatório em CTR-MEM-001 v1.1 e expor Incident + memória + explicação separadamente na API | lista vazia não distingue ausência real de precedente de falha do Neo4j/fallback | migração coordenada das fixtures antes da implementação; UI nunca infere indisponibilidade por `matches=[]` | Team | FL-20260829-TEAM-012 |
-| DEC-013 | DECIDED | Hospedar CMP-API-001/CMP-UI-001 (FastAPI + Streamlit) no Railway via Docker; Neo4j continua em Aura, fora do Railway | Docker/volume/env vars simples e trial de 30 dias cobre a janela do hackathon | migrar para Hobby ($5/mês) se o trial expirar antes da apresentação; fallback local de ASM-003 se o deploy falhar | Rogério | FL-20260829-ROGERIO-001 |
-| DEC-014 | DECIDED | Não travar as chaves de `scope` em `CTR-INC-001` (schema livre) até o RCA real de Renato existir | enum não teria pego os bugs reais (leitura de chave errada em Python, não dado inválido); travar cedo arrisca bloquear dimensões que o detector ainda vai definir | revisar quando `TASK-DET-004`/`RCA-001` produzirem `Incident.scope` real; até lá, `provider_id` é convenção garantida por teste, não por schema | Rogério | FL-20260829-ROGERIO-002 |
-
-## 5. Arquitetura
+## 5. Arquitetura 2.0
 
 ```mermaid
 flowchart LR
-    SCN[CMP-DATA-001 Scenario Generator] --> RAW[(Parquet raw)]
-    SCN --> ING[CMP-ING-001 Ingestion & Normalization]
-    ING --> CAN[(DuckDB canonical)]
-    CAN --> AGG[CMP-AGG-001 Window Aggregator]
-    AGG --> DET[CMP-DET-001 Detector]
-    DET --> RCA[CMP-RCA-001 Root Cause Explorer]
-    RCA --> INC[CMP-INC-001 Incident Correlator]
-    INC -->|SUPPORTED ou INCONCLUSIVE| EXP[CMP-EXP-001 Grounded Explainer]
-    INC -->|consulta sempre| MEM[CMP-MEM-001 Neo4j Incident Memory]
-    MEM -->|precedente ou NO_PRECEDENT| EXP
-    EXT[CMP-EXT-001 External Corroboration] -. optional .-> EXP
-    EXP --> API[CMP-API-001 Read API]
-    API --> UI[CMP-UI-001 Dashboard]
+    USER[Usuário] --> WEB[Next.js on Vercel]
+    WEB -->|HTTPS /v1 only| API[FastAPI on Railway]
+    API -->|persist before 202| DB[(DuckDB + Parquet\nRailway Volume)]
+    API --> Q[Durable processing queue]
+    Q --> WORKER[Worker pipeline]
+    HARNESS[Internal scenario/background harness] --> API
+    WORKER --> NORM[Normalize and classify]
+    NORM --> DB
+    DB --> AGG[Aggregate and baseline]
+    AGG --> DET[Detect and RCA]
+    DET --> INC[Incidents]
+    INC --> MEM[Neo4j memory]
+    INC --> EXP[Grounded explainer]
+    MEM --> EXP
+    EXP --> API
+    API --> WEB
 ```
 
-O fluxo geral para leigos e as quatro projeções técnicas por responsável estão em `docs/plans/architecture-diagrams.md`.
+### Fronteiras de deploy
 
-### Componentes
+| Ambiente | Responsabilidade | Dados permitidos | Dados proibidos |
+| --- | --- | --- | --- |
+| Vercel | Next.js, rotas e rendering | contratos públicos da API | secrets de backend, SQL, Neo4j, ground truth |
+| Railway web | FastAPI pública, validação, idempotência, queries | inputs sintéticos e respostas derivadas | PAN/CVV/PII |
+| Railway worker | lifecycle, normalização, classificação, agregação/detecção | registros persistidos | request não persistido |
+| Railway Volume | DuckDB/Parquet do MVP | raw sintético, canonical, métricas, incidentes | secrets |
+| Neo4j | memória de incidentes confirmados | signatures, causa confirmada, playbook | transações completas |
 
-| ID | Responsabilidade | Tecnologia | Owner | Health/falha explícita |
-| --- | --- | --- | --- | --- |
-| CMP-DATA-001 | 90 dias, stream acelerado, injeções e ground truth isolado | Python, NumPy, Polars, Faker opcional | Renato | seed, row count, distribution checks |
-| CMP-ING-001 | validar, deduplicar, normalizar e quarentenar | Pydantic, Python | Rogério | accepted/rejected/duplicate counts |
-| CMP-AGG-001 | janelas de 5 min por event time e rollups | DuckDB SQL | Rogério | watermark, lag, window count |
-| CMP-DET-001 | approval e latência vs baseline sazonal | SciPy/NumPy | Renato | detector version, candidates/window |
-| CMP-RCA-001 | beam search hierárquico e contribuição causal | Python | Renato | coverage, tested slices, pruning |
-| CMP-INC-001 | separar/correlacionar/priorizar e calcular impacto | Python | Rogério | incident count, overlap, currency |
-| CMP-MEM-001 | persistir e recuperar recorrência, causa confirmada e playbook anterior | Neo4j + driver + embedding opcional | Altoé | graph ping, retrieval trace |
-| CMP-EXP-001 | explicar diagnóstico atual e recomendar playbook grounded, priorizando solução anterior quando aplicável | OpenAI Responses API, `gpt-5.6-terra` | Altoé | schema-valid, citation coverage, fallback |
-| CMP-EXT-001 | consultar somente fontes oficiais após incidente | web search read-only | Altoé | timeout/source/`NOT_CHECKED` |
-| CMP-API-001 | endpoints read-only e scenario control de demo | FastAPI | Rogério | `/health`, dependency states |
-| CMP-UI-001 | dashboard, injection controls e pitch flow | Streamlit | André | render, API state, fallback demo |
+O Railway web precisa de domínio público porque a Vercel não participa da rede privada Railway. `CORS_ALLOWED_ORIGINS` contém apenas os domínios Vercel de production/preview autorizados e localhost. Banco e volume não recebem domínio público. O Dockerfile e o runbook Railway já publicados são adaptados, não recriados.
 
-### Escolha de stack
-
-- **Python:** uma linguagem para dados, estatística, API, Neo4j e UI reduz handoffs.
-- **Parquet + DuckDB:** histórico grande local, columnar, sem servidor; DuckDB consulta Parquet diretamente com filter/projection pushdown.
-- **Neo4j:** apenas incidentes e relações; não é event store.
-- **FastAPI:** uma fronteira HTTP única e tipada.
-- **Streamlit:** entrega visual rápida; UI consome apenas `CTR-API-001`.
-- **OpenAI:** Responses API com Structured Outputs e `gpt-5.6-terra`; `text-embedding-3-small` somente para rerank semântico. Nenhum fato é calculado pelo modelo.
-
-### Persistência
-
-| Dado | Store | Retenção MVP |
-| --- | --- | --- |
-| raw events | Parquet particionado por `event_date` | 90 dias + demo |
-| canonical attempts/events | DuckDB | 90 dias + live |
-| aggregates/baselines | DuckDB | versão do detector |
-| incidents/evidence/playbooks | DuckDB | todos |
-| incident graph/signatures | Neo4j | somente incidentes fechados/confirmados e atuais |
-| ground truth | arquivo separado, inacessível ao detector/UI até validação | cenários de teste |
-
-### Tratamento de eventos
-
-- deduplicação por `event_id`; hash auxiliar para payload repetido;
-- watermark inicial de 2 minutos para demo; late events dentro do limite revisam a janela;
-- evento antigo não regride terminal state;
-- `UNKNOWN` para resultado de provider ambíguo; nunca converter timeout em decline conhecido;
-- schema inválido, moeda/unidade ambígua ou tempo impossível vai para quarantine;
-- raw é imutável; canonical registra `normalization_version` e `raw_event_id`.
-
-### Método estatístico
-
-1. Agregar janelas de 5 minutos por dimensões elegíveis.
-2. Baseline sazonal por `weekday × time_bucket`, com pooling hierárquico.
-3. Approval: posterior Beta-Binomial/Wilson, queda absoluta, queda relativa, amostra mínima e lost approvals.
-4. Latência: median/p95, MAD robusto e timeout share.
-5. Gerar candidatos somente quando volume, efeito e persistência passam thresholds versionados.
-6. Explorar dimensões em beam search até profundidade 3; não enumerar produto cartesiano completo.
-7. Score de RCA combina `loss_coverage`, força estatística, consistência temporal, qualidade do dado e penalidade de complexidade.
-8. Se nenhum slice atual cobre o mínimo confiável, produzir `INCONCLUSIVE` com evidência faltante; esse estado é decidido independentemente da memória, mas ainda dispara a consulta histórica.
-9. Separar candidatos por overlap de attempts, intervalo e assinatura; priorizar por GMV local em risco, lost approvals, alcance e confiança.
-10. Consultar memória após formar todo incidente, seja `SUPPORTED` ou `INCONCLUSIVE`; lista vazia significa caso sem precedente, não evidência insuficiente por si só.
-11. Quando houver precedente, comparar as precondições do playbook anterior com escopo, métricas, sinais e limitações atuais. Em causa suportada, ele pode ser priorizado; em causa inconclusiva, é apenas roteiro de investigação. Sempre usar rationale e `HUMAN_ONLY`.
-
-### Impacto financeiro
+### Lifecycle por transação
 
 ```text
-expected_approvals = eligible_attempts × baseline_approval_rate
-lost_approvals = max(0, expected_approvals - observed_approvals)
-gmv_at_risk_minor = lost_approvals × historical_average_ticket_minor
+RECEIVED → NORMALIZING → CLASSIFYING → AGGREGATING → ANALYZING → COMPLETE
+                                                               ↘ PIPELINE_FAILED
 ```
 
-Sempre rotular `GMV estimado em risco`, na moeda local, com intervalo e método. Não afirmar lucro ou receita perdida.
+- Status público: `PROCESSING`, `SUCCEEDED`, `FAILED`, `UNKNOWN`.
+- `FAILED` é outcome da transação; `PIPELINE_FAILED` aparece em `processing.stage` com `failure_code` e não deve ser rotulado como decline.
+- O worker grava estágio e progresso; terminal exige `progress_percent=100`.
+- Retry usa o mesmo transaction ID e é idempotente; não duplica evento nem métrica.
 
-### Segurança e autoridade financeira
+## 6. Componentes e ownership
 
-- dados integralmente sintéticos; nenhum PAN/CVV/PII real;
-- agente, RAG e web são read-only;
-- playbooks usam `HUMAN_ONLY` e não possuem tool de execução;
-- conteúdo recuperado não muda prompt, permissões ou política;
-- secrets somente em env vars, nunca no repo/log;
-- sandbox/demo claramente identificados.
+| ID | Componente | Owner | Entrada → saída | Mock/test |
+| --- | --- | --- | --- | --- |
+| CMP-WEB-001 | Next.js transaction input/log/detail/incidents | André | CTR-API → UI | transaction fixtures + browser gate |
+| CMP-API-001 | FastAPI pública e CORS | Rogério | HTTP → contracts | OpenAPI + contract tests |
+| CMP-TXN-001 | batch ingest, idempotência e lifecycle | Rogério | CTR-TXN → CTR-TXL/EVT | batch/list fixtures |
+| CMP-DATA-001 | outcome simulator e background harness | Renato | TransactionInput → provider outcome/events | seeded fixtures |
+| CMP-ING-001 | normalization/dedupe/quarantine | Rogério | events → canonical | existing canonical fixtures |
+| CMP-AGG-001 | janelas e métricas automáticas | Rogério | canonical → CTR-AGG | known-denominator tests |
+| CMP-DET/RCA-001 | baseline, anomalia e causa | Renato | CTR-AGG → CTR-DET | holdout/evals |
+| CMP-INC-001 | incidentes e impacto | Rogério | candidates → CTR-INC | incident fixtures |
+| CMP-MEM/EXP-001 | memória e explicação grounded | Altoé | CTR-INC → CTR-MEM/LLM | RAG eval matrix |
+| CMP-HARNESS-001 | cenários e tráfego interno | Renato | internal config → batch API | existing scenario fixtures |
+| CMP-DEPLOY-001 | Railway runtime/volume/env | Rogério | repo/env → health | deploy smoke |
 
-## 6. Catálogo de dados
-
-Os JSON Schemas executáveis ficam em `contracts/v1/`; exemplos em `contracts/fixtures/`.
-
-### DATA-001 — Canonical Payment Attempt/Event
-
-Campos obrigatórios: `schema_version`, `event_id`, `event_type`, `event_time`, `received_at`, `payment_id`, `attempt_id`, `attempt_sequence`, `merchant_id`, `provider_id`, `country`, `currency`, `amount_minor`, `payment_method_category`, `status`, `timing`, `correlation_id`, `is_test`. Dimensões opcionais: issuer, brand, card type, provider connection, normalized decline. Raw payload permanece por referência.
-
-### DATA-002 — Window Metrics
-
-Chave: `window_start`, `window_end`, `dimensions`, `detector_version`. Métricas: `eligible_attempts`, `approved_attempts`, `unique_payments`, `approved_payments`, `amount_minor`, `approval_rate`, `payment_conversion`, `latency_p50_ms`, `latency_p95_ms`, `timeout_rate`, `decline_counts`.
-
-### DATA-003 — Incident
-
-Inclui state, onset, slices, métricas current/baseline, ranked causes, evidências, confiança decomposta, impacto, memória, limitações, playbooks e audit timestamps.
-
-### DATA-004 — Incident memory graph
-
-Nós: `Incident`, `Merchant`, `Provider`, `Country`, `PaymentMethod`, `Issuer`, `CardBrand`, `DeclineCode`, `Cause`, `Playbook`.
-
-Relações: `AFFECTED`, `DOMINATED_BY`, `CONFIRMED_AS`, `RECOMMENDED`, `SIMILAR_TO`, `FOLLOWED_BY`, `RESOLVED_WITH`.
-
-Somente causa `HUMAN_CONFIRMED` pode ser apresentada como precedente confirmado.
+Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, dependency lock e env; André coordena `web/`; Renato coordena simulator/detector; Altoé coordena graph/prompts. Mudança de contrato começa aqui.
 
 ## 7. Catálogo de contratos
 
-| ID/versão | Produtor → consumidores | Propósito e timing | Erros/fallback | Owner | Mock/test |
+| ID/versão | Estado | Produtor → consumidores | Propósito | Erros/fallback | Evidência |
 | --- | --- | --- | --- | --- | --- |
-| CTR-SCN-001 v1 FROZEN | DATA → ING/DET/UI | configuração de baseline/injeção e ground truth isolado | `INVALID_SCENARIO`; fixture local | Renato | `scenario-provider-br.json` |
-| CTR-EVT-001 v1 FROZEN | DATA → ING | canonical attempt event; at-least-once, event-time | quarantine, dedupe, watermark | Rogério | `canonical-attempt.json` |
-| CTR-AGG-001 v1 FROZEN | AGG → DET/RCA | métricas por janela fechada/revisada | `INSUFFICIENT_VOLUME` | Rogério | schema + fixture no plano de Rogério |
-| CTR-DET-001 v1 FROZEN | DET → RCA/INC | candidato estatístico, nunca narrativa | `NO_ANOMALY`, `DATA_QUALITY_LOW` | Renato | schema + unit fixtures |
-| CTR-INC-001 v1 FROZEN | INC → MEM/EXP/API | incidente auditável e versionado | `INCONCLUSIVE` é resultado válido | Rogério | `incident-mastercard-recurrence.json` |
-| CTR-MEM-001 v1.1 FROZEN | MEM → EXP/API | `memory_status` tipado + top-k precedentes, causa/playbook anteriores e trace para Incident `SUPPORTED` ou `INCONCLUSIVE`, sem alterar `root_cause` | `MATCH_FOUND`, `NO_PRECEDENT` ou `MEMORY_UNAVAILABLE`; somente os dois últimos exigem `matches=[]` | Altoé | quatro fixtures `similar-incidents*.json`, incluindo unavailable |
-| CTR-LLM-001 v1 FROZEN | EXP → API/UI | resumo ops/executivo + playbook + evidence IDs | template determinístico | Altoé | schema Structured Output |
-| CTR-EXT-001 v1 PROPOSED | EXT → EXP | corroborar fonte oficial, não provar causa | timeout 5s, `NOT_CHECKED` | Altoé | stub vazio |
-| CTR-API-001 v1 FROZEN | API → UI | health, metrics, incidents, inject scenario | 4xx estável; timeout 2s UI | Rogério | OpenAPI + fixture |
+| CTR-TXN-001 v1 | FROZEN SPEC / IMPLEMENTATION PENDING | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | draft executável `cc24c7a`; TASK-TXN-API-001 publica na main |
+| CTR-TXL-001 v1 | FROZEN SPEC / IMPLEMENTATION PENDING | TXN/worker → API/WEB | record/list, lifecycle, outcome e classificação | stale/unknown explícitos | draft executável `cc24c7a`; TASK-TXN-WORKER-001 publica na main |
+| CTR-API-001 v3 | FROZEN SPEC / IMPLEMENTATION PENDING | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | OpenAPI draft `cc24c7a`; API atual da main ainda é anterior |
+| CTR-SCN-001 v2 | INTERNAL MIGRATION PENDING | DATA/HARNESS → DATA | injeção e ground truth apenas para teste | nunca exposto na UI pública | scenario draft `cc24c7a`; código atual será adaptado pelo harness |
+| CTR-EVT-001 v1 | FROZEN | DATA/TXN → ING | canonical payment attempt event | quarantine/dedupe/watermark | schema existente |
+| CTR-AGG-001 v1 | FROZEN | AGG → DET/RCA | métricas calculadas | `INSUFFICIENT_VOLUME` | schema existente |
+| CTR-DET-001 v1 | FROZEN | DET → INC | candidatos numéricos | `NO_ANOMALY`, data quality | schema existente |
+| CTR-INC-001 v1 | FROZEN | INC → MEM/EXP/API | incidente auditável | `INCONCLUSIVE` válido | fixtures existentes |
+| CTR-MEM-001 v1.1 | FROZEN | MEM → EXP/API | precedente tipado | `NO_PRECEDENT`, `MEMORY_UNAVAILABLE` | fixtures existentes |
+| CTR-LLM-001 v1 | FROZEN | EXP → API/WEB | explicação grounded | template determinístico | schema existente |
+| CTR-DEP-001 v1 | FROZEN | Railway/Vercel → team | URLs, env, health e CORS | local mode; no fake live | deployment plan |
 
-### Regras transversais dos contratos
+### Invariantes
 
-- IDs são strings opacas; valores monetários `int64` em unidade mínima; moeda ISO 4217.
-- timestamps são UTC ISO 8601; durations terminam em `_ms`; taxas variam de 0 a 1.
-- toda resposta carrega `schema_version`, `correlation_id` e, quando aplicável, versão de baseline/detector/modelo.
-- mudanças incompatíveis exigem v2 e atualização coordenada; campo opcional novo é compatível.
-- chamadas LLM e Neo4j possuem timeout, no máximo uma retry segura e fallback local.
-- `CTR-MEM-001` é uma etapa obrigatória com fallback: recebe todo Incident; `memory_status` nunca modifica `CTR-INC-001.root_cause`; consumidores não inferem falha por lista vazia.
-- nenhuma autenticação de produção será implementada; serviço local de demo é bindado a localhost.
+- Todo `202` corresponde a batch e transações já persistidos.
+- `Idempotency-Key` repetida com payload igual retorna os mesmos IDs; com payload diferente retorna `409`.
+- Batch é aceito atomicamente no MVP: nenhum item é aceito se o request falhar na validação ou persistência inicial.
+- IDs são opacos; timestamps UTC; dinheiro em `amount_minor`; taxas 0..1.
+- Input nunca contém status, decline, approval rate, efeito, causa ou ground truth.
+- Sample generation devolve somente TransactionInput, usa catálogo vigente e retorna a seed efetiva; gerar não persiste nem processa até `Submit batch`.
+- Outcome determinístico precede classificação; LLM não decide sucesso/falha nem calcula métricas.
+- RAG recebe somente Incident já derivado e não é chamado por transação individual.
+- UI consome exclusivamente `NEXT_PUBLIC_API_BASE_URL`; não possui credencial de banco/agent.
 
-## 8. Ownership e colisões
+## 8. Persistência, processamento e segurança
 
-| Área/hotspot | Owner primário | Revisores/consumidores | Regra de mudança |
-| --- | --- | --- | --- |
-| `contracts/v1/`, enums e fixtures | Rogério | todos | mudança via CTR + aviso imediato |
-| generator/scenarios | Renato | Rogério, André | não alterar schema canonical |
-| detector/RCA | Renato | Rogério | outputs somente CTR-DET/INC |
-| API, DuckDB schema, migrations | Rogério | Renato, Altoé, André | coordenador único |
-| Neo4j schema/retrieval/prompts | Altoé | Rogério | não duplicar source of truth transacional |
-| Streamlit/UI | André | Rogério | consumir API, sem SQL direto |
-| `pyproject.toml`/lockfile | Rogério | todos | alterações serializadas |
-| `.env.example` | Rogério | Altoé | nomes sem valores |
-| `docs/flight-log.md` Team lane | André como recorder nesta fase | todos | append-only |
-| integração/checkpoints | Rogério | todos | preflight e contrato antes de merge |
+- Raw sintético é append-only; canonical registra versionamento e referência ao raw.
+- DuckDB/Parquet ficam em path montado pelo Railway Volume. O MVP usa uma réplica; essa limitação é aceita e documentada.
+- O estado durável de cada job permite retomar itens `PROCESSING` após restart. Itens presos recebem reconciliação por lease/updated_at.
+- Logs técnicos não contêm payload completo nem metadata sensível.
+- Nenhum PAN/CVV/PII é aceito; validação usa allowlist de campos e `additionalProperties=false`.
+- Agente, RAG e playbooks são read-only e `HUMAN_ONLY`.
+- Secrets apenas em Railway/Vercel environment variables; somente a base URL é pública.
 
-## 9. Objetivos e microtarefas
+## 9. Trabalho por pessoa
 
-### OBJ-ANDRE-001 — Tornar o diagnóstico compreensível e demonstrável
+### André — frontend
 
-Owner: André. Orçamento de implementação: 6–7h; restante protegido para integração visual, pitch e ensaio. Entregas: dashboard, controles de injeção, resumo dual-audience, roteiro e fallback gravado/local.
+Preservar `TASK-UI-001` concluída como protótipo Streamlit. Replanejar tarefas abertas: `TASK-UI-002` vira fundação Next/Vercel e formulário multi-input, incluindo geração de samples por quantidade/seed; `TASK-UI-003` vira log/filter/progress/detail; `TASK-UI-004` integra incidentes/recorrência; `TASK-UI-005` implementa adapter Railway e estados; `TASK-UI-006` faz acceptance e deploy Vercel. Pitch permanece depois do sistema.
 
-### OBJ-ALTOE-001 — Provar memória recorrente grounded
+### Rogério — backend/deploy
 
-Owner: Altoé. Orçamento: 13–14h. Entregas: grafo, seed de incidente de dois dias antes com resolução, recuperação híbrida, validação de aplicabilidade do playbook, explainer e `NO_PRECEDENT` seguro.
+Preservar tarefas concluídas. Replanejar API aberta para batch ingest/list/detail, lifecycle durável e Railway. `TASK-API-003` deixa de publicar cenários e passa a publicar transactions; `TASK-INT-001/002` incorporam worker, CORS, volume, contract smoke e deploy.
 
-### OBJ-ROGERIO-001 — Prover espinha dorsal contratual e integração
+### Renato — simulator/detector
 
-Owner: Rogério. Orçamento: 13–14h. Entregas: schemas, ingestion, DuckDB, agregação, incident correlation/impact, API e checkpoints.
+Preservar gerador, métricas e detector. `TASK-DATA-006` concluída vira base do harness interno; `TASK-DATA-007` mantém ground truth isolado. Trabalho novo: transformar cada TransactionInput em outcome/evento determinístico e enviar tráfego de fundo pela mesma batch API.
 
-### OBJ-RENATO-001 — Produzir dados e diagnóstico causal preciso
+### Altoé — memória/explicação
 
-Owner: Renato. Orçamento: 13–14h. Entregas: histórico/stream, detector, RCA, simultaneous incidents e evaluation dataset.
+Preservar grafo/RAG. Não adicionar RAG por transação. Atualizar explanation para aceitar incidentes correlacionados a transaction IDs e garantir que o detalhe linkado nunca trate precedente como causa atual.
 
-As microtarefas completas estão nos planos individuais e foram publicadas no projeto
-[Lumen — Yuno Hackathon](https://linear.app/lumenhack/project/lumen-yuno-hackathon-fd0533f171d5).
-Os épicos de ownership são [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-narrativa-dashboard-e-demo-executiva),
-[LUM2-5](https://linear.app/lumenhack/issue/LUM2-5/entregar-memoria-graphrag-e-explicacao-grounded),
-[LUM2-6](https://linear.app/lumenhack/issue/LUM2-6/entregar-ingestao-contratos-e-api-integradora) e
-[LUM2-7](https://linear.app/lumenhack/issue/LUM2-7/entregar-dados-sinteticos-deteccao-e-rca).
-O mapeamento completo e auditado está em `docs/plans/linear-preview.md`.
+Os detalhes e microtarefas estão em `docs/plans/people/*.md`; o preview de sincronização está em `docs/plans/linear-preview.md` e requer confirmação explícita antes da escrita no Linear.
 
-## 10. Dependências e tempo
+## 10. Ordem e paralelismo
 
 ```text
-CTR schemas/fixtures
- ├─ generator → ingestion → aggregation → detector → RCA → incident
- ├─ incident → memory retrieval → explanation
- └─ incident/explanation → API → dashboard → demo
+CTR-TXN/TXL/API v3
+ ├─ André: Next shell + fixtures → input → logs/detail → live adapter
+ ├─ Rogério: batch API → durable lifecycle → list/detail → Railway deploy
+ ├─ Renato: deterministic outcome adapter → background harness → detector evals
+ └─ Altoé: transaction-to-incident trace → grounded detail integration
+                                      ↓
+                         contract smoke + Vercel acceptance
 ```
 
-| Tempo | Checkpoint | Saída obrigatória | Corte se falhar |
+Checkpoints:
+
+1. **Contracts:** schemas/fixtures/OpenAPI validados.
+2. **Primeira fatia:** um item enviado no Next aparece `PROCESSING` e termina no log.
+3. **Batch:** pelo menos três itens mistos preservam ordem, IDs e filtros.
+4. **Analytics:** logs alteram métricas e podem produzir incidente relacionado.
+5. **Deploy:** Vercel → Railway ao vivo, restart do worker e fallback honesto.
+
+## 11. Testes e acceptance
+
+- Schema validation para todos os fixtures e refs.
+- Contract tests: samples com seed reproduzível e valores do catálogo; batch 1/100/101; idempotência igual/conflitante; catalog e cursor.
+- Worker: restart, duplicate delivery, stage monotonicity, terminal outcome e pipeline failure.
+- Analytics: denominadores conhecidos; um batch misto altera métricas sem input manual.
+- RAG: transaction link não muda autoridade do Incident; injection/no-answer/memory down.
+- Browser: adicionar/remover/duplicar linhas; teclado; erro preserva input; filtros; progress real; detail; refresh; API down; viewport de demo; console/rede.
+- Deploy smoke: health Railway, CORS Vercel production/preview permitido e origem alheia negada.
+
+## 12. Riscos e contingências
+
+| ID | Risco | Mitigação/fallback | Owner |
 | --- | --- | --- | --- |
-| H0–H1 | Contratos | env, schemas, fixtures, health stubs | vector rerank adiado |
-| H1–H4 | Fina vertical | provider BR aparece na UI com evidência | usar baseline pré-agregado |
-| H4–H8 | Profundidade | RCA hierárquico + memória Mastercard | cortar web externo |
-| H8–H11 | Casos difíceis | simultâneos + `INCONCLUSIVE` + dedupe/late | cortar animação/polimento |
-| H11–H13 | Trial by fire | holdout de nova combinação passa | reduzir dimensões de depth 3 para top-k |
-| H13–H15 | Integração | smoke/E2E, fallback e code freeze | nenhuma feature nova |
-| H15–H17 | Acceptance | navegador, regressão, Q&A técnico | usar roteiro determinístico |
-| H17–H19 | Pitch/demo | ensaio completo e contingência | somente correção bloqueante |
+| RSK-009 | DuckDB com volume impede replicas e pode pausar no deploy | uma réplica aceita no MVP; adapter preparado para Postgres | Rogério |
+| RSK-010 | Vercel bloqueada por CORS/env incorreta | allowlist e smoke por ambiente; mostrar `BACKEND UNAVAILABLE` | Rogério + André |
+| RSK-011 | progresso falso ou regressivo | backend é autoridade; teste monotônico; UI nunca incrementa localmente | Rogério + André |
+| RSK-012 | batch parcial gera logs inconsistentes | persistência inicial atômica; idempotência | Rogério |
+| RSK-013 | poucos inputs não sustentam anomalia | tráfego de fundo interno e `INCONCLUSIVE`; nunca inventar taxa | Renato |
+| RSK-014 | novo frontend duplica regras do backend | catálogo/contratos e zero SQL/cálculo causal na UI | André |
+| RSK-015 | dados reais entram na demo | copy “synthetic only”, allowlist e rejeição de PII/PAN/CVV | todos |
 
-## 11. Git e integração
-
-- Branch base: `main`; branches curtas `feat/<ID>-resumo`.
-- Ordem de integração: contratos → generator/ingestion → detector/RCA → incident/API → memory/explainer → UI.
-- Cada merge roda schema validation, unit tests afetados e smoke de fixture.
-- Checkpoint H4 roda a fatia completa antes de aprofundar.
-- Mudança em contrato começa neste plano, recebe versionamento e depois atualiza produtor/consumidores.
-- `docs/flight-log.md` é append-only; conflitos preservam todas as entradas.
-
-## 12. Qualidade e avaliações
-
-### Métricas do sistema
-
-- `root_cause_top1_accuracy` — principal;
-- `root_cause_scope_exact_match`;
-- `false_incidents_per_normal_run`;
-- `simultaneous_incident_separation_rate`;
-- `inconclusive_precision`;
-- `memory_recurrence_precision_at_1`;
-- `evidence_citation_coverage`;
-- `impact_estimation_error`;
-- latência por estágio, como métrica secundária.
-
-### Dataset de avaliação
-
-- development cases conhecidos;
-- holdout com novas combinações não usadas nos thresholds;
-- ground truth em arquivo separado;
-- casos normal, baixo volume, provider-country, merchant-issuer, Mastercard recurrence, latência-only, simultâneos, mix shift, duplicate, late/out-of-order, unknown decline e inconclusive.
-
-### Gates antes de conclusão de código
-
-1. testes automatizados proporcionais;
-2. `code-review-gate` no diff;
-3. correção de bloqueantes;
-4. `browser-acceptance-gate` no fluxo real;
-5. `integration-contract-guardian` antes de merge.
-
-## 13. Riscos e contingências
-
-| ID | Risco | Sinal | Mitigação/Fallback | Owner/deadline |
-| --- | --- | --- | --- | --- |
-| RSK-001 | Neo4j indisponível | health falha H1 | graph adapter in-memory e fixture | Altoé/H1 |
-| RSK-002 | API OpenAI indisponível | timeout/schema inválido | template grounded; memória continua | Altoé/H4 |
-| RSK-003 | histórico grande lento | benchmark >60s | reduzir raw rows, preservar 90d aggregates | Renato/H2 |
-| RSK-004 | falso RCA por baixa amostra | baixa coverage/unstable slice | pooling, min n, `INCONCLUSIVE` | Renato/H8 |
-| RSK-005 | branches divergem em schema | fixture não valida | Rogério coordena contrato único | Rogério/contínuo |
-| RSK-006 | frontend vira caminho crítico | API/UI mismatch | fixture local e deterministic demo mode | André/H4 |
-| RSK-007 | memória vaza ground truth | mesma origem/arquivo acessível | stores e interfaces separados | Altoé+Renato/H8 |
-| RSK-008 | external web cria falsa confirmação | fonte genérica | rotular `CORROBORATION`, nunca causa | Altoé/H11 |
-| RSK-009 | trial Railway (30 dias) expira antes da apresentação | build/host indisponível ou cobrança inesperada | migrar para Hobby ($5/mês) ou cair no fallback local de ASM-003 | Rogério/contínuo |
-
-## 14. Parecer do Integration Contract Guardian — modo PLANNING
+## 13. Parecer do Integration Contract Guardian — PLANNING
 
 **Resultado: `PLAN READY`.**
 
-- Fronteiras principais possuem IDs, owners, versões, fixtures e fallbacks.
-- Dependências paralelas começam por contratos/fixtures, não por código alheio.
-- Hotspots de schema, lockfile, API, env e Flight Log possuem coordenador único.
-- O caminho crítico produz aplicação executável em H4, H8 e H15.
-- Não há ciclo obrigatório: UI usa fixture; memória aceita Incident fixture; detector usa WindowMetrics fixture.
-- External web, vector rerank e LLM têm fallback e não bloqueiam diagnóstico.
-- A revisão 1.3.0 mantém o grafo acíclico, mas substitui CTR-MEM-001 v1 por v1.1 antes de qualquer implementação: `memory_status` agora é obrigatório e todas as fixtures produtoras/consumidoras foram migradas em conjunto.
-- `ASM-001..003` têm prazo H1 e não alteram contratos públicos.
+- Produtores, consumidores, owners, versões, fixtures, erros e fallbacks estão definidos.
+- O grafo é acíclico e permite quatro lanes paralelas após o freeze de `CTR-TXN/TXL/API`.
+- O trabalho concluído não é apagado: Streamlit vira referência/fallback e o cenário v2 vira harness interno.
+- A incompatibilidade pública é deliberadamente versionada em `CTR-API-001 v3`; não existe adapter silencioso para endpoints `/demo/scenarios`.
+- A fatia ponta a ponta precede polimento, RAG adicional ou pitch.
+- Linear ainda não é fonte de verdade desta revisão até o preview 2.0 ser confirmado e sincronizado.
+- **Integração da branch:** `READY TO HAND OFF`, mas não `READY TO MERGE` como produto completo. O código vindo da main ainda implementa a API/demo anterior; `TASK-TXN-API-001`, `TASK-TXN-WORKER-001` e `TASK-UI-002..006` devem eliminar essa divergência antes do merge funcional.
 
-## 15. Estratégia para a banca
+## 14. Fontes operacionais
 
-| Lente | Evidência planejada |
-| --- | --- |
-| Funciona | normal silencioso, dois incidentes, recurrence e holdout ao vivo |
-| Profundidade | denominadores explícitos, RCA por contribuição, memória não-gating, no-answer e event-time |
-| Problema real | provider/approval/latency e dimensões da Yuno |
-| Originalidade | descoberta causal para combinações inéditas + memória humana confirmada que acelera resposta ao sugerir solução anterior aplicável |
-| Clareza | uma linha executiva + drill-down operacional + evidence IDs |
-
-Perguntas de defesa: por que não LLM por dimensão; por que DuckDB e não Kafka; por que Neo4j não armazena transações; como evitamos Simpson's paradox; como `INCONCLUSIVE` é decidido; como sabemos que recorrência não é coincidência; o que acontece sem internet/API.
-
-## 16. Fontes técnicas
-
-- Yuno: https://www.y.uno/
-- Yuno routing: https://docs.y.uno/docs/using-yuno/dashboard-overview/routing
-- Yuno reports fields: https://docs.y.uno/reference/reports/reports-fields
-- Yuno response/MAC codes: https://docs.y.uno/reference/payments/status-and-response-codes/transaction
-- DuckDB e Parquet: https://duckdb.org/docs/current/guides/file_formats/query_parquet
-- Neo4j GraphRAG Python: https://neo4j.com/docs/neo4j-graphrag-python/current/index.html
-- OpenAI models: https://developers.openai.com/api/docs/models
-- OpenAI Responses API: https://developers.openai.com/api/reference/cli/resources/responses/methods/create
-- OpenAI embeddings: https://developers.openai.com/api/docs/models/text-embedding-3-small
+- Railway FastAPI: https://docs.railway.com/guides/fastapi
+- Railway Volumes: https://docs.railway.com/volumes/reference
+- Railway Postgres: https://docs.railway.com/databases/postgresql
+- Railway networking: https://docs.railway.com/networking/private-networking
+- Next.js on Vercel: https://vercel.com/docs/frameworks/full-stack/nextjs
+- Vercel environments: https://vercel.com/docs/deployments/environments

@@ -1,4 +1,4 @@
-# Sincronização no Linear — base 1.0.0, revisada contra o plano 1.3.0
+# Sincronização no Linear — base 1.0.0, revisada contra o plano 1.5.0
 
 ## Destino descoberto
 
@@ -37,7 +37,7 @@
 | TASK-UI-002 | Renderizar resumo executivo e impacto local | 45m | High | TASK-UI-001 | TASK-UI-006 |
 | TASK-UI-003 | Renderizar drill-down operacional e evidence IDs | 60m | High | TASK-UI-001 | TASK-UI-004 |
 | TASK-UI-004 | Explicar recorrência com fatores iguais e diferentes | 45m | High | TASK-UI-003, TASK-MEM-006 | TASK-UI-006 |
-| TASK-UI-005 | Implementar controles e estados da demo | 60m | High | TASK-API-003 | TASK-UI-006 |
+| TASK-UI-005 | Implementar construtor visual e estados da demo | 90m | High | TASK-API-003 | TASK-UI-006 |
 | TASK-UI-006 | Validar dashboard no navegador e projetor | 60m | High | TASK-UI-002,004,005 | TASK-DEMO-001 |
 | TASK-DEMO-001 | Ensaiar pitch, Q&A e fallback da demo | 60m | High | TASK-INT-002, TASK-UI-006 | apresentação |
 
@@ -79,7 +79,7 @@ Carga: 12 microtarefas, aproximadamente 10h15; vector e web são cortes explíci
 | TASK-INC-003 | Serializar Incident v1 e estado INCONCLUSIVE | 45m | High | TASK-INC-002 | API-002, MEM-005 |
 | TASK-API-001 | Expor health e current metrics | 45m | High | TASK-CORE-001, AGG-001 | INT-001 |
 | TASK-API-002 | Expor incidents e explanation | 45m | High | TASK-INC-003, EXP-003 | UI-005, INT-002 |
-| TASK-API-003 | Expor injection somente em demo mode | 45m | High | TASK-DATA-006, CORE-001 | UI-005 |
+| TASK-API-003 | Expor catálogo, injeção e status somente em demo mode | 75m | High | TASK-DATA-006, CORE-001 | UI-005 |
 | TASK-INT-001 | Integrar primeira fatia ponta a ponta | 60m | High | TASK-AGG-002, DET-004, API-001, UI-002 | demais profundidade |
 | TASK-INT-002 | Executar preflight, contratos e smoke final | 60m | High | objetivos completos | TASK-DEMO-001 |
 
@@ -94,7 +94,7 @@ Carga: 16 microtarefas, aproximadamente 14h15 incluindo coordenação de integra
 | TASK-DATA-003 | Gerar outcomes condicionais e retries | 60m | High | TASK-DATA-001 | DATA-005 |
 | TASK-DATA-004 | Gerar latências e decline distributions | 60m | High | TASK-DATA-001 | DATA-005 |
 | TASK-DATA-005 | Persistir Parquet e medir benchmark | 45m | Medium | TASK-DATA-002,003,004 | ING-001 |
-| TASK-DATA-006 | Implementar live stream e scenario injection | 60m | High | TASK-DATA-001 | API-003 |
+| TASK-DATA-006 | Implementar stream, catálogo e injeção de combinação válida | 75m | High | TASK-DATA-001 | API-003 |
 | TASK-DATA-007 | Isolar ground truth do runtime | 30m | High | TASK-DATA-006 | EVAL-002 |
 | TASK-DET-001 | Calcular baseline sazonal com pooling | 60m | High | TASK-AGG-001, DATA-002 | DET-002,003 |
 | TASK-DET-002 | Detectar queda de approval com baixa amostra | 60m | High | TASK-DET-001 | DET-004 |
@@ -130,3 +130,108 @@ Autorização recebida em 2026-08-29 para criar o projeto `Lumen — Yuno Hackat
 - Revisão 1.1.0: as issues de RCA, Incident, memória, explainer e UI foram relidas. Elas já colocam cálculo causal antes da memória e proíbem tratar similaridade como causa; nenhuma tarefa, owner ou relação precisou mudar. `no-answer` em `TASK-MEM-008` significa `NO_PRECEDENT` da recuperação, nunca `INCONCLUSIVE` causal.
 - Preview de mudança 1.2.0: manter as mesmas issues, owners, estimativas e dependências, mas atualizar descrições/aceites de `TASK-UI-004` (LUM2-11), `TASK-MEM-006` (LUM2-20), `TASK-EXP-002` (LUM2-23), `TASK-EXP-003` (LUM2-24), `TASK-MEM-008` (LUM2-25), `TASK-INC-003` (LUM2-37), `TASK-RCA-002` (LUM2-55) e `TASK-EVAL-001` (LUM2-56) para exigir consulta de memória em Incident `INCONCLUSIVE` e cobrir `INCONCLUSIVE + MATCH` sem promover a causa atual. Escrita externa ainda não executada para esta revisão; exige confirmação explícita deste preview conforme a skill.
 - Preview de mudança 1.3.0: nas mesmas issues e sem alterar relações, atualizar também `TASK-API-002` (LUM2-39) e os contratos citados nas issues acima para CTR-MEM-001 v1.1, cujo `memory_status` obrigatório diferencia `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE`. A confirmação explícita deste preview continua pendente antes da escrita externa.
+- Preview de mudança 1.4.0: nas mesmas issues e sem alterar relações, atualizar `TASK-UI-005` (LUM2-12), `TASK-API-003` (LUM2-40) e `TASK-DATA-006` (LUM2-48) para o construtor visual sem código, `CTR-SCN-001 v2` e `CTR-API-001 v2`. A autorização atual cobre os documentos locais; a escrita externa no Linear permanece pendente até sincronização explícita.
+
+## Preview de mudança 2.0.0 — aguardando confirmação explícita
+
+### Escopo e política de preservação
+
+- Destino permanece team `LUMEN HACKATHON`, projeto `Lumen — Yuno Hackathon`, label `Feature`, sem ciclo.
+- Nenhuma issue `Done` será reaberta, renomeada ou reescrita. `TASK-UI-001/LUM2-8`, `TASK-API-003/LUM2-40` e `TASK-DATA-006/LUM2-48` passam a ser referenciadas nos planos como protótipo/harness preservado.
+- Estados atuais do Linear permanecem como encontrados; trabalho local não é usado para presumir transição externa.
+- Atualizações usam o ID Linear existente e o ID estável na descrição; novas issues são pesquisadas pelo ID estável antes da criação para garantir idempotência.
+- Relações são escritas em segunda passagem e relidas. Em falha parcial, parar e inventariar; não repetir cegamente.
+
+### Issues existentes a atualizar
+
+| Linear | ID estável | Estado observado | Novo objetivo 2.0 | Dependências propostas |
+| --- | --- | --- | --- | --- |
+| LUM2-4 | OBJ-ANDRE-001 | Todo | Entregar frontend transaction-first Vercel e demo | filhas abaixo |
+| LUM2-9 | TASK-UI-002 | Todo | Next.js, formulário 1..100 e geração de samples por quantidade/seed | contracts v3; desbloqueia UI-005/006 |
+| LUM2-10 | TASK-UI-003 | Todo | Log, filtros, progresso backend-authored e detalhe | contracts v3; desbloqueia UI-004/006 |
+| LUM2-11 | TASK-UI-004 | Todo | Integrar incidentes/recorrência ao transaction detail | UI-003, EXP-004 |
+| LUM2-12 | TASK-UI-005 | Todo | Adapter Railway para catalog/sample/batch/list/detail | UI-002/003, TXN-API-001 |
+| LUM2-13 | TASK-UI-006 | Todo | Browser acceptance e deploy Vercel → Railway | UI-004/005, DEPLOY-API-001 |
+| LUM2-14 | TASK-DEMO-001 | Todo | Ensaiar demo transaction-first com seed e fallback | UI-006, INT-002 |
+| LUM2-23 | TASK-EXP-002 | Todo | ExplanationBundle resolve evidence até transactions sem LLM por item | INC-003, MEM-006, EXP-001 |
+| LUM2-25 | TASK-MEM-008 | In Progress | Evals incluem no-incident, multi-transaction e sem vazamento de seed/config | EXP-003, EXP-004 |
+| LUM2-39 | TASK-API-002 | In Progress | Incidents filtráveis por transaction ID e eixos causal/memory separados | INC-003, EXP-003 |
+| LUM2-41 | TASK-INT-001 | In Progress | Fatia Vercel → Railway → worker → log/detail → analytics | TXN-WORKER-001, UI-005, DATA-009 |
+| LUM2-42 | TASK-INT-002 | In Progress | Preflight de schemas v3, volume, restart, CORS e browser deployed | INT-001, UI-006, MEM-008 |
+| LUM2-49 | TASK-DATA-007 | Todo | Ground truth/config de efeitos ficam somente no harness interno | DATA-008/009 |
+| LUM2-56 | TASK-EVAL-001 | Todo | Casos de batch misto, low volume e equivalência manual/background | DATA-009, RCA-002 |
+| LUM2-57 | TASK-EVAL-002 | Todo | Holdout usa somente logs persistidos, sem input de efeito | EVAL-001, DATA-007 |
+
+### Novas issues propostas
+
+| ID estável | Título | Owner | Estimativa operacional | Prioridade | Blocked by | Desbloqueia |
+| --- | --- | --- | --- | --- | --- | --- |
+| TASK-TXN-API-001 | Expor API transaction-first e geração de samples | Rogério | 90m | Urgent | TASK-CON-001 | TXN-WORKER-001, UI-005 |
+| TASK-TXN-WORKER-001 | Persistir lifecycle e retomar processamento idempotente | Rogério | 90m | Urgent | TXN-API-001, DATA-008 | INT-001, DEPLOY-API-001 |
+| TASK-DEPLOY-API-001 | Publicar FastAPI/worker no Railway com volume e CORS | Rogério | 75m | High | TXN-WORKER-001 | UI-006, INT-002 |
+| TASK-DATA-008 | Adaptar TransactionInput para outcome e eventos determinísticos | Renato | 75m | Urgent | TASK-DATA-001, TASK-CON-001 | TXN-WORKER-001 |
+| TASK-DATA-009 | Gerar samples e tráfego de fundo pela batch API comum | Renato | 75m | High | DATA-008, DATA-006 | INT-001, UI-002, EVAL-001 |
+| TASK-EXP-004 | Validar trace grounded de transaction até incident | Gabriel Altoé | 60m | High | EXP-002, API-002 | UI-004, MEM-008 |
+
+### Corpo canônico das novas issues
+
+#### TASK-TXN-API-001 — Expor API transaction-first e geração de samples
+
+- **Problema:** a UI final não pode usar endpoints de efeito nem acessar stores; precisa cadastrar e consultar transações pelo Railway.
+- **Outcome:** `CTR-API-001 v3` implementado para catalog, sample, batch, get batch, list e detail.
+- **Inclui:** allowlist de campos, IDs server-side, batch atômico 1..100, idempotency key, seed efetiva, cursor/status filters e errors `404/409/422/503`.
+- **Não inclui:** worker, outcome simulator, deploy, autenticação real ou endpoints públicos de cenário.
+- **Aceite/teste:** schemas/fixtures validam; mesma seed repete samples; sample não persiste nem contém outcome; key repetida igual devolve IDs e conflitante retorna `409`; 101 itens retorna `422`.
+- **Contratos/handoff:** produz `CTR-API-001 v3` e integra `CTR-TXN-001`; entrega OpenAPI/error map para André e interface ao worker.
+
+#### TASK-TXN-WORKER-001 — Persistir lifecycle e retomar processamento idempotente
+
+- **Problema:** progresso visual não pode ser timer do frontend nem desaparecer em restart.
+- **Outcome:** worker durável grava stage/progress/outcome/classification e reconcilia jobs presos.
+- **Inclui:** persist before `202`, lease/retry, stage monotônico, duplicate delivery e separação transaction failure/pipeline failure.
+- **Não inclui:** SSE, queue externa ou Postgres migration.
+- **Aceite/teste:** crash entre stages retoma o mesmo ID; reentrega não duplica eventos/métricas; terminal tem 100%; pipeline error nunca vira decline.
+- **Contratos/handoff:** produz `CTR-TXL-001`; entrega records reais à API/UI.
+
+#### TASK-DEPLOY-API-001 — Publicar FastAPI/worker no Railway com volume e CORS
+
+- **Problema:** a Vercel precisa de uma única API pública com persistência privada.
+- **Outcome:** Railway health, domínio, volume, env, start command e CORS validados.
+- **Inclui:** origem Vercel production/preview/local explícita, volume path, restart smoke e degraded health.
+- **Não inclui:** múltiplas replicas ou migração Postgres.
+- **Aceite/teste:** Vercel permitida e origem aleatória negada; batch sobrevive restart; store/Neo4j não têm exposição pública.
+- **Contratos/handoff:** produz `CTR-DEP-001`; entrega base URL a André.
+
+#### TASK-DATA-008 — Adaptar TransactionInput para outcome e eventos determinísticos
+
+- **Problema:** agora o usuário fornece fatos, mas a pipeline ainda precisa produzir resposta simulada e eventos sem receber o resultado esperado.
+- **Outcome:** adapter puro `TransactionInput + seed/context → outcome/events CTR-EVT-001`.
+- **Inclui:** regras condicionais, status, response/decline normalizado, latência e reprodutibilidade.
+- **Não inclui:** API, persistência, métricas agregadas ou LLM.
+- **Aceite/teste:** mesma seed/contexto repete; cobre success/failure/unknown; não aceita PAN/PII nem effect/ground truth; retry não duplica.
+- **Handoff:** Rogério integra no worker.
+
+#### TASK-DATA-009 — Gerar samples e tráfego de fundo pela batch API comum
+
+- **Problema:** a demo precisa de inputs rápidos e volume para analytics sem configuração manual nem escrita direta no banco.
+- **Outcome:** sample generator por quantidade/seed e harness interno que chama a batch API.
+- **Inclui:** catálogo vigente, defaults opcionais, seed retornada e background traffic.
+- **Não inclui:** outcome no sample ou formulário de efeitos público.
+- **Aceite/teste:** 1..100 samples válidos/reprodutíveis; todos os valores pertencem ao catálogo; harness não escreve no DuckDB; métricas só mudam após processamento.
+- **Handoff:** sample function para Rogério; fixtures/seed para André.
+
+#### TASK-EXP-004 — Validar trace grounded de transaction até incident
+
+- **Problema:** o detalhe precisa explicar incidentes relacionados sem executar uma chamada RAG por transaction nem vazar evidência de outra.
+- **Outcome:** resolver `transaction_id → evidence → incident → ExplanationBundle` com validação de escopo.
+- **Inclui:** no incident, one/multiple incidents, missing evidence, memory/model down e cross-transaction leakage.
+- **Não inclui:** classificação do outcome ou causa baseada em precedente.
+- **Aceite/teste:** todo related ID existe e pertence às evidências autorizadas; resumo reutiliza bundle/template; `INCONCLUSIVE` não é promovido; falhas ficam explícitas.
+- **Handoff:** fixtures/semântica para André e regra de resolução para Rogério.
+
+### Carga após confirmação
+
+- 54 issues existentes preservadas; 15 descrições existentes atualizadas; 6 novas issues; total esperado 60.
+- Novas cargas: André 0 issues novas (6 abertas replanejadas), Rogério +3, Renato +2, Altoé +1.
+- Caminho crítico 2.0: `contracts → DATA-008 + TXN-API-001 → TXN-WORKER-001 → UI-005 + DATA-009 → INT-001 → DEPLOY-API-001 + UI-006 → INT-002`.
+- **Estado de escrita externa:** `NOT RUN`. Este preview substitui previews 1.2–1.4 pendentes e precisa de confirmação explícita antes de qualquer `save_issue`.

@@ -46,7 +46,7 @@ Descoberta
   → merge
 ```
 
-O plano geral em `docs/plans/system-plan.md` será a fonte de verdade arquitetural quando for gerado. Os planos em `docs/plans/people/` serão projeções individuais e não poderão redefinir contratos.
+O plano geral em `docs/plans/system-plan.md` é a fonte de verdade arquitetural. Os planos em `docs/plans/people/` são projeções individuais e não podem redefinir contratos. A arquitetura 2.0 é transaction-first: Next.js na Vercel consome somente a API FastAPI no Railway; o runbook está em `docs/plans/deployment-vercel-railway.md`.
 
 Um plano só é distribuído após `PLAN READY`. Os quality gates verificam problema, arquitetura, contratos, decomposição, autonomia individual, consistência entre os cinco planos, simulação de execução paralela, sequência de merges e ensaio da demo.
 
