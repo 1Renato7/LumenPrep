@@ -878,7 +878,251 @@ _Nenhuma decisão registrada._
 
 <!-- ALTOE: faça append de novas entradas imediatamente antes da próxima seção. -->
 
-_Nenhuma decisão registrada._
+### FL-20260829-ALTOE-001 — Usar recuperação estruturada precision-first antes do rerank vetorial
+
+- **Timestamp:** 2026-08-29T17:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Categoria:** AI/RAG | quality | architecture
+- **Escopo:** TASK-MEM-005, TASK-MEM-006, CTR-MEM-001 v1.1
+
+#### Contexto e pergunta
+
+A memória precisa reconhecer a recorrência Mastercard sem apresentar um precedente apenas porque alguns sinais genéricos coincidem. Embeddings ainda são opcionais e não podem ser a base inicial da demonstração.
+
+#### Decisão
+
+Implementar primeiro recuperação determinística: somente incidentes HUMAN_CONFIRMED, janela inicial de 30 dias, ao menos uma dimensão de escopo compartilhada e score estruturado de escopo, decline profile e forma temporal. O threshold inicial é 0,80 e o desempate é por score, recência e ID. Rerank vetorial continua posterior e opcional.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Threshold baixo e recall amplo | mais matches aparentes | falso precedente e ancoragem indevida | rejeitada |
+| Vector-first | semântica flexível | dependência externa e menor rastreabilidade | adiada |
+| Score estruturado precision-first | resultado rastreável e fallback local | pode perder match parcial | escolhida |
+
+#### Evidência, hipóteses e limitações
+
+- **TEST:** 15 testes unitários passaram: D-2 top-1, idempotência, candidatos não confirmados, recência, escopo, desempate, auto-match, falhas e fallback.
+- **ASSUMPTION:** 30 dias e 0,80 são baseline adequados até os evals; não constituem threshold final.
+- **UNKNOWN:** recall de recorrências parciais no holdout.
+- **Limitação:** não houve teste de aplicação integrada, Neo4j real ou embedding real nesta etapa.
+
+#### Consequências e gatilhos de revisão
+
+A memória retorna NO_PRECEDENT em vez de forçar um match e nunca muda a causa atual. Recalibrar pesos ou threshold somente após os evals de TASK-MEM-008; queda de precision@1 ou perda de recurrence válida dispara revisão.
+
+
+### FL-20260829-ALTOE-002 — Adiar geração OpenAI até existir proveniência por afirmação versionada
+
+- **Timestamp:** 2026-08-29T17:21:29-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex; revisão independente de memória
+- **Categoria:** AI/RAG | contract | quality | scope
+- **Escopo:** CTR-LLM-001 v1, explicação operacional e integração opcional OpenAI
+- **Links:** CTR-LLM-001, contracts/v1/explanation-bundle.schema.json, codex/altoe-incident-memory
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A API OpenAI está disponível para o projeto, e um adapter com Structured Outputs foi prototipado na branch. A revisão mostrou que CTR-LLM-001 v1 aceita apenas evidence_ids agregados: não transporta a evidência que sustenta cada afirmação narrativa. A pergunta é se vale publicar geração textual antes de a UI conseguir auditar cada claim.
+
+#### Decisão
+
+Manter a explicação determinística e grounded como único caminho publicado no MVP atual. Adiar o adapter OpenAI até uma versão de contrato, acordada com os consumidores, carregar proveniência por afirmação e permitir validação/UI correspondente. A indisponibilidade ou não uso de LLM continua transparente por model_version=deterministic-template.
+
+#### Critérios e por que agora
+
+Precisão causal e auditabilidade superam variedade textual. O contrato v1 tem additionalProperties: false; adicionar proveniência unilateralmente quebraria API/UI, e manter a informação apenas interna não permitiria defesa da origem de cada frase.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Publicar o adapter com IDs agregados | Texto mais variado | Claim causal pode não ser auditável por campo | FACT: CTR-LLM v1 não possui campo de citações por claim | Rejeitada por grounding incompleto |
+| Alterar CTR-LLM v1 unilateralmente | Permite enviar proveniência | Quebra consumidores e exige coordenação de contrato | FACT: schema v1 proíbe propriedades extras | Fora da autoridade local |
+| Template determinístico e extensão versionada futura | Rastreável e compatível | Menos flexibilidade narrativa agora | TEST: 15 testes do núcleo passaram sem dependência LLM | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o schema vigente exige exatamente os campos de CTR-LLM v1 e não inclui mapa de citações por claim.
+- **TEST:** um protótipo com Responses API, strict JSON schema e fallback foi exercitado localmente; a revisão identificou que a proveniência seria descartada na resposta v1. O protótipo foi removido antes de integração.
+- **ASSUMPTION:** uma extensão versionada poderá expor citações por campo sem prejudicar a demo; alinhar com Rogério e André antes de implementar.
+- **UNKNOWN:** formato mínimo de proveniência que a UI consegue apresentar sem poluir a explicação.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** explicação reproduzível, HUMAN_ONLY e sem claim não auditável.
+- **Abrimos mão de:** reescrita generativa no MVP atual.
+- **Dívida/limitação:** a opção de usar créditos OpenAI fica pendente de contrato e integração.
+- **Risco residual:** o template pode ser menos natural; a clareza factual é preferível no prazo do hackathon.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a demo mostra explicação determinística e citações agregadas existentes; não promete geração por LLM.
+- **Arquitetura/contratos:** CTR-LLM-001 v1 permanece inalterado; uma proposta futura deve ser versão nova, nunca propriedade extra silenciosa.
+- **Pessoas/branches:** Rogério e André precisam participar antes que novo campo alcance API/UI; Altoé retoma o adapter após esse acordo.
+- **Plano/Linear:** não há alteração imediata, pois o uso efetivo de OpenAI é opcional no plano; registrar o bloqueio ao priorizá-lo.
+- **Testes/observabilidade:** manter testes de grounding determinístico; a integração futura deve incluir teste de proveniência por claim de ponta a ponta.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** sem adapter LLM, cada explicação v1 continua válida contra o schema e só referencia evidência conhecida.
+- **Caminho feliz:** Incident + memória retornam ExplanationBundle determinístico validado.
+- **Caso difícil/adverso:** API OpenAI falha ou devolve claim não suportado; não há caminho generativo publicado que possa alterar a resposta.
+- **Resultado observado:** PASS em 15 testes unitários do núcleo; NOT RUN para integração ponta a ponta com FastAPI/UI/Neo4j real.
+- **Fallback:** GroundedExplainer determinístico, sem dependência de rede ou chave.
+
+#### Gatilhos de revisão
+
+Reabrir quando o time aprovar CTR-LLM versionado com proveniência por claim e os consumidores puderem exibi-la/validá-la, ou se a banca exigir explicitamente geração por LLM auditável.
+
+#### Adendos
+
+- 2026-08-29T17:21:29-03:00 — Codex: adapter e testes opcionais criados na branch foram removidos antes de merge; nenhum contrato compartilhado foi alterado.
+
+
+### FL-20260829-ALTOE-003 — Manter playbooks em catálogo JSON versionado e somente humano
+
+- **Timestamp:** 2026-08-29T17:38:02-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex
+- **Categoria:** AI/RAG | quality | operations
+- **Escopo:** TASK-EXP-001, CMP-EXP-001, catálogo de playbooks
+- **Links:** LUM2-22, CTR-LLM-001 v1, codex/altoe-incident-memory
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A explicação precisa selecionar recomendações consistentes, verificáveis e sem autoridade de execução. O código possuía playbooks criados manualmente em testes, mas ainda não havia um artefato versionado que a demo e futuras integrações pudessem auditar.
+
+#### Decisão
+
+Publicar um catálogo JSON v1 junto ao módulo de explicação, carregado e validado pelo código. Cada entrada declara causa, precondições de escopo, ação, cautelas e execution=HUMAN_ONLY. O loader rejeita schema desconhecido, IDs duplicados, ausência do playbook genérico ou qualquer execução diferente de HUMAN_ONLY.
+
+#### Critérios e por que agora
+
+O catálogo é uma dependência direta da explicação grounded e fecha a tarefa sem depender de API, Neo4j ou LLM. JSON é legível, nativo em Python e não acrescenta dependência durante a janela curta do hackathon.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Playbooks hardcoded no explainer | Menos arquivos | Auditoria e alteração ficam dispersas no código | FACT: LUM2-22 pede catálogo versionado | Rejeitada |
+| YAML com parser adicional | Mais confortável para edição manual | Dependência e superfície de parsing extra | ASSUMPTION: catálogo inicial é pequeno | Não necessária no MVP |
+| JSON versionado com loader estrito | Auditável e sem dependência nova | Menos ergonomia para textos longos | TEST: loader e seleção passam localmente | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** CTR-LLM-001 fixa execution=HUMAN_ONLY.
+- **TEST:** 17 testes unitários passam após incluir catálogo, seleção do playbook do emissor e rejeição de execução automática.
+- **ASSUMPTION:** dois playbooks iniciais cobrem a demo; ampliar apenas após evals.
+- **UNKNOWN:** formato final de edição pela UI; fora do MVP.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** recomendações reproduzíveis e auditáveis.
+- **Abrimos mão de:** edição dinâmica de playbooks.
+- **Dívida/limitação:** catálogo é local e ainda não possui administração.
+- **Risco residual:** cobertura inicial pequena; fallback genérico preserva comportamento seguro.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a recomendação pode mostrar ID e cautela do playbook.
+- **Arquitetura/contratos:** CTR-LLM v1 não muda; o catálogo é detalhe interno de CMP-EXP-001.
+- **Pessoas/branches:** Rogério/API e André/UI consomem somente o ExplanationBundle já existente.
+- **Plano/Linear:** LUM2-22 permanece In Progress até revisão e publicação da branch.
+- **Testes/observabilidade:** loader rejeita execução não humana e catalogo inválido.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** incidente Mastercard suportado escolhe PB-ISSUER-INVESTIGATION; causa inconclusiva ou sem evidência permanece no genérico.
+- **Caminho feliz:** catálogo é carregado e o explainer devolve ação HUMAN_ONLY.
+- **Caso difícil/adverso:** catálogo adulterado tenta execução automática ou remove fallback; loader falha explicitamente.
+- **Resultado observado:** PASS local em 17 testes; NOT RUN em Neo4j real/API/UI.
+- **Fallback:** PB-GENERIC-INVESTIGATION embutido no explainer.
+
+#### Gatilhos de revisão
+
+Revisar se a demo exigir playbook adicional, se API/UI precisarem de metadados extras ou se o catálogo precisar ser administrado externamente.
+
+#### Adendos
+
+- Nenhum.
+
+
+### FL-20260829-ALTOE-004 — Usar baseline de avaliação determinístico antes de Neo4j real e rerank
+
+- **Timestamp:** 2026-08-29T17:41:16-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex
+- **Categoria:** AI/RAG | quality | scope
+- **Escopo:** TASK-MEM-008, CTR-MEM-001 v1.1, avaliação de memória
+- **Links:** LUM2-25, docs/evaluations/memory-baseline.md, structured-v1
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A recuperação estruturada já possui testes unitários, mas os critérios do RAG exigem avaliar os resultados do produto antes de introduzir rerank ou depender de Neo4j. Não há URI, credenciais ou Docker Neo4j neste ambiente.
+
+#### Decisão
+
+Criar um conjunto de avaliação de desenvolvimento separado, com cinco resultados verificáveis: recorrência exata, combinação nova, incidente inconclusivo com precedente, precedente não confirmado e memória indisponível. Registrar o relatório como baseline in-memory e manter explícito que holdout independente e Neo4j real continuam pendentes.
+
+#### Critérios e por que agora
+
+Precisão e honestidade sobre no-answer importam mais que complexidade adicional. Os casos cobrem as transições que API/UI precisarão explicar e fornecem uma linha de base antes de qualquer vetor.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Esperar Neo4j/holdout para qualquer avaliação | Mais realismo | Bloqueia feedback e regressão local | FACT: ambiente não possui Neo4j configurado | Rejeitada |
+| Medir só precisão média | Métrica simples | Esconde no-answer, inconclusivo e indisponibilidade | FACT: estes estados são contratos explícitos | Rejeitada |
+| Baseline de desenvolvimento rotulado | Regressão local reproduzível | Não prova generalização | TEST: cinco casos passam | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o baseline roda com repositório in-memory e seed humano confirmado.
+- **TEST:** cinco evals e 23 testes totais passaram localmente.
+- **ASSUMPTION:** Renato fornecerá holdout de combinações independentes antes do code freeze.
+- **UNKNOWN:** latência e compatibilidade contra Neo4j real.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** regressão imediata e métricas por estado.
+- **Abrimos mão de:** estimar recall/generalização nesta fase.
+- **Dívida/limitação:** resultados não substituem holdout.
+- **Risco residual:** otimização excessiva ao seed; mitigada por rotular o conjunto como desenvolvimento.
+
+#### Consequências e propagação
+
+- **Produto/demo:** estados de memória continuam demonstráveis mesmo sem Neo4j.
+- **Arquitetura/contratos:** nenhum schema muda.
+- **Pessoas/branches:** integração Neo4j depende de configuração coordenada por Rogério; Renato deve fornecer holdout.
+- **Plano/Linear:** LUM2-25 passa a In Progress.
+- **Testes/observabilidade:** relatório separa métricas observadas de lacunas.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** regressão que transforme no-answer em match ou altere INCONCLUSIVE falha antes de integração.
+- **Caminho feliz:** Mastercard D-2 é top-1.
+- **Caso difícil/adverso:** falha da memória retorna MEMORY_UNAVAILABLE, não NO_PRECEDENT.
+- **Resultado observado:** PASS em cinco evals locais; NOT RUN contra Neo4j real/holdout.
+- **Fallback:** manter structured-v1 e template deterministicamente.
+
+#### Gatilhos de revisão
+
+Adicionar rerank, conectar Neo4j, receber holdout ou observar falso precedente exige rodar e comparar o conjunto completo.
+
+#### Adendos
+
+- Nenhum.
+
 
 ## Rogério
 

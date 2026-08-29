@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "playbooks": [
+    {
+      "playbook_id": "PB-GENERIC-INVESTIGATION",
+      "cause_categories": [],
+      "required_scope": {},
+      "action": "Inspect current evidence and escalate to the payment operations owner.",
+      "cautions": [
+        "Do not execute payment actions automatically."
+      ],
+      "execution": "HUMAN_ONLY"
+    },
+    {
+      "playbook_id": "PB-ISSUER-INVESTIGATION",
+      "cause_categories": ["ISSUER_OUTAGE"],
+      "required_scope": {
+        "card_brand": ["MASTERCARD"]
+      },
+      "action": "Ask the issuer/provider operations team to investigate the observed decline pattern.",
+      "cautions": [
+        "Confirm the current scope before reusing a historical procedure."
+      ],
+      "execution": "HUMAN_ONLY"
+    }
+  ]
+}
+
