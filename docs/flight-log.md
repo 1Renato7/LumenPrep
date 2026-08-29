@@ -174,7 +174,7 @@ Exigência oficial de nome/localização, conflitos recorrentes, backlinks quebr
 
 #### Adendos
 
-- **2026-08-29T16:49:29-03:00:** o schema passou a impor as invariantes de estado: `MATCH_FOUND` exige ao menos um match; `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` exigem lista vazia. O parse das quatro fixtures e a checagem dessas invariantes passaram; teste de aplicação continua `NOT RUN`.
+- Nenhum.
 
 ### FL-20260829-TEAM-003 — Colocar precisão causal e memória recorrente no núcleo do MVP
 
@@ -866,6 +866,7 @@ Consumidor inferindo status por `matches.length`, necessidade de erro HTTP parci
 #### Adendos
 
 - **2026-08-29T16:50:00-03:00:** validação pós-migração passou para quatro fixtures de memória, três fixtures causais/explicativas, parse de todos os JSON, OpenAPI YAML, cinco diagramas, versões 1.3.0 dos quatro planos individuais, 12 IDs únicos no Flight Log e `git diff --check`.
+- **2026-08-29T16:49:29-03:00:** o schema passou a impor as invariantes de estado: `MATCH_FOUND` exige ao menos um match; `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` exigem lista vazia. O parse das quatro fixtures e a checagem dessas invariantes passaram; teste de aplicação continua `NOT RUN`.
 
 ## André
 
