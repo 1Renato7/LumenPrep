@@ -984,6 +984,76 @@ Reabrir quando o time aprovar CTR-LLM versionado com proveniência por claim e o
 - 2026-08-29T17:21:29-03:00 — Codex: adapter e testes opcionais criados na branch foram removidos antes de merge; nenhum contrato compartilhado foi alterado.
 
 
+### FL-20260829-ALTOE-003 — Manter playbooks em catálogo JSON versionado e somente humano
+
+- **Timestamp:** 2026-08-29T17:38:02-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex
+- **Categoria:** AI/RAG | quality | operations
+- **Escopo:** TASK-EXP-001, CMP-EXP-001, catálogo de playbooks
+- **Links:** LUM2-22, CTR-LLM-001 v1, codex/altoe-incident-memory
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A explicação precisa selecionar recomendações consistentes, verificáveis e sem autoridade de execução. O código possuía playbooks criados manualmente em testes, mas ainda não havia um artefato versionado que a demo e futuras integrações pudessem auditar.
+
+#### Decisão
+
+Publicar um catálogo JSON v1 junto ao módulo de explicação, carregado e validado pelo código. Cada entrada declara causa, precondições de escopo, ação, cautelas e execution=HUMAN_ONLY. O loader rejeita schema desconhecido, IDs duplicados, ausência do playbook genérico ou qualquer execução diferente de HUMAN_ONLY.
+
+#### Critérios e por que agora
+
+O catálogo é uma dependência direta da explicação grounded e fecha a tarefa sem depender de API, Neo4j ou LLM. JSON é legível, nativo em Python e não acrescenta dependência durante a janela curta do hackathon.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Playbooks hardcoded no explainer | Menos arquivos | Auditoria e alteração ficam dispersas no código | FACT: LUM2-22 pede catálogo versionado | Rejeitada |
+| YAML com parser adicional | Mais confortável para edição manual | Dependência e superfície de parsing extra | ASSUMPTION: catálogo inicial é pequeno | Não necessária no MVP |
+| JSON versionado com loader estrito | Auditável e sem dependência nova | Menos ergonomia para textos longos | TEST: loader e seleção passam localmente | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** CTR-LLM-001 fixa execution=HUMAN_ONLY.
+- **TEST:** 17 testes unitários passam após incluir catálogo, seleção do playbook do emissor e rejeição de execução automática.
+- **ASSUMPTION:** dois playbooks iniciais cobrem a demo; ampliar apenas após evals.
+- **UNKNOWN:** formato final de edição pela UI; fora do MVP.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** recomendações reproduzíveis e auditáveis.
+- **Abrimos mão de:** edição dinâmica de playbooks.
+- **Dívida/limitação:** catálogo é local e ainda não possui administração.
+- **Risco residual:** cobertura inicial pequena; fallback genérico preserva comportamento seguro.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a recomendação pode mostrar ID e cautela do playbook.
+- **Arquitetura/contratos:** CTR-LLM v1 não muda; o catálogo é detalhe interno de CMP-EXP-001.
+- **Pessoas/branches:** Rogério/API e André/UI consomem somente o ExplanationBundle já existente.
+- **Plano/Linear:** LUM2-22 permanece In Progress até revisão e publicação da branch.
+- **Testes/observabilidade:** loader rejeita execução não humana e catalogo inválido.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** incidente Mastercard suportado escolhe PB-ISSUER-INVESTIGATION; causa inconclusiva ou sem evidência permanece no genérico.
+- **Caminho feliz:** catálogo é carregado e o explainer devolve ação HUMAN_ONLY.
+- **Caso difícil/adverso:** catálogo adulterado tenta execução automática ou remove fallback; loader falha explicitamente.
+- **Resultado observado:** PASS local em 17 testes; NOT RUN em Neo4j real/API/UI.
+- **Fallback:** PB-GENERIC-INVESTIGATION embutido no explainer.
+
+#### Gatilhos de revisão
+
+Revisar se a demo exigir playbook adicional, se API/UI precisarem de metadados extras ou se o catálogo precisar ser administrado externamente.
+
+#### Adendos
+
+- Nenhum.
+
+
 ## Rogério
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->
