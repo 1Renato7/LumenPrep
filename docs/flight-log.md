@@ -1124,6 +1124,99 @@ Adicionar rerank, conectar Neo4j, receber holdout ou observar falso precedente e
 - Nenhum.
 
 
+### FL-20260829-ALTOE-005 — Suportar o runtime embutido do projeto para o bootstrap Neo4j
+
+- **Timestamp:** 2026-08-29T19:18:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex
+- **Categoria:** operations | quality | Git/integration
+- **Escopo:** LUM2-15, `scripts/bootstrap-python.ps1`, `scripts/start-neo4j.ps1`, `docs/neo4j-local.md`
+- **Links:** PR #1, `requirements-neo4j.txt`, `scripts/start-neo4j.ps1`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O bootstrap oficial baixa o Python embutido 3.14.4, que não contém `pip`. A
+documentação do Neo4j e o script de inicialização mandavam executar
+`python -m pip`, tornando a instalação limpa do driver inviável justamente no
+runtime recomendado pelo repositório.
+
+#### Decisão
+
+Priorizar `.python-runtime\\python.exe` no bootstrap Neo4j e documentar a
+instalação do driver com `uv pip install --python ...`. Uma instalação normal
+de Python com `pip` continua sendo alternativa explícita, mas não é exigida.
+
+#### Critérios e por que agora
+
+O fluxo local precisa ser reproduzível para a integração e a demo. Manter uma
+instrução que o runtime oficial não consegue executar cria falha tardia e
+mascara a causa com erro de import.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Exigir Python de sistema com pip | instrução conhecida | diverge do runtime 3.14.4 reproduzível do projeto | FACT: não há `pip` no runtime embutido | rejeitada |
+| Adicionar pip ao runtime embutido | elimina `uv` | o pacote embutido não traz `ensurepip`; manutenção extra | TEST: `python -m pip` e `ensurepip` ausentes | rejeitada |
+| Usar `uv` para instalar no runtime do projeto | preserva versão e instala só o driver opcional | requer `uv` instalado | TEST: `uv pip install --python` funcionou com `neo4j==5.28.5` | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `scripts/bootstrap-python.ps1` baixa o pacote embutido oficial.
+- **TEST:** validação real do Neo4j e os cinco evals de memória passaram usando
+  o runtime 3.14.4 com o driver instalado via `uv`.
+- **ASSUMPTION:** colaboradores terão `uv` disponível ou poderão usar Python
+  normal com `pip`; o runbook declara as duas rotas.
+- **UNKNOWN:** a CI ainda não possui checks publicados para a PR #1.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** instalação coerente com o runtime oficial e erro acionável para
+  driver ausente.
+- **Abrimos mão de:** fluxo de uma única ferramenta do Python embutido.
+- **Dívida/limitação:** o setup completo das dependências da aplicação além do
+  driver Neo4j permanece responsabilidade do ambiente compartilhado.
+- **Risco residual:** ausência de `uv` bloqueia apenas o caminho embutido; o
+  fallback com Python e `pip` continua documentado.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a inicialização local do grafo deixa de falhar por `pip`
+  inexistente.
+- **Arquitetura/contratos:** nenhum contrato ou schema muda.
+- **Pessoas/branches:** Rogério precisa tratar a instalação das dependências
+  gerais observada no smoke completo; Altoé mantém o driver opcional isolado.
+- **Plano/Linear:** LUM2-15 recebe a evidência da revisão; plano geral não muda.
+- **Testes/observabilidade:** o script verifica o import do driver antes do
+  bootstrap e mostra a correção exata.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um clone limpo com runtime embutido consegue
+  inicializar Neo4j após instalar o driver pelo comando documentado.
+- **Caminho feliz:** Compose saudável, constraints e seed D-2 aplicados.
+- **Caso difícil/adverso:** driver ausente falha antes do bootstrap com comando
+  de instalação explícito, sem deixar estado parcial.
+- **Resultado observado:** validação real do grafo e evals passaram; o teste do
+  script completo está limitado nesta sessão pela ausência do CLI Docker no PATH.
+- **Fallback:** usar Python normal com `pip` para o mesmo `requirements-neo4j.txt`.
+
+#### Gatilhos de revisão
+
+Adicionar um gerenciador de dependências do projeto, disponibilizar CI ou mudar
+o bootstrap Python exige revisar este runbook.
+
+#### Adendos
+
+- 2026-08-29T19:16:00-03:00 — Validação real concluída contra Neo4j local:
+  bootstrap aplicou constraints e seed D-2 de modo idempotente; recorrência,
+  combinação nova, falta de similaridade e indisponibilidade retornaram os
+  estados esperados. Os cinco evals automatizados continuam passando. Holdout
+  independente, latência sob carga e rerank continuam `NOT RUN`.
+
+
 ## Rogério
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->

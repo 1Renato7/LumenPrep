@@ -4,11 +4,16 @@
 
 1. Instale e abra o Docker Desktop.
 2. Copie `.env.docker.example` para `.env.docker` e defina uma senha local para `NEO4J_PASSWORD`.
-3. Instale o driver opcional:
+3. Instale o driver opcional no runtime do projeto:
 
    ```powershell
-   python -m pip install -r requirements-neo4j.txt
+   uv pip install --python .\.python-runtime\python.exe -r requirements-neo4j.txt
    ```
+
+   O runtime criado por `scripts/bootstrap-python.ps1` é o pacote embutido
+   oficial do Python e não inclui `pip`. Se você preferir usar uma instalação
+   normal de Python que já tenha `pip`, o comando equivalente é
+   `python -m pip install -r requirements-neo4j.txt`.
 
 4. Inicialize o banco:
 

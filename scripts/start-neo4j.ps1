@@ -17,6 +17,30 @@ if (-not (Test-Path -LiteralPath $environmentFile)) {
     throw 'Created .env.docker. Set a strong NEO4J_PASSWORD in that file, then rerun this script.'
 }
 
+$pythonExecutable = $null
+if ($Bootstrap) {
+    $projectPython = Join-Path $projectRoot '.python-runtime\python.exe'
+    if (Test-Path -LiteralPath $projectPython) {
+        $pythonExecutable = $projectPython
+    }
+    else {
+        $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+        if (-not $pythonCommand) {
+            $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
+        }
+        if ($pythonCommand) {
+            $pythonExecutable = $pythonCommand.Source
+        }
+    }
+    if (-not $pythonExecutable) {
+        throw 'Python was not found. Run scripts/bootstrap-python.ps1, then install the driver with: uv pip install --python .\.python-runtime\python.exe -r requirements-neo4j.txt'
+    }
+    & $pythonExecutable -c 'import neo4j'
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The Neo4j driver is missing. For the project runtime, run: uv pip install --python .\.python-runtime\python.exe -r requirements-neo4j.txt'
+    }
+}
+
 Push-Location $projectRoot
 try {
     if ($Stop) {
@@ -39,14 +63,7 @@ try {
                 Set-Item -Path ("Env:" + $matches[1]) -Value $matches[2]
             }
         }
-        $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-        if (-not $pythonCommand) {
-            $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
-        }
-        if (-not $pythonCommand) {
-            throw 'Python was not found. Install Python 3.14.4 and run: python -m pip install -r requirements-neo4j.txt; python -m app.memory.neo4j_bootstrap'
-        }
-        & $pythonCommand.Source -m app.memory.neo4j_bootstrap
+        & $pythonExecutable -m app.memory.neo4j_bootstrap
         if ($LASTEXITCODE -ne 0) {
             throw "Neo4j bootstrap failed (exit code $LASTEXITCODE)."
         }
