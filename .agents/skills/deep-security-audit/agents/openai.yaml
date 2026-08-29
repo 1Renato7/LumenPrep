@@ -1,0 +1,7 @@
+interface:
+  display_name: "Deep Security Audit"
+  short_description: "Auditoria profunda de segurança sob demanda"
+  default_prompt: "Use $deep-security-audit para auditar profundamente a segurança deste sistema."
+
+policy:
+  allow_implicit_invocation: false

@@ -14,6 +14,7 @@
 - Ao decompor trabalho ou preparar issues, use `$linear-microtask-planner`. Não crie ou altere itens no Linear sem pedido ou autorização explícita do usuário.
 - Ao implementar ou modificar RAG, busca semântica, embeddings, recuperação ou grounding, use `$rag-quality-engineer`.
 - Ao implementar agentes que propõem, autorizam ou executam pagamentos, use `$agent-payment-safety`.
+- Nunca invoque `$deep-security-audit` automaticamente. Use essa skill somente quando o usuário pedir explicitamente auditoria, revisão ou verificação de segurança.
 - Antes de declarar concluída qualquer alteração de código, use `$code-review-gate` sobre o diff relevante.
 - Depois da revisão e das correções, use `$browser-acceptance-gate` para toda mudança com comportamento observável na aplicação local.
 - Antes de merge, rebase, abertura de PR ou integração entre branches, use `$integration-contract-guardian` em modo de integração.
@@ -45,3 +46,5 @@
 ## Definition of Done
 
 Uma tarefa só está concluída quando seus critérios de aceitação foram atendidos, os testes relevantes passaram, a revisão não possui achados bloqueantes, o comportamento observável foi validado localmente e os contratos/documentos afetados estão sincronizados. Se alguma validação não puder ser executada, registre exatamente o que falta e por quê.
+
+`$deep-security-audit` não faz parte automática da Definition of Done. Quando o usuário a solicitar, conduza a auditoria de forma defensiva e read-only por padrão; correções exigem um pedido separado ou autorização explícita para implementar os achados.
