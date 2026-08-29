@@ -1,27 +1,14 @@
-"""CMP-API-001 — expõe router. Stub TASK-CORE-001 (health, metrics/current);
-TASK-API-001..003 (Bloco 2) substitui por health.py/metrics.py/incidents.py/demo.py
-sem exigir segunda edição de main.py (Seam 3, ver docs/plans/people/rogerio.md)."""
+"""CTR-API-001 v1 router assembly (TASK-API-001..003)."""
 
 from fastapi import APIRouter
 
-from app.aggregation import get_current_metrics
-from app.config import settings
+from app.api.demo import router as demo_router
+from app.api.health import router as health_router
+from app.api.incidents import router as incidents_router
+from app.api.metrics import router as metrics_router
 
 router = APIRouter()
-
-
-@router.get("/health")
-def health() -> dict:
-    return {
-        "status": "ok",
-        "dependencies": {
-            "duckdb": "ok",
-            "neo4j": "not_configured" if not settings.neo4j_uri else "configured",
-            "openai": "not_configured" if not settings.openai_api_key else "configured",
-        },
-    }
-
-
-@router.get("/metrics/current")
-def metrics_current() -> list[dict]:
-    return [m.model_dump() for m in get_current_metrics()]
+router.include_router(health_router)
+router.include_router(metrics_router)
+router.include_router(incidents_router)
+router.include_router(demo_router)
