@@ -3204,6 +3204,73 @@ RCA que publique relação pai-filho ou trial que demonstre fragmentação inade
 
 - **2026-08-29T22:55:00-03:00:** PASS: 97 testes completos aprovados; os casos específicos cobriram métricas múltiplas no mesmo slice, provider BR + issuer MX simultâneos e provider/issuer no mesmo país sem mesclagem indevida. Contratos, compilação e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve alteração de rota, UI ou fluxo executável no navegador.
 
+### FL-20260829-RENATO-007 — Explorar hipóteses por beam determinístico sem afirmar causa
+
+- **Timestamp:** 2026-08-29T23:25:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** solicitante; Codex como implementador e recorder
+- **Categoria:** architecture | data | quality | integration
+- **Escopo:** `LUM2-54` / `TASK-RCA-001`, `CMP-DET/RCA-001`, `CTR-DET-001 v1`, `CTR-INC-001 v1`
+- **Links:** `app/detection/models.py`, `docs/plans/system-plan.md`, `LUM2-53`, `LUM2-55`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+`LUM2-53` já publica `AnomalyCandidate` numérico, mas não existe implementação de `LUM2-54`. O RCA precisa explorar combinações dimensionais sem ler ground truth nem transformar uma hipótese estatística em Incident ou causa confirmada.
+
+#### Decisão
+
+Implementar um módulo interno de beam search que recebe apenas `AnomalyCandidate`, expande prefixes dimensionais configuráveis, elimina ramos abaixo do support mínimo e devolve hipóteses ordenadas com score, evidências e IDs de candidatos. O módulo não cria `Incident`, não muda schemas e não afirma `SUPPORTED`.
+
+#### Critérios e por que agora
+
+O contrato `CTR-DET-001 v1` é a entrada congelada disponível e `LUM2-54` desbloqueia `LUM2-55`. Separar busca de ranking final preserva o handoff planejado e evita que a correlação de Incident assuma causalidade prematuramente.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Buscar diretamente nos eventos/raw | Mais combinações possíveis | mistura armazenamento/ground truth com RCA e aumenta acoplamento | FACT: `LUM2-54` depende de `LUM2-53` | Fora da fronteira da microtarefa |
+| Escolher o maior candidate sem exploração | Implementação pequena | perde combinações e pruning hierárquico | FACT: a issue exige beam search top-down | Não satisfaz o aceite |
+| Beam interno sobre candidatos | Reproduzível, testável e compatível com contratos v1 | qualidade depende da granularidade dos candidates disponíveis | TEST: a busca terá fixtures de normal, dominante e baixa amostra | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `CTR-DET-001` contém slice, support, efeito, confiança e evidências; não contém causa declarada.
+- **TEST:** NOT RUN — testes de ordem, pruning e ausência de hipótese em baixa amostra serão executados antes do Linear.
+- **UNKNOWN:** o score de dominância e as alternativas públicas pertencem a `LUM2-55`.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** uma busca causal auditável sem vazamento de ground truth.
+- **Abrimos mão de:** explicar relações não representadas pelos slices de entrada.
+- **Dívida/limitação:** dimensões ausentes no candidate não podem ser exploradas; o produtor precisa publicar a granularidade necessária.
+- **Risco residual:** score de exploração não é confiança causal; o consumidor deve mantê-lo como hipótese.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** `CTR-DET-001 v1` é somente consumido; `CTR-INC-001 v1` não muda.
+- **Pessoas/branches:** `LUM2-55` recebe hipóteses ordenadas; Incident continua responsável por serialização.
+- **Plano/Linear:** marcar somente `LUM2-54` depois de testes, review, integração e push primeiro na branch de Renato.
+- **Testes/observabilidade:** cobrir ganho dominante, combinações, baixa amostra e determinismo.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** candidates iguais produzem hypotheses iguais e um ramo esparso nunca ultrapassa o pruning.
+- **Caminho feliz:** provider/country dominante chega ao primeiro resultado com referências de evidência.
+- **Caso difícil/adverso:** candidatos simultâneos ou suporte insuficiente permanecem hipóteses distintas ou não são retornados.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** retornar lista vazia e conservar `INCONCLUSIVE`; nunca fabricar uma causa.
+
+#### Gatilhos de revisão
+
+Novo contrato de agregação dimensional, requisito de causa confirmada ou consumo direto pela API exige change control.
+
+#### Adendos
+
+- **2026-08-29T23:39:00-03:00:** PASS: a busca validou determinismo, slice dominante, pruning por suporte, ausência de candidates, grupos de correlação mistos e parâmetros inválidos. `14` testes focados e `116` testes completos passaram; `scripts/validate_contracts.py`, `compileall` e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve rota, UI ou fluxo local observável novo; o módulo só será exposto pelo consumidor de `LUM2-55`.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._
