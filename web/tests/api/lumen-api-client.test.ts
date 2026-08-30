@@ -24,7 +24,7 @@ import {
   type LumenApiClient,
 } from "../../lib/api/client-interface";
 import { createMockLumenApiClient } from "../../lib/mocks/transaction-api-client";
-import { parseDiagnosticSuggestion, parseTransactionInput } from "../../lib/api/parse";
+import { parseDiagnosticSuggestion, parseIncident, parseTransactionInput } from "../../lib/api/parse";
 import type { HumanReviewRequest, TransactionBatchRequest, TransactionList } from "../../lib/api/types";
 
 const batchRequest: TransactionBatchRequest = {
@@ -132,6 +132,18 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
   assert.equal(incidentDetails.incidents[0].incident.recommendations[0].recommendation_class, "ESCALATE");
   assert.equal(suggestion.status, "SUGGESTED");
   assert.equal(normalizeApiBaseUrl("https://api.example.test/v1///"), "https://api.example.test/v1");
+});
+
+test("accepts string-array incident metrics allowed by CTR-INC-001", () => {
+  const incident = parseIncident({
+    ...incidentFixture,
+    metrics: {
+      ...incidentFixture.metrics,
+      decline_codes: ["DO_NOT_HONOR", "INSUFFICIENT_FUNDS", "SUSPECTED_FRAUD"],
+    },
+  });
+
+  assert.deepEqual(incident.metrics.decline_codes, ["DO_NOT_HONOR", "INSUFFICIENT_FUNDS", "SUSPECTED_FRAUD"]);
 });
 
 test("submits CTR-HRV-001 to the incident review route and parses its audit response", async () => {

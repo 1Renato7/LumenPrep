@@ -252,6 +252,10 @@ export function parseIncident(value: unknown): Incident {
   const metrics = object(incident.metrics, "Incident.metrics");
   for (const [key, scopeValue] of Object.entries(scope)) scope[key] = stringArray(scopeValue, `Incident.scope.${key}`);
   for (const [key, metric] of Object.entries(metrics)) {
+    if (Array.isArray(metric)) {
+      stringArray(metric, `Incident.metrics.${key}`);
+      continue;
+    }
     if (metric !== null && typeof metric !== "string" && (typeof metric !== "number" || !Number.isFinite(metric))) fail(`Incident.metrics.${key} has an invalid value.`, metric);
   }
   const rootCause = exactObject(incident.root_cause, ["status", "category", "confidence", "confidence_factors"], ["alternatives"], "Incident.root_cause");
