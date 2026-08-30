@@ -1,8 +1,8 @@
 import {
   ApiPayloadError,
   parseIncidentDetail,
-  parseIncidentDetailList,
   parseIncidentList,
+  parseTransactionIncidentDetail,
   parseTransactionBatchAccepted,
   parseTransactionCatalog,
   parseTransactionList,
@@ -20,6 +20,7 @@ import type {
   TransactionSampleRequest,
   TransactionSampleResponse,
   TransactionStatus,
+  TransactionIncidentDetail,
 } from "./types";
 
 export interface RequestOptions {
@@ -42,7 +43,7 @@ export interface LumenApiClient {
   listTransactions(query?: ListTransactionsQuery, options?: RequestOptions): Promise<TransactionList>;
   getTransaction(transactionId: string, options?: RequestOptions): Promise<TransactionRecord>;
   listIncidents(options?: RequestOptions): Promise<Incident[]>;
-  listTransactionIncidents(transactionId: string, options?: RequestOptions): Promise<IncidentDetail[]>;
+  listTransactionIncidents(transactionId: string, options?: RequestOptions): Promise<TransactionIncidentDetail>;
   getIncident(incidentId: string, options?: RequestOptions): Promise<IncidentDetail>;
 }
 
@@ -103,6 +104,7 @@ export function createPollingController(parentSignal?: AbortSignal): PollingCont
 
 export interface PollTransactionsOptions extends RequestOptions {
   query?: ListTransactionsQuery;
+  batchId?: string;
   intervalMs?: number;
   onUpdate?: (list: TransactionList) => void | Promise<void>;
 }
@@ -113,9 +115,33 @@ export async function pollTransactions(client: LumenApiClient, options: PollTran
   if (!Number.isInteger(intervalMs) || intervalMs < 0) throw new RangeError("Polling interval must be a non-negative integer.");
   while (true) {
     throwIfAborted(options.signal);
-    const list = await client.listTransactions(options.query, options);
+    const list = options.batchId
+      ? await client.getTransactionBatch(options.batchId, options)
+      : await client.listTransactions(options.query, options);
     await options.onUpdate?.(list);
     if (!list.items.some((item) => item.status === "PROCESSING")) return list;
+    await waitFor(intervalMs, options.signal);
+  }
+}
+
+export interface PollTransactionOptions extends RequestOptions {
+  intervalMs?: number;
+  onUpdate?: (record: TransactionRecord) => void | Promise<void>;
+}
+
+/** Polls one transaction until the backend publishes a terminal public status. */
+export async function pollTransaction(
+  client: LumenApiClient,
+  transactionId: string,
+  options: PollTransactionOptions = {},
+): Promise<TransactionRecord> {
+  const intervalMs = options.intervalMs ?? 1_000;
+  if (!Number.isInteger(intervalMs) || intervalMs < 0) throw new RangeError("Polling interval must be a non-negative integer.");
+  while (true) {
+    throwIfAborted(options.signal);
+    const record = await client.getTransaction(transactionId, options);
+    await options.onUpdate?.(record);
+    if (record.status !== "PROCESSING") return record;
     await waitFor(intervalMs, options.signal);
   }
 }
@@ -174,7 +200,7 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
     listIncidents: (requestOptions) => request("/incidents", { method: "GET" }, parseIncidentList, requestOptions),
     listTransactionIncidents: (transactionId, requestOptions) => {
       if (!transactionId) throw new LumenApiError("VALIDATION", 422, null, "transactionId must be non-empty.");
-      return request(`/incidents${toQuery({ transaction_id: transactionId })}`, { method: "GET" }, parseIncidentDetailList, requestOptions);
+      return request(`/transactions/${encodeURIComponent(transactionId)}/incidents`, { method: "GET" }, parseTransactionIncidentDetail, requestOptions);
     },
     getIncident: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}`, { method: "GET" }, parseIncidentDetail, requestOptions),
   };
@@ -202,6 +228,7 @@ function toQuery(query: object | undefined): string {
 }
 
 async function requestJson<T>(fetchImpl: typeof fetch, url: string, init: RequestInit, parser: (body: unknown) => T, options: RequestOptions | undefined, defaultTimeoutMs: number): Promise<T> {
+  if (options?.signal?.aborted) throw new LumenApiError("CANCELLED", null, null, "Lumen API request was cancelled.");
   const controller = new AbortController();
   let timedOut = false;
   const relayAbort = () => controller.abort(options?.signal?.reason);

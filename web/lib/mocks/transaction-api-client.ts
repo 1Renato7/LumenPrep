@@ -88,8 +88,17 @@ export function createMockLumenApiClient(): MockLumenApiClient {
     },
     async listTransactionIncidents(transactionId, options) {
       checkCancelled(options);
-      if (transactionId === "missing") return [];
-      return [structuredClone(incidentDetail)];
+      if (transactionId === "missing") {
+        return { schema_version: "1.0", transaction_id: transactionId, status: "NO_INCIDENT", incidents: [], rejected_incident_ids: [], limitations: [] };
+      }
+      return {
+        schema_version: "1.0",
+        transaction_id: transactionId,
+        status: "RESOLVED",
+        incidents: [{ ...structuredClone(incidentDetail), evidence_ids: incident.evidence.map((item) => item.evidence_id), limitations: [] }],
+        rejected_incident_ids: [],
+        limitations: [],
+      };
     },
     async getIncident(incidentId, options) {
       checkCancelled(options);

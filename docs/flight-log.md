@@ -3677,3 +3677,52 @@ Qualquer mudança no envelope do servidor, no contrato canônico, na semântica 
 
 - **2026-08-30T00:20:00-03:00:** PASS: `20` testes focados (ingestão, listener, histórico, agregação e Parquet), `compileall` e validação de contratos passaram. O smoke do CLI com banco novo confirmou `52/52` eventos gerados/publicados/aceitos e `52` linhas em uma partição. Um run tentou reutilizar armazenamento já populado; a proteção foi adicionada para recusar esse estado, sem apagar dados existentes.
 - **2026-08-30T00:22:00-03:00:** O solicitante determinou que o benchmark de 90 dias já concluído não deve ser repetido. Uma nova execução iniciada para atualização de configuração foi interrompida antes de produzir relatório final; os únicos números publicados permanecem os do relatório salvo de `90` dias.
+
+### FL-20260830-ANDRE-001 — Padronizar dependências Python com uv e lock versionado
+
+- **Timestamp:** 2026-08-30T00:30:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Participantes:** solicitante; Codex como implementador e recorder
+- **Categoria:** operation | quality | integration
+- **Escopo:** ambiente Python local, CI e deploy do monorepo
+- **Links:** `pyproject.toml`, `uv.lock`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Durante a validação da integração frontend/backend, `uv run` gerou `uv.lock` e o arquivo foi tratado incorretamente como artefato transitório no worktree. O solicitante confirmou que uv e o lock fazem parte do padrão já definido para o projeto.
+
+#### Decisão
+
+Usar `pyproject.toml` como declaração de dependências e manter `uv.lock` versionado como resolução reproduzível. Os fluxos de instalação, teste e deploy Python devem usar uv; não haverá migração para pip/`requirements.txt` nesta tarefa.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| uv + `uv.lock` versionado | resolução reproduzível e grupos/extras consistentes | exige atualizar o lock quando o projeto muda | FACT: `pyproject.toml` já define projeto e extras; solicitante confirmou o padrão | Escolhida |
+| pip + `requirements.txt` | ferramenta amplamente disponível | duplicaria fonte de dependências e exigiria novo processo de locking | FACT: não há requirements autoritativo no repositório | Rejeitada |
+| Somente `pyproject.toml`, sem lock | diff menor | versões transitivas podem divergir entre máquinas e deploy | FACT: intervalos de versão permitem resoluções diferentes | Rejeitada |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `uv lock` resolveu 41 pacotes e `uv lock --check` passou neste worktree.
+- **FACT:** a suíte Python foi executada por uv e aprovou 160 testes antes desta confirmação.
+- **UNKNOWN:** o CI/deploy remoto ainda precisa ser inspecionado para confirmar que todos os comandos usam `uv sync --frozen` ou equivalente.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** builds locais e remotos partem da mesma resolução.
+- **Abrimos mão de:** instalação direta por pip como caminho oficial desta configuração.
+- **Risco residual:** esquecer de atualizar o lock após editar dependências deve falhar no check de CI.
+
+#### Consequências e propagação
+
+- **Operação:** conservar `uv.lock`; validar com `uv lock --check`.
+- **Integração:** qualquer mudança em `pyproject.toml` deve atualizar o lock no mesmo diff.
+- **Testes:** CI deve instalar a resolução congelada e executar a suíte através de uv.
+
+#### Gatilhos de revisão
+
+Reavaliar somente se o runtime/deploy deixar de suportar uv ou se a equipe aprovar formalmente outro gerenciador e mecanismo de lock.

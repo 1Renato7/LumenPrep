@@ -1,68 +1,70 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { TransactionList, TransactionRecord } from "@/lib/api/types";
+import { createPollingController, LumenApiError, pollTransactions, type LumenApiClient } from "@/lib/api/client-interface";
+import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
+import type { TransactionList, TransactionRecord, TransactionStatus } from "@/lib/api/types";
 
-import {
-  getOfflineTransactionList,
-  hasProcessing,
-  normalizeFilter,
-  normalizeFixtureMode,
-  transactionFilters,
-  type OfflineFixtureError,
-} from "./fixture-source";
-import { startProcessingPolling } from "./polling";
+import { normalizeFilter, transactionFilters } from "./filters";
 import { buildTransactionUrl, firstSearchValue, type SearchValues } from "./url";
 import styles from "./transaction-log.module.css";
 
-export function TransactionLog({ searchValues }: { searchValues: SearchValues }) {
+export function TransactionLog({ searchValues, api: suppliedApi }: { searchValues: SearchValues; api?: LumenApiClient }) {
   const router = useRouter();
+  const client = useMemo(() => resolveLumenClient(suppliedApi), [suppliedApi]);
+  const api = client.api;
   const status = normalizeFilter(firstSearchValue(searchValues.status));
   const cursor = firstSearchValue(searchValues.cursor);
-  const fixture = normalizeFixtureMode(firstSearchValue(searchValues.fixture));
+  const batchId = firstSearchValue(searchValues.batch_id);
+  const queryKey = JSON.stringify({ status, cursor, batchId });
   const [list, setList] = useState<TransactionList | null>(null);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const hasCachedList = useRef(false);
+  const cache = useRef(new Map<string, TransactionList>());
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
 
   useEffect(() => {
+    const cached = cache.current.get(queryKey) ?? null;
+    setList(cached);
+    setLoading(!cached);
+    setStale(false);
+    setError(client.error);
+    if (!api) return;
+
     let active = true;
-    void getOfflineTransactionList({ status, cursor, fixture })
-      .then((result) => {
-        if (!active) return;
-        setList(result.list);
-        hasCachedList.current = true;
-        setStale(result.stale);
-        setError(null);
-      })
-      .catch((reason: OfflineFixtureError) => {
-        if (!active) return;
-        setError(reason.message);
-        setStale(hasCachedList.current);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const polling = createPollingController();
+    const apply = (next: TransactionList) => {
+      if (!active) return;
+      const visible = batchId && status !== "ALL" ? filterList(next, status) : next;
+      cache.current.set(queryKey, visible);
+      setList(visible);
+      setLoading(false);
+      setStale(false);
+      setError(null);
+    };
+    void pollTransactions(api, {
+      batchId,
+      query: batchId ? undefined : { status: status === "ALL" ? undefined : status, cursor },
+      signal: polling.signal,
+      onUpdate: apply,
+    }).catch((reason: unknown) => {
+      if (!active || reason instanceof LumenApiError && reason.code === "CANCELLED") return;
+      setError(apiErrorMessage(reason, "The transaction log could not reach the Lumen API."));
+      setStale(cache.current.has(queryKey));
+      setLoading(false);
+    });
 
     return () => {
       active = false;
+      polling.cancel("transaction query changed");
     };
-  }, [cursor, fixture, reloadKey, status]);
-
-  useEffect(() => {
-    const polling = startProcessingPolling({
-      hasProcessing: Boolean(list && !error && hasProcessing(list.items)),
-      onPoll: reload,
-    });
-    return () => polling?.cancel();
-  }, [error, list, reload]);
+  }, [api, batchId, client.error, cursor, queryKey, reloadKey, status]);
 
   const navigate = (nextStatus: typeof status, nextCursor: string | null) => {
     router.replace(buildTransactionUrl(searchValues, { status: nextStatus, cursor: nextCursor }));
@@ -76,7 +78,7 @@ export function TransactionLog({ searchValues }: { searchValues: SearchValues })
           <h1>Transaction <span>logs</span></h1>
           <p className={styles.muted}>Newest records first. Status and progress come from the backend contract.</p>
         </div>
-        <span className={styles.offline}>Offline fixtures</span>
+        <span className={styles.offline}>{client.source === "MOCK_FIXTURE" ? "Explicit mock data" : "Live Lumen API"}</span>
       </div>
 
       <div className={styles.filters} aria-label="Transaction status filters">
@@ -96,7 +98,7 @@ export function TransactionLog({ searchValues }: { searchValues: SearchValues })
       {stale ? (
         <section className={`${styles.card} ${styles.notice}`} aria-live="polite">
           <strong>Stale data</strong>
-          <p className={styles.muted}>The last fixture response is still visible. Refresh to try again.</p>
+          <p className={styles.muted}>The last successful response for this query is still visible. Retry the live API.</p>
           <button className={styles.button} type="button" onClick={reload}>Retry</button>
         </section>
       ) : null}
@@ -145,11 +147,11 @@ export function TransactionLog({ searchValues }: { searchValues: SearchValues })
             </div>
           )}
           <div className={styles.pager}>
-            <span className={styles.muted}>Cursor: {cursor ?? "first page"}</span>
+            <span className={styles.muted}>{batchId ? `Batch: ${batchId}` : `Cursor: ${cursor ?? "first page"}`}</span>
             <button
               className={styles.button}
               type="button"
-              disabled={!list.next_cursor}
+              disabled={Boolean(batchId) || !list.next_cursor}
               onClick={() => navigate(status, list.next_cursor)}
             >
               Next page
@@ -159,6 +161,10 @@ export function TransactionLog({ searchValues }: { searchValues: SearchValues })
       ) : null}
     </main>
   );
+}
+
+function filterList(list: TransactionList, status: TransactionStatus): TransactionList {
+  return { ...list, items: list.items.filter((item) => item.status === status), next_cursor: null };
 }
 
 function DiagnosticSummary({ record }: { record: TransactionRecord }) {

@@ -41,13 +41,15 @@
 .actionList small { color: #9fb7aa; }
 .memory { border-left: .35rem solid #90f0bd; }
 .alert { border-color: #ff9b9b; background: rgba(99, 26, 31, .36); color: #ffe2e2; }
+.button { min-height: 44px; padding: .58rem .82rem; border: 1px solid rgba(195, 205, 255, .62); border-radius: .6rem; background: rgba(39, 57, 139, .7); color: #f4f6ff; cursor: pointer; font: inherit; font-weight: 800; }
+.button:hover { background: rgba(55, 75, 168, .82); }
 .warning { padding: .75rem; border: 1px solid #d5a84d; border-radius: .65rem; background: rgba(89, 60, 17, .38); color: #ffe4a8; }
 .link { width: fit-content; color: #c3cdff; font-weight: 800; }
 .back { display: inline-grid; width: 44px; height: 44px; place-items: center; margin-bottom: .65rem; border: 1px solid rgba(153, 172, 255, .45); border-radius: .65rem; color: #c8d1ff; text-decoration: none; }
 .back svg { width: 1.3rem; height: 1.3rem; }
 .back:hover { border-color: #c2ccff; background: rgba(39, 57, 139, .55); }
 .link { display: inline-flex; min-height: 44px; align-items: center; margin-top: auto; }
-.link:focus-visible, .back:focus-visible, .trace summary:focus-visible { outline: 3px solid #b3c0ff; outline-offset: 3px; }
+.link:focus-visible, .back:focus-visible, .button:focus-visible, .trace summary:focus-visible { outline: 3px solid #b3c0ff; outline-offset: 3px; }
 .label { margin: 0 0 .2rem; color: #9cafff; font-size: .69rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .muted { margin: .25rem 0 0; color: #aab6d4; }
 .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .8rem; }

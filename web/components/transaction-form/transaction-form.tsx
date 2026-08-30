@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { createLumenApiClient, LumenApiError, type LumenApiClient } from "../../lib/api/client-interface";
+import { LumenApiError, type LumenApiClient } from "../../lib/api/client-interface";
+import { resolveLumenClient } from "../../lib/api/client-runtime";
 import type { TransactionCatalog } from "../../lib/api/types";
 import {
   addTransactionRow,
@@ -26,13 +27,7 @@ export interface TransactionFormProps { api?: LumenApiClient; }
 
 export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
   const router = useRouter();
-  const client = useMemo(() => {
-    try {
-      return { api: suppliedApi ?? createLumenApiClient(), error: null };
-    } catch (error) {
-      return { api: null, error: errorMessage(error, "The transaction catalog is unavailable.") };
-    }
-  }, [suppliedApi]);
+  const client = useMemo(() => resolveLumenClient(suppliedApi), [suppliedApi]);
   const api = client.api;
   const [catalog, setCatalog] = useState<TransactionCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);

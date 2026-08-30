@@ -1,7 +1,9 @@
 import type { TransactionList, TransactionRecord, TransactionStatus } from "@/lib/api/types";
+import { hasProcessing, normalizeFilter, transactionFilters, type TransactionFilter } from "./filters";
 
-export const transactionFilters = ["ALL", "SUCCEEDED", "FAILED", "PROCESSING", "UNKNOWN"] as const;
-export type TransactionFilter = (typeof transactionFilters)[number];
+export { hasProcessing, normalizeFilter, transactionFilters };
+export type { TransactionFilter };
+
 export type TransactionFixtureMode = "default" | "loading" | "empty" | "error" | "stale";
 
 export interface OfflineTransactionQuery {
@@ -61,20 +63,10 @@ const records: TransactionRecord[] = [
   succeededRecord,
 ].sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at));
 
-export function normalizeFilter(value: string | undefined): TransactionFilter {
-  return transactionFilters.includes(value as TransactionFilter)
-    ? (value as TransactionFilter)
-    : "ALL";
-}
-
 export function normalizeFixtureMode(value: string | undefined): TransactionFixtureMode {
   return value === "loading" || value === "empty" || value === "error" || value === "stale"
     ? value
     : "default";
-}
-
-export function hasProcessing(items: TransactionRecord[]): boolean {
-  return items.some((item) => item.status === "PROCESSING");
 }
 
 export function buildFixtureTransactionList(query: OfflineTransactionQuery = {}): TransactionList {

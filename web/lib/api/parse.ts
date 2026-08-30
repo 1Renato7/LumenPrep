@@ -11,6 +11,7 @@ import type {
   TransactionRecord,
   TransactionSampleResponse,
   TransactionStatus,
+  TransactionIncidentDetail,
 } from "./types";
 
 export class ApiPayloadError extends Error {
@@ -99,6 +100,12 @@ function number(value: unknown, context: string, min = -Infinity, max = Infinity
 function stringArray(value: unknown, context: string): string[] {
   if (!Array.isArray(value)) fail(`${context} must be an array.`, value);
   return value.map((item, index) => string(item, `${context}[${index}]`));
+}
+
+function uniqueStringArray(value: unknown, context: string): string[] {
+  const result = stringArray(value, context);
+  if (new Set(result).size !== result.length) fail(`${context} must contain unique values.`, value);
+  return result;
 }
 
 function enumValue<T extends string>(value: unknown, values: Set<T>, context: string): T {
@@ -207,7 +214,7 @@ export function parseTransactionRecord(value: unknown): TransactionRecord {
   const classification = parseClassification(record.classification);
   if (status === "PROCESSING" && (processing.progress_percent >= 100 || outcome !== null || classification !== null)) fail("PROCESSING record has terminal data.", value);
   if (status === "SUCCEEDED" && (processing.stage !== "COMPLETE" || processing.progress_percent !== 100 || outcome?.result !== "SUCCEEDED" || classification?.category !== "APPROVED")) fail("SUCCEEDED record violates its lifecycle invariant.", value);
-  if (status === "FAILED" && (processing.stage !== "COMPLETE" || processing.progress_percent !== 100 || outcome?.result !== "FAILED" || classification?.category === "APPROVED")) fail("FAILED record violates its lifecycle invariant.", value);
+  if (status === "FAILED" && (processing.stage !== "COMPLETE" || processing.progress_percent !== 100 || outcome?.result !== "FAILED" || classification === null || classification.category === "APPROVED")) fail("FAILED record violates its lifecycle invariant.", value);
   if (status === "UNKNOWN") {
     const terminalUnknown = processing.stage === "COMPLETE" && processing.progress_percent === 100 && outcome?.result === "UNKNOWN" && classification?.category === "UNKNOWN";
     const pipelineFailure = processing.stage === "PIPELINE_FAILED" && processing.progress_percent === 100 && typeof processing.failure_code === "string" && processing.failure_code.length > 0 && outcome === null && classification === null;
@@ -281,6 +288,45 @@ export function parseIncidentList(value: unknown): Incident[] {
 export function parseIncidentDetailList(value: unknown): IncidentDetail[] {
   if (!Array.isArray(value)) fail("Incident detail list must be an array.", value);
   return value.map(parseIncidentDetail);
+}
+
+export function parseTransactionIncidentDetail(value: unknown): TransactionIncidentDetail {
+  const detail = exactObject(
+    value,
+    ["schema_version", "transaction_id", "status", "incidents", "rejected_incident_ids", "limitations"],
+    [],
+    "TransactionIncidentDetail",
+  );
+  const schemaVersion = string(detail.schema_version, "TransactionIncidentDetail.schema_version");
+  if (schemaVersion !== "1.0") return fail("TransactionIncidentDetail.schema_version must be 1.0.", value);
+  const transactionId = string(detail.transaction_id, "TransactionIncidentDetail.transaction_id");
+  if (!transactionId) return fail("TransactionIncidentDetail.transaction_id must be non-empty.", value);
+  const status = enumValue(
+    detail.status,
+    new Set(["RESOLVED", "PARTIAL", "NO_INCIDENT"]),
+    "TransactionIncidentDetail.status",
+  ) as TransactionIncidentDetail["status"];
+  if (!Array.isArray(detail.incidents)) return fail("TransactionIncidentDetail.incidents must be an array.", value);
+  const incidents = detail.incidents.map((entry, index) => {
+    const link = exactObject(entry, ["incident", "memory", "explanation", "evidence_ids", "limitations"], [], `TransactionIncidentDetail.incidents[${index}]`);
+    return {
+      incident: parseIncident(link.incident),
+      memory: parseSimilarIncidents(link.memory),
+      explanation: parseExplanation(link.explanation),
+      evidence_ids: uniqueStringArray(link.evidence_ids, `TransactionIncidentDetail.incidents[${index}].evidence_ids`),
+      limitations: stringArray(link.limitations, `TransactionIncidentDetail.incidents[${index}].limitations`),
+    };
+  });
+  if (status === "NO_INCIDENT" && incidents.length !== 0) return fail("NO_INCIDENT must not contain incidents.", value);
+  if (status === "RESOLVED" && incidents.length === 0) return fail("RESOLVED must contain at least one incident.", value);
+  return {
+    schema_version: "1.0",
+    transaction_id: transactionId,
+    status,
+    incidents,
+    rejected_incident_ids: uniqueStringArray(detail.rejected_incident_ids, "TransactionIncidentDetail.rejected_incident_ids"),
+    limitations: stringArray(detail.limitations, "TransactionIncidentDetail.limitations"),
+  };
 }
 
 export function parseIncidentDetail(value: unknown): IncidentDetail {

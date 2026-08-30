@@ -1,4 +1,4 @@
-import type { TransactionFilter } from "./fixture-source";
+import type { TransactionFilter } from "./filters";
 
 export type SearchValues = Record<string, string | string[] | undefined>;
 

@@ -1,32 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import type { OfflineIncidentDetail } from "./fixture-source";
-import { getOfflineIncident, normalizeIncidentFixture, type OfflineIncidentFixtureError } from "./fixture-source";
+import { LumenApiError, type LumenApiClient } from "@/lib/api/client-interface";
+import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
+import type { IncidentDetail as IncidentDetailData } from "@/lib/api/types";
 import styles from "./incidents.module.css";
 
-export function IncidentDetail({ incidentId, fixture }: { incidentId: string; fixture?: string }) {
-  const [detail, setDetail] = useState<OfflineIncidentDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const fixtureMode = normalizeIncidentFixture(fixture);
+export function IncidentDetail({ incidentId, api: suppliedApi }: { incidentId: string; api?: LumenApiClient }) {
+  return <IncidentDetailView key={incidentId} incidentId={incidentId} suppliedApi={suppliedApi} />;
+}
+
+function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; suppliedApi?: LumenApiClient }) {
+  const client = useMemo(() => resolveLumenClient(suppliedApi), [suppliedApi]);
+  const [detail, setDetail] = useState<IncidentDetailData | null>(null);
+  const [error, setError] = useState<string | null>(client.error);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    let active = true;
-    void getOfflineIncident(incidentId, fixtureMode)
-      .then((result) => { if (active) { setDetail(result); setError(null); } })
-      .catch((reason: OfflineIncidentFixtureError) => { if (active) setError(reason.message); });
-    return () => { active = false; };
-  }, [fixtureMode, incidentId]);
+    if (!client.api) return;
+    const controller = new AbortController();
+    void client.api.getIncident(incidentId, { signal: controller.signal })
+      .then(setDetail)
+      .catch((reason: unknown) => {
+        if (reason instanceof LumenApiError && reason.code === "CANCELLED") return;
+        setError(apiErrorMessage(reason, "The incident could not be loaded."));
+      });
+    return () => controller.abort("incident changed");
+  }, [client, incidentId, reload]);
 
-  if (error) return <main className={styles.shell}><section className={`${styles.card} ${styles.alert}`} role="alert"><strong>Could not load incident</strong><p>{error}</p></section></main>;
+  if (error) return <main className={styles.shell}><section className={`${styles.card} ${styles.alert}`} role="alert"><strong>Could not load incident</strong><p>{error}</p><button className={styles.button} type="button" onClick={() => { setError(null); setDetail(null); setReload((value) => value + 1); }}>Try again</button></section></main>;
   if (!detail) return <main className={styles.shell}><section className={styles.card} role="status">Loading incident…</section></main>;
 
   const { incident, memory, explanation } = detail;
   const inconclusive = incident.root_cause.status === "INCONCLUSIVE";
   return <main className={styles.shell}>
-    <div className={styles.top}><div><Link className={styles.back} href="/incidents" aria-label="Back to incidents"><BackIcon /></Link><p className={styles.label}>Full operational diagnosis</p><h1>{incident.title}</h1><p className={styles.muted}>Incident ID: <code>{incident.incident_id}</code></p></div><span className={styles.offline}>Offline fixtures</span></div>
+    <div className={styles.top}><div><Link className={styles.back} href="/incidents" aria-label="Back to incidents"><BackIcon /></Link><p className={styles.label}>Full operational diagnosis</p><h1>{incident.title}</h1><p className={styles.muted}>Incident ID: <code>{incident.incident_id}</code></p></div><span className={styles.offline}>{client.source === "MOCK_FIXTURE" ? "Explicit test fixture" : "Live Lumen API"}</span></div>
 
     <section className={`${styles.card} ${styles.executiveCard}`} aria-labelledby="executive-summary-title">
       <div className={styles.cardTop}><span className={styles.state}>{incident.state}</span><span className={inconclusive ? styles.causeInconclusive : styles.causeSupported}>{incident.root_cause.status}</span></div>

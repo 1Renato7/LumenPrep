@@ -240,3 +240,18 @@ export interface IncidentDetail {
   memory: SimilarIncidentResult;
   explanation: ExplanationBundle;
 }
+
+export interface TransactionIncidentLink extends IncidentDetail {
+  evidence_ids: string[];
+  limitations: string[];
+}
+
+/** CTR-TDI-001: grounded Incident detail authorized for one transaction. */
+export interface TransactionIncidentDetail {
+  schema_version: TransactionSchemaVersion;
+  transaction_id: string;
+  status: "RESOLVED" | "PARTIAL" | "NO_INCIDENT";
+  incidents: TransactionIncidentLink[];
+  rejected_incident_ids: string[];
+  limitations: string[];
+}

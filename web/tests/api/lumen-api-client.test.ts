@@ -10,6 +10,7 @@ import processingFixture from "../../../contracts/fixtures/transaction-processin
 import sampleFixture from "../../../contracts/fixtures/transaction-sample-response.json";
 import similarIncidentsFixture from "../../../contracts/fixtures/similar-incidents.json";
 import succeededFixture from "../../../contracts/fixtures/transaction-succeeded.json";
+import noIncidentFixture from "../../../contracts/fixtures/transaction-incident-detail-no-incident.json";
 import {
   backendStateFor,
   createBatchSubmission,
@@ -17,6 +18,7 @@ import {
   createPollingController,
   LumenApiError,
   normalizeApiBaseUrl,
+  pollTransaction,
   pollTransactions,
   type LumenApiClient,
 } from "../../lib/api/client-interface";
@@ -35,6 +37,14 @@ function json(body: unknown, status = 200): Response {
 
 test("normalizes public base URL and follows every CTR-API-001 v3 path/query", async () => {
   const calls: string[] = [];
+  const resolvedTransactionIncident = {
+    schema_version: "1.0",
+    transaction_id: "txn one",
+    status: "RESOLVED",
+    incidents: [{ incident: incidentFixture, memory: similarIncidentsFixture, explanation: explanationFixture, evidence_ids: ["evt_demo_1001_final"], limitations: [] }],
+    rejected_incident_ids: [],
+    limitations: [],
+  };
   const client = createLumenApiClient({
     baseUrl: " https://api.example.test/v1/// ",
     fetchImpl: async (url, init) => {
@@ -44,9 +54,10 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
       if (requestUrl.includes("transaction-samples")) return json(sampleFixture);
       if (requestUrl.endsWith("transaction-batches")) return json(batchAcceptedFixture, 202);
       if (requestUrl.includes("transaction-batches/")) return json(listFixture);
+      if (requestUrl.endsWith("transactions/txn%20one/incidents")) return json(resolvedTransactionIncident);
+      if (requestUrl.endsWith("/incidents")) return json([incidentFixture]);
       if (requestUrl.includes("transactions?")) return json(listFixture);
       if (requestUrl.includes("transactions/")) return json(processingFixture);
-      if (requestUrl.includes("incidents?")) return json([{ incident: incidentFixture, memory: similarIncidentsFixture, explanation: explanationFixture }]);
       return json({ incident: incidentFixture, memory: similarIncidentsFixture, explanation: explanationFixture });
     },
   });
@@ -57,6 +68,7 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
   await client.getTransactionBatch("batch/one");
   await client.listTransactions({ status: "PROCESSING", cursor: "cursor one", limit: 20 });
   await client.getTransaction("txn/one");
+  await client.listIncidents();
   const incidentDetails = await client.listTransactionIncidents("txn one");
   await client.getIncident("incident/one");
 
@@ -67,11 +79,12 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
     "GET https://api.example.test/v1/transaction-batches/batch%2Fone",
     "GET https://api.example.test/v1/transactions?status=PROCESSING&cursor=cursor+one&limit=20",
     "GET https://api.example.test/v1/transactions/txn%2Fone",
-    "GET https://api.example.test/v1/incidents?transaction_id=txn+one",
+    "GET https://api.example.test/v1/incidents",
+    "GET https://api.example.test/v1/transactions/txn%20one/incidents",
     "GET https://api.example.test/v1/incidents/incident%2Fone",
   ]);
-  assert.deepEqual(incidentDetails[0].incident.root_cause.alternatives, [{ category: "ISSUER_DECLINE", confidence: 0.18 }]);
-  assert.equal(incidentDetails[0].incident.recommendations[0].recommendation_class, "ESCALATE");
+  assert.deepEqual(incidentDetails.incidents[0].incident.root_cause.alternatives, [{ category: "ISSUER_DECLINE", confidence: 0.18 }]);
+  assert.equal(incidentDetails.incidents[0].incident.recommendations[0].recommendation_class, "ESCALATE");
   assert.equal(normalizeApiBaseUrl("https://api.example.test/v1///"), "https://api.example.test/v1");
 });
 
@@ -140,6 +153,29 @@ test("unknown response properties are rejected rather than cast silently", async
   await assert.rejects(client.getTransactionCatalog(), (error: unknown) => error instanceof LumenApiError && error.code === "INVALID_RESPONSE");
 });
 
+test("CTR-TDI-001 parses NO_INCIDENT and rejects invalid status invariants and duplicate IDs", async () => {
+  const valid = createLumenApiClient({ baseUrl: "https://api.example.test/v1", fetchImpl: async () => json(noIncidentFixture) });
+  const result = await valid.listTransactionIncidents("txn_missing");
+  assert.equal(result.status, "NO_INCIDENT");
+  assert.deepEqual(result.incidents, []);
+
+  for (const invalid of [
+    { ...noIncidentFixture, status: "RESOLVED" },
+    { ...noIncidentFixture, status: "NOT_A_STATUS" },
+    { ...noIncidentFixture, rejected_incident_ids: ["inc_1", "inc_1"] },
+    { ...noIncidentFixture, unexpected: true },
+  ]) {
+    const client = createLumenApiClient({ baseUrl: "https://api.example.test/v1", fetchImpl: async () => json(invalid) });
+    await assert.rejects(client.listTransactionIncidents("txn_missing"), (error: unknown) => error instanceof LumenApiError && error.code === "INVALID_RESPONSE");
+  }
+});
+
+test("transaction lifecycle parser rejects FAILED without classification", async () => {
+  const invalid = { ...succeededFixture, status: "FAILED", outcome: { ...succeededFixture.outcome, result: "FAILED" }, classification: null };
+  const client = createLumenApiClient({ baseUrl: "https://api.example.test/v1", fetchImpl: async () => json(invalid) });
+  await assert.rejects(client.getTransaction("txn_invalid"), (error: unknown) => error instanceof LumenApiError && error.code === "INVALID_RESPONSE");
+});
+
 test("polling ends without PROCESSING and cancellation stops the pending next poll", async () => {
   const processingList = { ...listFixture, items: [processingFixture] } as TransactionList;
   const terminalList = { ...listFixture, items: [succeededFixture] } as TransactionList;
@@ -157,6 +193,37 @@ test("polling ends without PROCESSING and cancellation stops the pending next po
     pollTransactions(foreverProcessing, { signal: polling.signal, intervalMs: 100, onUpdate: () => polling.cancel("navigation") }),
     (error: unknown) => error instanceof LumenApiError && error.code === "CANCELLED",
   );
+});
+
+test("polling one transaction and one submitted batch use their dedicated endpoints", async () => {
+  let recordCalls = 0;
+  const single = {
+    getTransaction: async () => (++recordCalls === 1 ? processingFixture : succeededFixture),
+  } as unknown as LumenApiClient;
+  const record = await pollTransaction(single, "txn_1", { intervalMs: 0 });
+  assert.equal(record.status, "SUCCEEDED");
+  assert.equal(recordCalls, 2);
+
+  let batchCalls = 0;
+  const batch = {
+    getTransactionBatch: async (batchId: string) => {
+      assert.equal(batchId, "batch_1");
+      batchCalls += 1;
+      return { ...listFixture, items: [succeededFixture] } as TransactionList;
+    },
+    listTransactions: async () => assert.fail("batch polling must not use the global transaction list"),
+  } as unknown as LumenApiClient;
+  await pollTransactions(batch, { batchId: "batch_1", intervalMs: 0 });
+  assert.equal(batchCalls, 1);
+});
+
+test("a request cancelled before dispatch fails without calling fetch", async () => {
+  const controller = new AbortController();
+  controller.abort("navigation");
+  let called = false;
+  const client = createLumenApiClient({ baseUrl: "https://api.example.test/v1", fetchImpl: async () => { called = true; return json(catalogFixture); } });
+  await assert.rejects(client.getTransactionCatalog({ signal: controller.signal }), (error: unknown) => error instanceof LumenApiError && error.code === "CANCELLED");
+  assert.equal(called, false);
 });
 
 test("the explicitly labelled mock and live adapters share the same consumer interface", async () => {
