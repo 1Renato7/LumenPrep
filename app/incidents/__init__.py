@@ -16,6 +16,23 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Candidate = Mapping[str, Any]
 
+# Which metric a detector candidate measured decides how its observed/expected
+# pair may be named. Publishing a p95 in milliseconds as ``approval_rate_*``
+# broke the 0..1 bound CTR-AGT-001 declares for those fields and handed the
+# agent a "rate" of 2533. The latency keys match the vocabulary already used in
+# contracts/fixtures/incident-mastercard-recurrence.json.
+METRIC_SERIES_KEYS: dict[str, tuple[str, str]] = {
+    "APPROVAL_RATE": ("approval_rate_observed", "approval_rate_expected"),
+    "LATENCY_P95": ("provider_latency_p95_ms_observed", "provider_latency_p95_ms_expected"),
+    "TIMEOUT_RATE": ("timeout_rate_observed", "timeout_rate_expected"),
+    # PAYMENT_CONVERSION's own observed/expected are written again below by its
+    # dedicated block, which is also where the web client reads them
+    # (web/components/incidents/incidents.tsx). Mapping the pair here too keeps
+    # this generic assignment from ever emitting the placeholder "observed" /
+    # "expected" keys when a conversion candidate leads its group.
+    "PAYMENT_CONVERSION": ("payment_conversion_observed", "payment_conversion_expected"),
+}
+
 
 def _as_dict(value: Candidate | BaseModel) -> dict[str, Any]:
     return value.model_dump() if isinstance(value, BaseModel) else dict(value)
@@ -229,10 +246,13 @@ def to_incident(
     started = estimated_started_at or str(first_window.get("start") or datetime.now(timezone.utc).isoformat())
     detected = detected_at or str(first_window.get("end") or datetime.now(timezone.utc).isoformat())
     candidate = correlated.candidates[0]
+    metric = str(candidate.get("metric") or "APPROVAL_RATE")
+    observed_key, expected_key = METRIC_SERIES_KEYS.get(metric, ("observed", "expected"))
     metrics = {
         "eligible_attempts": int(candidate.get("sample_size", 0)),
-        "approval_rate_observed": candidate.get("observed"),
-        "approval_rate_expected": candidate.get("expected"),
+        "metric": metric,
+        observed_key: candidate.get("observed"),
+        expected_key: candidate.get("expected"),
         "lost_approvals": int(round(max(float(item.get("lost_approvals", 0)) for item in correlated.candidates))),
     }
     conversion_candidates = [item for item in correlated.candidates if item.get("metric") == "PAYMENT_CONVERSION"]

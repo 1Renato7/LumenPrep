@@ -82,3 +82,36 @@ def test_pipeline_does_not_create_incident_for_low_sample_anomaly(valid_attempt)
 
     assert derive_incidents_for_correlation(get_connection(), "corr_low_sample") == []
     assert DuckDBIncidentRepository().list() == []
+
+
+def test_category_ignores_the_no_decline_sentinel():
+    """NO_DECLINE counts approvals, so it must not choose the category.
+
+    A window degraded to 63% approval still has more approvals than refusals.
+    With the sentinel in the argmax the healthy majority always won, the
+    function fell through to the fallback and this override never fired.
+    """
+    from app.worker.incident_pipeline import _category_from_decline_profile
+
+    profile = {"NO_DECLINE": 22, "PROVIDER_TIMEOUT": 13}
+
+    assert _category_from_decline_profile(profile, "ISSUER_OUTAGE") == "PROVIDER_DEGRADATION"
+
+
+def test_category_falls_back_when_only_sentinels_are_present():
+    from app.worker.incident_pipeline import _category_from_decline_profile
+
+    assert (
+        _category_from_decline_profile({"NO_DECLINE": 40, "NOT_APPLICABLE": 2}, "ISSUER_OUTAGE")
+        == "ISSUER_OUTAGE"
+    )
+    assert _category_from_decline_profile({"NO_DECLINE": 40}, None) == "UNCLASSIFIED_DEGRADATION"
+
+
+def test_category_breaks_ties_deterministically():
+    from app.worker.incident_pipeline import _category_from_decline_profile
+
+    tied = {"DO_NOT_HONOR": 7, "PROVIDER_TIMEOUT": 7}
+
+    assert _category_from_decline_profile(tied, None) == "PROVIDER_DEGRADATION"
+    assert _category_from_decline_profile(dict(reversed(tied.items())), None) == "PROVIDER_DEGRADATION"

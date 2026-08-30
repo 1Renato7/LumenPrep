@@ -63,6 +63,11 @@ def approval_rate_signal(current: WindowMetrics, baseline: SeasonalBaseline) -> 
     """Detect an approval drop when the 95% Wilson upper bound remains below expected."""
 
     observed = current.approval_rate
+    # A window at or above its baseline is not a drop, whatever the interval
+    # says. The direction is checked first so no rounding artefact of the bound
+    # can turn a healthy or flat window into a candidate.
+    if observed >= baseline.approval_rate:
+        return None
     if _wilson_bound(observed, current.eligible_attempts, upper=True) >= baseline.approval_rate:
         return None
     return DetectionSignal(
@@ -112,6 +117,12 @@ def timeout_rate_signal(current: WindowMetrics, baseline: SeasonalBaseline) -> D
     """Detect a timeout-rate increase when the 95% Wilson lower bound exceeds expected."""
 
     observed = current.timeout_rate
+    # Same guard as the approval drop, and here it is load-bearing: a slice with
+    # no timeouts against a baseline of no timeouts used to raise a candidate
+    # with zero effect, because ``centre - margin`` lands on ~1e-17 instead of
+    # zero and cleared the strict comparison below.
+    if observed <= baseline.timeout_rate:
+        return None
     if _wilson_bound(observed, current.eligible_attempts, upper=False) <= baseline.timeout_rate:
         return None
     return DetectionSignal(
@@ -268,6 +279,12 @@ def _wilson_bound(rate: float, sample_size: int, *, upper: bool) -> float:
     if sample_size <= 0:
         return 1.0 if upper else 0.0
     successes = round(rate * sample_size)
+    # The degenerate ends are exact, so they are returned exactly. Computing
+    # them leaves a residue of ~1e-17 that reads as a positive rate downstream.
+    if successes == 0 and not upper:
+        return 0.0
+    if successes == sample_size and upper:
+        return 1.0
     proportion = successes / sample_size
     denominator = 1 + _Z_95**2 / sample_size
     centre = proportion + _Z_95**2 / (2 * sample_size)

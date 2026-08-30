@@ -15,6 +15,10 @@ from app.incidents import RootCause, RootCauseAlternative
 
 from .beam import RcaHypothesis
 
+# Placeholders the cube writes when a dimension does not apply to an attempt.
+# They identify the absence of a value, so they can never name a suspect.
+ABSENT_DIMENSION_VALUES = frozenset({"NOT_APPLICABLE", "UNKNOWN", ""})
+
 
 @dataclass(frozen=True)
 class RankedHypothesis:
@@ -137,7 +141,7 @@ def _rank(path: RcaHypothesis, *, max_support: int, max_depth: int) -> RankedHyp
 
 def _category_for(path: RcaHypothesis) -> str:
     dimensions = path.slice
-    if "issuer_bank_id" in dimensions or "issuer_bank" in dimensions:
+    if _names_an_issuer(dimensions):
         return "ISSUER_OUTAGE"
     if "provider_id" in dimensions:
         return "PROVIDER_DEGRADATION"
@@ -148,6 +152,22 @@ def _category_for(path: RcaHypothesis) -> str:
     if "merchant_id" in dimensions:
         return "MERCHANT_LOCALIZED_DEGRADATION"
     return "UNCLASSIFIED_DEGRADATION"
+
+
+def _names_an_issuer(dimensions: dict[str, str]) -> bool:
+    """A slice points at an issuer only when it actually carries one.
+
+    ``app.aggregation.windows`` fills ``issuer_bank_id`` for every attempt,
+    using ``NOT_APPLICABLE`` for methods that have no issuer at all (wallet,
+    bank transfer). Testing for the key alone therefore attributed a wallet or
+    bank-transfer degradation to an issuer that does not exist, and because
+    this dimension is checked first it outranked every other explanation.
+    """
+    for key in ("issuer_bank_id", "issuer_bank"):
+        value = dimensions.get(key)
+        if value is not None and str(value) not in ABSENT_DIMENSION_VALUES:
+            return True
+    return False
 
 
 def _dominance_margin(ranked: tuple[RankedHypothesis, ...]) -> float:

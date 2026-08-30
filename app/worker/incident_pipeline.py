@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 LOW_SAMPLE_ATTEMPTS = 12
 MINIMUM_UNIQUE_PAYMENTS = 10
+# Outcome sentinels of the decline profile: they describe the healthy or
+# unmapped part of a window, not a refusal anyone can be routed to.
+DECLINE_PROFILE_SENTINELS = frozenset({"NO_DECLINE", "NOT_APPLICABLE", "UNMAPPED_DECLINE"})
 SuggestionJob: TypeAlias = tuple[Incident, dict[str, int], list[dict[str, Any]]]
 
 
@@ -202,9 +205,25 @@ def _memory_decline_codes(profile: dict[str, int]) -> list[str]:
 
 
 def _category_from_decline_profile(profile: dict[str, int], fallback: str | None) -> str:
-    if not profile:
+    """Derive the category from the leading *decline*, never from the sentinels.
+
+    ``NO_DECLINE`` counts the approvals of the window and ``NOT_APPLICABLE``
+    counts methods that have no issuer decline at all. Leaving either in the
+    argmax lets the healthy majority of a degraded window pick the category: a
+    window that fell to 63% approval still has more approvals than refusals, so
+    the sentinel wins, the function falls through to ``fallback`` and this
+    override silently never fires. The same exclusion already guards
+    ``app.agent.llm._dominant_decline``.
+    """
+    declines = {
+        code: count
+        for code, count in profile.items()
+        if count > 0 and code not in DECLINE_PROFILE_SENTINELS
+    }
+    if not declines:
         return fallback or "UNCLASSIFIED_DEGRADATION"
-    code = max(profile.items(), key=lambda item: item[1])[0]
+    # The code breaks ties so the same profile always yields the same category.
+    code = max(declines.items(), key=lambda item: (item[1], item[0]))[0]
     if code.startswith("PROVIDER_"):
         return "PROVIDER_DEGRADATION"
     if code.startswith("ISSUER_") or code in {"DO_NOT_HONOR", "INSUFFICIENT_FUNDS", "TRANSACTION_NOT_PERMITTED"}:

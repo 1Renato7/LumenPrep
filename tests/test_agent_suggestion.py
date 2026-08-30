@@ -499,3 +499,47 @@ def test_missing_decline_profile_is_declared_as_a_limitation():
 
     assert pack.decline_profile == {}
     assert any("decline profile" in item for item in pack.limitations)
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "Compare the authorization rate in the incident window against the weekday-hour baseline.",
+        "Inspect the provider authorization logs for the affected slice.",
+        "Review the authorisation response codes recorded for this merchant.",
+    ],
+)
+def test_authorization_as_a_noun_is_investigative_and_survives(action):
+    """"Authorization" is the ordinary noun of the thing being investigated.
+
+    Blocking it rejected purely investigative steps and cost the whole
+    suggestion, while the verbs that actually move money stay blocked below.
+    """
+    body = _valid_body(
+        recommended_actions=[
+            {"action": action, "execution": "HUMAN_ONLY", "rationale_evidence_ids": ["evd_det_one"]}
+        ]
+    )
+    suggestion = _service(FakeClient(body)).suggest_for_incident(_incident(), decline_profile=DECLINE_PROFILE)
+
+    assert suggestion.status == "SUGGESTED"
+    assert [item.action for item in suggestion.recommended_actions] == [action]
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "Authorize the pending attempts once the issuer recovers.",
+        "Authorise a manual capture for the affected payments.",
+    ],
+)
+def test_authorizing_a_payment_is_still_rejected(action):
+    body = _valid_body(
+        recommended_actions=[
+            {"action": action, "execution": "HUMAN_ONLY", "rationale_evidence_ids": ["evd_det_one"]}
+        ]
+    )
+    suggestion = _service(FakeClient(body)).suggest_for_incident(_incident(), decline_profile=DECLINE_PROFILE)
+
+    assert suggestion.status == "UNAVAILABLE"
+    assert any("investigation steps" in item for item in suggestion.limitations)

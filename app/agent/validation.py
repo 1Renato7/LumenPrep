@@ -45,12 +45,20 @@ ENGINE_OWNED_KEYS = frozenset(
 )
 
 # Verbs that move money or traffic.  This challenge diagnoses; it never remediates.
+#
+# Only verb forms belong here.  ``authorization`` and ``authorisation`` were
+# removed because in payments they are the ordinary nouns of the thing being
+# investigated -- "authorization rate", "authorization logs", "authorization
+# response" -- so they rejected purely investigative steps and cost the whole
+# suggestion.  The verbs ``authorize``/``authorise`` still block any attempt to
+# act.  ``charge`` and ``capture`` stay in their verb *and* noun forms: they are
+# rarer as nouns here and the conservative side of that trade is the safe one.
 FINANCIAL_ACTION_PATTERN = re.compile(
     r"\b("
     r"retry|retries|retrying|reroute|re-route|rerouting|refund|refunds|refunding|"
     r"capture|captures|capturing|chargeback|void|voiding|settle|settling|"
     r"cancel|cancels|cancelling|canceling|cancellation|"
-    r"authorize|authorise|authorization|authorisation|"
+    r"authorize|authorise|"
     r"charge|charges|charging|failover|fail-over|"
     r"switch traffic|shift traffic|disable the provider|execute the payment|process the payment"
     r")\b",
