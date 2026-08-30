@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "transaction_id": "txn_no_incident_001",
+  "status": "NO_INCIDENT",
+  "incidents": [],
+  "rejected_incident_ids": [],
+  "limitations": [
+    "No related Incident with authorized evidence was resolved for this transaction."
+  ]
+}

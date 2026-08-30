@@ -177,6 +177,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | CTR-TXN-001 v1 | FROZEN / IMPLEMENTED ON MAIN | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | endpoints, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
 | CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome e classificação | stale/unknown explícitos | worker, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
 | CTR-API-001 v3 | FROZEN / IMPLEMENTED ON MAIN | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | endpoints e OpenAPI em `origin/main@103073b`; CORS/deploy pendentes |
+| CTR-TDI-001 v1 | IMPLEMENTED / READY FOR REVIEW | API → WEB | detalhe grounded de uma transação e seus Incidents autorizados | `404` para transação inexistente; `NO_INCIDENT` e `PARTIAL` explícitos | schema, fixture, OpenAPI e testes HTTP na branch `codex/integrate-grounded-transactions` |
 | CTR-SCN-001 v2 | INTERNAL MIGRATION PENDING | DATA/HARNESS → DATA | injeção e ground truth apenas para teste | nunca exposto na UI pública | scenario draft `cc24c7a`; código atual será adaptado pelo harness |
 | CTR-EVT-001 v1 | FROZEN | DATA/TXN → ING | canonical payment attempt event | quarantine/dedupe/watermark | schema existente |
 | CTR-AGG-001 v1 | FROZEN | AGG → DET/RCA | métricas calculadas | `INSUFFICIENT_VOLUME` | schema existente |
@@ -196,6 +197,8 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 - Sample generation devolve somente TransactionInput, usa catálogo vigente e retorna a seed efetiva; gerar não persiste nem processa até `Submit batch`.
 - Outcome determinístico precede classificação; LLM não decide sucesso/falha nem calcula métricas.
 - RAG recebe somente Incident já derivado e não é chamado por transação individual.
+- `GET /v1/incidents` sempre devolve uma lista homogênea de `Incident`; quando filtrada por `transaction_id`, a lista só contém Incidents que passam por ID relacionado, evidência de classificação e `correlation_id` compatível.
+- `GET /v1/transactions/{transaction_id}/incidents` é o único detalhe grounded público: devolve `RESOLVED`, `PARTIAL` ou `NO_INCIDENT`, evidência autorizada, Incident, memória, ExplanationBundle e limitações sem promover precedente a causa atual.
 - `root_cause.alternatives` é uma lista ordenada por confiança decrescente; cada item é hipótese, não causa atual, e não altera `root_cause.status`.
 - `recommendation_class` só classifica a recomendação humana (`INVESTIGATE`, `MONITOR` ou `ESCALATE`); `execution` permanece obrigatoriamente `HUMAN_ONLY`.
 - Incidentes são ordenados por `impact.amount_minor` apenas dentro do bucket da mesma `currency`; sem FX versionado não há comparação global entre moedas.

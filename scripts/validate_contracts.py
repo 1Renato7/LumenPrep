@@ -44,6 +44,7 @@ PAIRS: dict[str, list[str]] = {
         "transaction-succeeded.json",
         "transaction-failed.json",
     ],
+    "transaction-incident-detail.schema.json": ["transaction-incident-detail-no-incident.json"],
 }
 
 

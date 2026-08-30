@@ -46,6 +46,7 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 
 - Validar que todo `related_incident_id` exposto no transaction detail resolve para Incident existente e que seus `evidence_ids` pertencem ao conjunto autorizado.
 - Produzir resumo curto para o detalhe sem nova chamada LLM por transação; reutilizar ExplanationBundle do Incident ou template determinístico.
+- Publicar o detalhe somente em `GET /v1/transactions/{transaction_id}/incidents` sob `CTR-TDI-001 v1`; a lista de Incidents permanece homogênea e o endpoint explicita `RESOLVED`, `PARTIAL` ou `NO_INCIDENT`.
 - **Teste:** no incident, one incident, multiple incidents, missing evidence, Neo4j down, model down e cross-transaction leakage.
 - **Bloqueia live:** `TASK-UI-004`; depende do link criado por Rogério.
 

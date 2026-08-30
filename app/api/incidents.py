@@ -14,7 +14,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.config import settings
-from app.explanation import GroundedExplainer, resolve_transaction_grounding_from_api_responses
+from app.explanation import (
+    GroundedExplainer,
+    TransactionGrounding,
+    resolve_transaction_grounding_from_api_responses,
+)
 from app.ingestion.storage import transaction_record_for_grounding
 from app.memory import (
     Incident,
@@ -163,22 +167,17 @@ def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], ex
     return {"incident": serialized_incident, "memory": memory, "explanation": explanation}
 
 
-@router.get("/incidents")
-def list_incidents(transaction_id: str | None = Query(default=None, min_length=1)) -> list[dict[str, Any]]:
-    """List records; transaction filtering exposes only evidence-authorized Incidents."""
-    records = _fixture_records()
-    if transaction_id is None:
-        return list(records.values())
-
+def _grounding_for_transaction(
+    transaction_id: str,
+) -> tuple[dict[str, dict[str, Any]], TransactionGrounding] | None:
+    """Build candidate detail responses, then let the trace resolver authorize them."""
     transaction_record = transaction_record_for_grounding(transaction_id)
     if transaction_record is None:
-        # An unknown transaction and one without a correlated Incident both have no
-        # authorized Incident to expose.  The public collection contract therefore
-        # remains an empty list instead of manufacturing an error or a record.
-        return []
+        return None
 
     classification = transaction_record.get("classification")
     related_ids = classification.get("related_incident_ids", []) if isinstance(classification, dict) else []
+    records = _fixture_records()
     candidate_responses: dict[str, dict[str, Any]] = {}
     for incident_id in related_ids:
         if not isinstance(incident_id, str):
@@ -194,7 +193,62 @@ def list_incidents(transaction_id: str | None = Query(default=None, min_length=1
         [transaction_record],
         candidate_responses,
     )
-    return [candidate_responses[incident_id] for incident_id in grounding.incident_ids]
+    return candidate_responses, grounding
+
+
+def _grounding_detail_contract(
+    transaction_id: str,
+    candidate_responses: dict[str, dict[str, Any]],
+    grounding: TransactionGrounding,
+) -> dict[str, Any]:
+    """Serialize CTR-TDI-001 without changing the homogeneous incidents list."""
+    incidents = []
+    for link in grounding.incident_links:
+        response = candidate_responses[link.incident_id]
+        incidents.append(
+            {
+                "incident": response["incident"],
+                "memory": response["memory"],
+                "explanation": response["explanation"],
+                "evidence_ids": list(link.evidence_ids),
+                "limitations": list(link.limitations),
+            }
+        )
+    return {
+        "schema_version": "1.0",
+        "transaction_id": transaction_id,
+        "status": grounding.status,
+        "incidents": incidents,
+        "rejected_incident_ids": list(grounding.rejected_incident_ids),
+        "limitations": list(grounding.limitations),
+    }
+
+
+@router.get("/incidents")
+def list_incidents(transaction_id: str | None = Query(default=None, min_length=1)) -> list[dict[str, Any]]:
+    """List records; transaction filtering exposes only evidence-authorized Incidents."""
+    records = _fixture_records()
+    if transaction_id is None:
+        return list(records.values())
+
+    resolved = _grounding_for_transaction(transaction_id)
+    if resolved is None:
+        # An unknown transaction and one without a correlated Incident both have no
+        # authorized Incident to expose.  The public collection contract therefore
+        # remains an empty list instead of manufacturing an error or a record.
+        return []
+    candidate_responses, grounding = resolved
+    return [candidate_responses[incident_id]["incident"] for incident_id in grounding.incident_ids]
+
+
+@router.get("/transactions/{transaction_id}/incidents")
+def get_transaction_incidents(transaction_id: str) -> dict[str, Any]:
+    """Return CTR-TDI-001, the explicit grounded detail for one transaction."""
+    resolved = _grounding_for_transaction(transaction_id)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="TRANSACTION_NOT_FOUND")
+    candidate_responses, grounding = resolved
+    return _grounding_detail_contract(transaction_id, candidate_responses, grounding)
 
 
 @router.get("/incidents/{incident_id}")

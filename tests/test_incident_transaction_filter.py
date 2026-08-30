@@ -67,8 +67,8 @@ def test_incidents_filter_exposes_only_authorized_transaction_links():
 
     assert response.status_code == 200
     body = response.json()
-    assert [item["incident"]["incident_id"] for item in body] == ["inc_current_mastercard_001"]
-    assert all({"incident", "memory", "explanation"} <= item.keys() for item in body)
+    assert [item["incident_id"] for item in body] == ["inc_current_mastercard_001"]
+    assert all("memory" not in item and "explanation" not in item for item in body)
 
 
 def test_incidents_filter_returns_empty_list_when_transaction_has_no_incident():
@@ -102,3 +102,42 @@ def test_incidents_filter_rejects_links_without_evidence_or_matching_correlation
     wrong_correlation = client.get("/v1/incidents", params={"transaction_id": transaction_id})
     assert wrong_correlation.status_code == 200
     assert wrong_correlation.json() == []
+
+
+def test_transaction_incident_detail_returns_grounded_incident_response():
+    transaction_id = _submit_transaction()
+    _set_related_incidents(transaction_id, ["inc_current_mastercard_001"])
+
+    response = client.get(f"/v1/transactions/{transaction_id}/incidents")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schema_version"] == "1.0"
+    assert body["transaction_id"] == transaction_id
+    assert body["status"] == "RESOLVED"
+    assert [item["incident"]["incident_id"] for item in body["incidents"]] == ["inc_current_mastercard_001"]
+    assert body["incidents"][0]["evidence_ids"] == ["evt_txn_001"]
+    assert {"memory", "explanation"} <= body["incidents"][0].keys()
+
+
+def test_transaction_incident_detail_reports_no_incident_and_rejections():
+    transaction_id = _submit_transaction()
+    _set_related_incidents(
+        transaction_id,
+        ["inc_current_mastercard_001"],
+        evidence_ids=[],
+    )
+
+    response = client.get(f"/v1/transactions/{transaction_id}/incidents")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "NO_INCIDENT"
+    assert response.json()["incidents"] == []
+    assert response.json()["rejected_incident_ids"] == ["inc_current_mastercard_001"]
+
+
+def test_transaction_incident_detail_returns_404_for_unknown_transaction():
+    response = client.get("/v1/transactions/txn_unknown/incidents")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "TRANSACTION_NOT_FOUND"

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/transaction-incident-detail.schema.json",
+  "title": "CTR-TDI-001 Transaction Incident Detail v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "transaction_id", "status", "incidents", "rejected_incident_ids", "limitations"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "transaction_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["RESOLVED", "PARTIAL", "NO_INCIDENT"]},
+    "incidents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["incident", "memory", "explanation", "evidence_ids", "limitations"],
+        "properties": {
+          "incident": {"$ref": "incident.schema.json"},
+          "memory": {"$ref": "similar-incidents.schema.json"},
+          "explanation": {"$ref": "explanation-bundle.schema.json"},
+          "evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "limitations": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "rejected_incident_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "NO_INCIDENT"}}}, "then": {"properties": {"incidents": {"maxItems": 0}}}},
+    {"if": {"properties": {"status": {"const": "RESOLVED"}}}, "then": {"properties": {"incidents": {"minItems": 1}}}}
+  ]
+}

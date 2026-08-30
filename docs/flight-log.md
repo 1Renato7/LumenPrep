@@ -2314,6 +2314,31 @@ relaxar a regra.
   política do navegador local para `127.0.0.1`; os testes HTTP automatizados
   cobrem o endpoint.
 
+### FL-20260829-ALTOE-006 — Separar lista de Incidents do detalhe grounded da transação
+
+- **Timestamp:** 2026-08-29T22:20:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Gabriel Altoé
+- **Contexto:** `GET /v1/incidents` passou a devolver objetos diferentes quando
+  recebia `transaction_id`, o que tornava o contrato ambíguo para o cliente
+  Next.js e para geração de tipos.
+- **Decisão:** manter a lista sempre homogênea e publicar o detalhe em
+  `GET /v1/transactions/{transaction_id}/incidents` (`CTR-TDI-001 v1`). A nova
+  resposta expõe estado, links autorizados, Incident, memória, ExplanationBundle
+  e limitações; transação conhecida sem vínculo retorna `NO_INCIDENT`, e uma
+  inexistente retorna `404`.
+- **Trade-off:** há uma rota e um schema a mais, mas nenhum consumidor precisa
+  inferir a forma da resposta pelo parâmetro de consulta.
+- **Guardrails:** a associação requer `related_incident_ids`, evidência de
+  classificação e `correlation_id` compatível; nenhum LLM é chamado por item e
+  precedente histórico não altera a causa atual.
+- **Validação concluída:** schema/fixture/OpenAPI, testes HTTP para
+  `RESOLVED`, `NO_INCIDENT`, correlação/evidência inválida e `404`; `112`
+  testes passaram e `scripts/validate_contracts.py` retornou `OK`.
+- **Gate visual:** bloqueado pela política do navegador local nesta máquina;
+  o endpoint foi coberto por testes HTTP e continua pendente de aceite visual
+  no ambiente de integração.
+
 ## Rogério
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->

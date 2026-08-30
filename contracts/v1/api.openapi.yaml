@@ -102,6 +102,18 @@ paths:
             application/json:
               schema: {$ref: "transaction-record.schema.json"}
         "404": {description: TRANSACTION_NOT_FOUND}
+  /transactions/{transaction_id}/incidents:
+    get:
+      operationId: getTransactionIncidents
+      parameters:
+        - {name: transaction_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Grounded Incident detail for one known transaction; NO_INCIDENT and PARTIAL are explicit states.
+          content:
+            application/json:
+              schema: {$ref: "transaction-incident-detail.schema.json"}
+        "404": {description: TRANSACTION_NOT_FOUND}
   /metrics/current:
     get:
       operationId: getCurrentMetrics
@@ -111,7 +123,7 @@ paths:
     get:
       operationId: listIncidents
       parameters:
-        - {name: transaction_id, in: query, required: false, schema: {type: string, minLength: 1}, description: Restrict results to Incident IDs authored on the transaction classification.}
+        - {name: transaction_id, in: query, required: false, schema: {type: string, minLength: 1}, description: "Restrict the homogeneous Incident list to evidence-authorized IDs from the transaction classification. Use /transactions/{transaction_id}/incidents for memory and explanation detail."}
       responses:
         "200": {description: Incident list}
   /incidents/{incident_id}:
