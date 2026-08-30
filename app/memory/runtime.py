@@ -19,6 +19,7 @@ class Neo4jSettings:
     user: str
     password: str
     database: str = "neo4j"
+    include_evaluation: bool = False
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> "Neo4jSettings":
@@ -31,6 +32,7 @@ class Neo4jSettings:
             user=values.get("NEO4J_USER", "neo4j"),
             password=password,
             database=values.get("NEO4J_DATABASE", "neo4j"),
+            include_evaluation=values.get("GRAPHRAG_EVALUATION_MODE", "false").lower() == "true",
         )
 
 
@@ -61,7 +63,11 @@ def create_memory_runtime(
     fallback = InMemoryIncidentRepository()
     seed_mastercard_d2(fallback)
     service = IncidentMemoryService(
-        Neo4jIncidentRepository(driver, database=resolved.database),
+        Neo4jIncidentRepository(
+            driver,
+            database=resolved.database,
+            include_evaluation=resolved.include_evaluation,
+        ),
         fallback=fallback,
     )
     return MemoryRuntime(service=service, driver=driver)

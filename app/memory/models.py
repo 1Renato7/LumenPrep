@@ -67,6 +67,7 @@ class HistoricalIncident:
     confirmed_cause: str
     prior_playbook_id: str
     evidence_ids: tuple[str, ...]
+    provenance: str = "REAL_HUMAN_REVIEW"
 
 
 @dataclass(frozen=True)

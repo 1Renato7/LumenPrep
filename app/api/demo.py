@@ -13,6 +13,9 @@ from app.config import settings
 from app.simulation import LiveStreamController, ScenarioV1Contract, load_generator_config
 from app.simulation.scenario_contract import ScenarioContractError
 from app.streaming import get_transaction_server
+from app.api.transactions import BatchRequest, TransactionInput, _create_batch
+from app.worker.transaction_worker import run_batch_to_completion
+from uuid import uuid4
 
 router = APIRouter()
 _SCENARIOS = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
@@ -68,6 +71,34 @@ def inject_scenario(scenario_id: str) -> dict[str, Any]:
         "matched_attempts": result.matched_attempts,
         "events_published": result.events_published,
     }
+
+
+@router.post("/demo/scenarios/{scenario_id}/inject-worker", status_code=202)
+def inject_scenario_through_worker(scenario_id: str) -> dict[str, Any]:
+    """Evaluation-only scenario path that exercises the public batch worker."""
+    if not settings.demo_mode:
+        raise HTTPException(status_code=403, detail="DEMO_MODE_REQUIRED")
+    payload = _load_scenario(scenario_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="SCENARIO_NOT_FOUND")
+    scenario = _scenario_contract.parse(payload)
+    provider = scenario.filters.get("provider_id", ("stripe",))[0]
+    country = scenario.filters.get("country", ("BR",))[0]
+    currency = {"BR": "BRL", "MX": "MXN", "CO": "COP"}.get(country, "BRL")
+    transactions = [
+        TransactionInput(
+            client_reference=f"scenario-worker-{scenario_id}-{index}", merchant_id="merchant_br_01",
+            occurred_at="2026-08-29T12:00:00Z",
+            provider_id=provider, issuer_bank="bank_br_a", country=country, currency=currency,
+            amount_minor=12990, payment_method_category="CARD", card_brand="MASTERCARD",
+            card_type="CREDIT", provider_connection_id=f"conn_{country.lower()}_primary", channel="WEB",
+            scenario_effects={key: float(value) for key, value in scenario.effects.items() if isinstance(value, (int, float))},
+        )
+        for index in range(50)
+    ]
+    response = _create_batch(BatchRequest(schema_version="1.0", idempotency_key=f"scenario-{uuid4().hex}", transactions=transactions))
+    run_batch_to_completion(response["batch_id"])
+    return {"status": "ACCEPTED", "scenario_id": scenario_id, "source": "transaction_worker", **response}
 
 
 class BackgroundTrafficRequest(BaseModel):

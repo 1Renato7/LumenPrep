@@ -13,10 +13,18 @@ from .models import HistoricalIncident, Incident
 class Neo4jIncidentRepository:
     """Driver adapter; callers fall back when this adapter raises or is unhealthy."""
 
-    def __init__(self, driver: Any, *, database: str = "neo4j", timeout_seconds: float = 2.0) -> None:
+    def __init__(
+        self,
+        driver: Any,
+        *,
+        database: str = "neo4j",
+        timeout_seconds: float = 2.0,
+        include_evaluation: bool = False,
+    ) -> None:
         self.driver = driver
         self.database = database
         self.timeout_seconds = timeout_seconds
+        self.include_evaluation = include_evaluation
 
     def health(self) -> bool:
         try:
@@ -37,6 +45,7 @@ class Neo4jIncidentRepository:
             "confirmed_cause": incident.confirmed_cause,
             "prior_playbook_id": incident.prior_playbook_id,
             "evidence_ids": list(incident.evidence_ids),
+            "provenance": incident.provenance,
             "providers": list(incident.scope.get("provider_id", ())),
             "countries": list(incident.scope.get("country", ())),
             "brands": list(incident.scope.get("card_brand", ())),
@@ -50,6 +59,7 @@ class Neo4jIncidentRepository:
             result = session.run(
                 _SELECT_CONFIRMED,
                 query_scope_values=query_values,
+                include_evaluation=self.include_evaluation,
                 timeout=self.timeout_seconds,
             )
             return tuple(_to_historical(record.data() if hasattr(record, "data") else dict(record)) for record in result)
@@ -74,6 +84,7 @@ def _to_historical(row: dict[str, object]) -> HistoricalIncident:
         confirmed_cause=str(row["confirmed_cause"]),
         prior_playbook_id=str(row["prior_playbook_id"]),
         evidence_ids=tuple(row["evidence_ids"]),
+        provenance=str(row.get("provenance") or "REAL_HUMAN_REVIEW"),
     )
 
 
@@ -86,7 +97,8 @@ SET incident.occurred_at = $occurred_at,
     incident.confirmation = $confirmation,
     incident.confirmed_cause = $confirmed_cause,
     incident.prior_playbook_id = $prior_playbook_id,
-    incident.evidence_ids = $evidence_ids
+    incident.evidence_ids = $evidence_ids,
+    incident.provenance = $provenance
 MERGE (cause:Cause {cause_id: $confirmed_cause})
 MERGE (incident)-[:CONFIRMED_AS]->(cause)
 MERGE (playbook:Playbook {playbook_id: $prior_playbook_id})
@@ -107,7 +119,8 @@ FOREACH (evidence_id IN $evidence_ids |
 
 _SELECT_CONFIRMED = """
 MATCH (incident:Incident)
-WHERE incident.confirmation = 'HUMAN_CONFIRMED'
+WHERE (incident.confirmation = 'HUMAN_CONFIRMED'
+       OR ($include_evaluation AND incident.confirmation = 'EVALUATION_CONFIRMED'))
   AND ($query_scope_values = [] OR any(value IN $query_scope_values WHERE value IN incident.scope_values))
 RETURN incident.incident_id AS incident_id,
        incident.occurred_at AS occurred_at,
@@ -116,7 +129,8 @@ RETURN incident.incident_id AS incident_id,
        incident.confirmation AS confirmation,
        incident.confirmed_cause AS confirmed_cause,
        incident.prior_playbook_id AS prior_playbook_id,
-       incident.evidence_ids AS evidence_ids
+       incident.evidence_ids AS evidence_ids,
+       incident.provenance AS provenance
 ORDER BY incident.occurred_at DESC, incident.incident_id ASC
 """
 

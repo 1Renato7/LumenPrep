@@ -32,7 +32,6 @@ from app.memory.seed import seed_mastercard_d2
 
 router = APIRouter()
 _FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
-
 _neo4j_driver: Any | None = None
 _neo4j_driver_failed = False
 
@@ -61,7 +60,11 @@ def _memory_repository() -> IncidentMemoryRepository | None:
     driver = _neo4j_driver_instance()
     if driver is None:
         return None
-    return Neo4jIncidentRepository(driver, database=settings.neo4j_database)
+    return Neo4jIncidentRepository(
+        driver,
+        database=settings.neo4j_database,
+        include_evaluation=settings.graphrag_evaluation_mode,
+    )
 
 
 def _fixture(name: str) -> dict[str, Any]:

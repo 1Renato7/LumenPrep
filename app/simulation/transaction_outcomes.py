@@ -62,8 +62,14 @@ def adapt_transaction(
     payload = dict(transaction)
     rng = Random(_seed(payload, seed_context or transaction_id, config.fingerprint))
     status = _status_for(payload, rng, config)
+    effects = payload.get("scenario_effects") or {}
+    if effects:
+        status = _apply_scenario_status(status, rng, effects)
     decline = _decline_for(payload, status, rng, config)
     timing = _timing_for(str(payload["provider_id"]), status, rng, config)
+    if effects.get("latency_p95_multiplier"):
+        timing["provider_latency_ms"] = round(timing["provider_latency_ms"] * effects["latency_p95_multiplier"])
+        timing["total_latency_ms"] = timing["provider_latency_ms"] + timing["orchestrator_latency_ms"]
     result, classification = _classification_for(status, decline, transaction_id)
     outcome = {
         "result": result,
@@ -116,6 +122,15 @@ def _weighted_choice(values: tuple[WeightedValue, ...], rng: Random) -> str:
         if threshold < cumulative:
             return value.identifier
     return values[-1].identifier
+
+
+def _apply_scenario_status(status: str, rng: Random, effects: Mapping[str, Any]) -> str:
+    if rng.random() < float(effects.get("timeout_rate", 0.0)):
+        return "TIMEOUT"
+    multiplier = float(effects.get("approval_rate_multiplier", 1.0))
+    if status == "SUCCEEDED" and multiplier < 1.0 and rng.random() < 1.0 - multiplier:
+        return "DECLINED"
+    return status
 
 
 def _decline_for(
