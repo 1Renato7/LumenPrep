@@ -3271,6 +3271,73 @@ Novo contrato de agregação dimensional, requisito de causa confirmada ou consu
 
 - **2026-08-29T23:39:00-03:00:** PASS: a busca validou determinismo, slice dominante, pruning por suporte, ausência de candidates, grupos de correlação mistos e parâmetros inválidos. `14` testes focados e `116` testes completos passaram; `scripts/validate_contracts.py`, `compileall` e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve rota, UI ou fluxo local observável novo; o módulo só será exposto pelo consumidor de `LUM2-55`.
 
+### FL-20260829-RENATO-008 — Ranquear alternativas sem elevar hipótese a causa suportada
+
+- **Timestamp:** 2026-08-29T23:49:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** solicitante; Codex como implementador e recorder
+- **Categoria:** data | quality | integration
+- **Escopo:** `LUM2-55` / `TASK-RCA-002`, `CMP-DET/RCA-001`, `CTR-INC-001 v1`
+- **Links:** `app/rca/beam.py`, `app/incidents/__init__.py`, `LUM2-54`, `LUM2-56`, `LUM2-35`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O beam de `LUM2-54` encontra slices com evidência quantitativa, mas não define como comparar contribuição, abrangência e especificidade nem como expressar empate sem que o consumidor confunda ranking com causalidade confirmada.
+
+#### Decisão
+
+Ranquear hipóteses com score determinístico ponderando contribuição observada, affected share e especificidade. Expor a lista ordenada como `RootCause.alternatives` de `CTR-INC-001` e manter o `RootCause` em `INCONCLUSIVE` com categoria nula: o ranking escolhe uma hipótese de investigação, mas não tem evidência independente para emitir `SUPPORTED`.
+
+#### Critérios e por que agora
+
+`LUM2-55` é a ponte entre busca e consumo de Incident. O contrato já permite alternativas ordenadas e o status inconclusivo, portanto o handoff não precisa alterar schema nem assumir que a maior anomalia é a causa real.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Promover o maior score a `SUPPORTED` | Interface aparentemente simples | confunde associação estatística com confirmação e pode acionar explicação indevida | FACT: `AnomalyCandidate` não declara causa | Rejeitada por segurança causal |
+| Retornar apenas um vencedor sem alternativas | Menos payload | esconde empates e mix shifts | FACT: `CTR-INC-001` prevê alternativas | Não satisfaz o aceite |
+| Ranking determinístico inconclusivo com alternativas | Auditável e compatível com o contrato | requer investigação humana para confirmar | TEST: fixtures cobrirão dominante, mix shift e empate | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o contrato de `RootCause` ordena alternativas por confiança e permite `INCONCLUSIVE` com categoria nula.
+- **ASSUMPTION:** contribution, cobertura relativa e profundidade do slice são sinais suficientes para priorizar investigação, não para provar causalidade.
+- **UNKNOWN:** quais evidências externas podem elevar uma hipótese a `SUPPORTED`; isso exige change control e owner de Incident.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** uma ordem estável e explicável para a demo sem ground truth.
+- **Abrimos mão de:** causa confirmada automática.
+- **Dívida/limitação:** pesos e margem de ambiguidade são heurísticos internos, sujeitos a eval posterior.
+- **Risco residual:** uma hipótese dominante pode ainda ser falsa; a serialização declara `INCONCLUSIVE` para reduzir esse risco.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** produz instância compatível com `CTR-INC-001 v1`; não altera o schema nem cria Incident.
+- **Pessoas/branches:** `LUM2-35` recebe alternativas já ordenadas; `LUM2-56` avalia o comportamento em batches mistos.
+- **Plano/Linear:** atualizar após evidência real, revisão, push na branch de Renato e integração.
+- **Testes/observabilidade:** verificar dominante, mix shift, empate e a preservação de `INCONCLUSIVE`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** resultados iguais preservam ordem; margem pequena remove vencedor único, mas conserva alternativas.
+- **Caminho feliz:** hipótese de provider dominante aparece antes das alternativas.
+- **Caso difícil/adverso:** empate e mix shift não recebem categoria suportada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** nenhuma hipótese retorna `INCONCLUSIVE` sem alternativas; nunca fabricar categoria confirmada.
+
+#### Gatilhos de revisão
+
+Disponibilidade de evidência independente, novo contrato de contribuição ou pedido para automação de decisão exige change control.
+
+#### Adendos
+
+- **2026-08-29T23:58:00-03:00:** PASS: cobertos hipótese dominante, mix shift, empate inconclusivo, entrada vazia, grupos de correlação incompatíveis e valores inválidos. `19` testes focados e `122` testes completos passaram; contratos, compilação e `git diff --check` passaram. Code review gate: PASS após validar limites numéricos de suporte/score e a preservação de `INCONCLUSIVE`. Browser acceptance não se aplica: nenhuma rota, UI ou fluxo observável foi alterado; o ranking é consumido internamente pela etapa de Incident.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._
