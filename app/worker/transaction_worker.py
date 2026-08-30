@@ -27,9 +27,30 @@ STAGE_ORDER = ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZI
 _PROGRESS_BY_STAGE = {stage: index * 20 for index, stage in enumerate(STAGE_ORDER)}
 DEFAULT_LEASE_SECONDS = 30
 
+_FAILED_CLASSIFICATIONS_BY_NORMALIZED_CODE = {
+    "ACQUIRER_ERROR": "PROVIDER_ERROR",
+    "EXCESSIVE_RETRY_BLOCKED": "PROVIDER_ERROR",
+    "ISSUER_UNAVAILABLE": "TIMEOUT",
+}
+_EVENT_DECLINE_CATEGORIES = {
+    "ISSUER_DECLINE": "ISSUER",
+    "PROVIDER_ERROR": "PROVIDER",
+    "TIMEOUT": "TECHNICAL",
+    "UNKNOWN": "UNKNOWN",
+}
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _classification_category(result: str, normalized_code: str | None) -> str:
+    """Return a coarse record category without inventing an issuer decision."""
+    if result == "SUCCEEDED":
+        return "APPROVED"
+    if result == "UNKNOWN":
+        return "UNKNOWN"
+    return _FAILED_CLASSIFICATIONS_BY_NORMALIZED_CODE.get(normalized_code or "", "ISSUER_DECLINE")
 
 
 def _generate_outcome(
@@ -61,9 +82,10 @@ def _generate_outcome(
         "observed_response_code": str(response_code),
     }
     result = resolution.outcome
+    category = _classification_category(result, resolution.normalized_code)
     classification = dict(adapted.classification)
     classification.update({
-        "category": "APPROVED" if result == "SUCCEEDED" else ("ISSUER_DECLINE" if result == "FAILED" else "UNKNOWN"),
+        "category": category,
         "reason": resolution.reason or "No unique mapping was found for this provider response code.",
         "confidence": 1.0 if resolution.lookup_status.value == "MATCH_FOUND" else 0.35,
         "refusal_resolution": payload,
@@ -75,7 +97,7 @@ def _generate_outcome(
     event["status"] = {"SUCCEEDED": "SUCCEEDED", "FAILED": "DECLINED", "UNKNOWN": "ERROR"}[result]
     event["decline"] = None if result == "SUCCEEDED" else {
         "normalized_code": outcome["normalized_decline_code"] or "UNMAPPED_DECLINE",
-        "category": "ISSUER", "retryability": "UNKNOWN", "raw_code": str(response_code),
+        "category": _EVENT_DECLINE_CATEGORIES[category], "retryability": "UNKNOWN", "raw_code": str(response_code),
         "raw_message": resolution.reason or "Unmapped provider response code",
     }
     return AdaptedTransaction(result=result, outcome=outcome, classification=classification, event=event)

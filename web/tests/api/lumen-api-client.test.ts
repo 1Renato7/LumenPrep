@@ -26,7 +26,7 @@ import {
   type LumenApiClient,
 } from "../../lib/api/client-interface";
 import { createMockLumenApiClient } from "../../lib/mocks/transaction-api-client";
-import { parseDiagnosticSuggestion, parseIncident, parseTransactionInput } from "../../lib/api/parse";
+import { parseDiagnosticSuggestion, parseIncident, parseTransactionInput, parseTransactionRecord } from "../../lib/api/parse";
 import type { HumanReviewRequest, TransactionBatchRequest, TransactionList } from "../../lib/api/types";
 
 const batchRequest: TransactionBatchRequest = {
@@ -282,6 +282,21 @@ test("unknown response properties are rejected rather than cast silently", async
   const invalidCatalog = { ...catalogFixture, unexpected: "not part of CTR-TXN-001" };
   const client = createLumenApiClient({ baseUrl: "https://api.example.test/v1", fetchImpl: async () => json(invalidCatalog) });
   await assert.rejects(client.getTransactionCatalog(), (error: unknown) => error instanceof LumenApiError && error.code === "INVALID_RESPONSE");
+});
+
+test("parses the normalized code preserved in a refusal resolution", () => {
+  const record = parseTransactionRecord({
+    ...processingFixture,
+    status: "FAILED",
+    processing: { stage: "COMPLETE", progress_percent: 100, failure_code: null },
+    outcome: { result: "FAILED", provider_response_code: "4", normalized_decline_code: "ACQUIRER_ERROR", latency_ms: 42 },
+    classification: {
+      category: "PROVIDER_ERROR", reason: "Acquirer error", confidence: 1, evidence_ids: ["evt_acquirer"], related_incident_ids: [],
+      refusal_resolution: { lookup_status: "MATCH_FOUND", provider_id: "ADYEN", issuer_bank: "NUBANK_BR", card_brand: "VISA", response_code: "4", observed_response_code: "4", outcome: "FAILED", normalized_code: "ACQUIRER_ERROR", reason: "Acquirer error", source: "ADYEN_REFUSAL_REASON", mapping_version: "2026.08.30" },
+    },
+  });
+  assert.equal(record.classification?.category, "PROVIDER_ERROR");
+  assert.equal(record.classification?.refusal_resolution?.normalized_code, "ACQUIRER_ERROR");
 });
 
 test("CTR-TDI-001 parses NO_INCIDENT and rejects invalid status invariants and duplicate IDs", async () => {

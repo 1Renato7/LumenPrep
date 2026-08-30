@@ -5013,3 +5013,69 @@ Indisponibilidade do modelo, custo/latência incompatível, falha de guardrail o
 - **Code Review Gate:** PASS. Foram revisados `Settings`, defaults do cliente e request Responses; não há alteração de schema, endpoint, permissão, retry ou consumidor. Fixtures Terra permanecem históricas.
 - **Browser acceptance:** NOT RUN. Não há UI/rota alterada e a materialização do novo `model_version` exige chave; a tentativa de conectar o navegador local expirou antes de abrir uma aba.
 - **Integration Contract Guardian (INTEGRATION):** READY WITH WARNINGS. O merge com `origin/main@301148f` preservou `FL-20260830-ROGERIO-030` e esta entrada, sem alterar contrato; o único checkpoint pendente é o smoke externo.
+
+### FL-20260830-TEAM-041 — Classificar falhas pelo código resolvido, não pelo status genérico
+
+- **Timestamp:** 2026-08-30T07:55:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** payments | data | contract | quality
+- **Escopo:** `DEC-040`, `CTR-RFC-001 v1`, `CTR-TXL-001 v1`, worker, evento canônico e parser web
+- **Links:** `app/worker/transaction_worker.py`; `contracts/v1/transaction-record.schema.json`; `tests/test_refusal_code_flow.py`
+- **Supersedes / superseded by:** não aplicável; evita reutilizar o ID remoto `FL-20260830-TEAM-039`.
+
+#### Contexto e pergunta
+
+O worker marcava todo resultado `FAILED` como recusa do emissor, embora o catálogo contenha erros do adquirente e indisponibilidade técnica. A integração com `origin/main` também revelou que `TEAM-039` e `DEC-036` já tinham outro significado remoto.
+
+#### Decisão
+
+Mapear somente os significados não-emissor já explícitos no catálogo: erro de adquirente para `PROVIDER_ERROR`, indisponibilidade do emissor para `TIMEOUT`, demais recusas conhecidas para `ISSUER_DECLINE`. Registrar a decisão como `DEC-040` e `FL-20260830-TEAM-041`, preservando a história remota sem IDs duplicados.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Manter todo `FAILED` como emissor | nenhum trabalho adicional | atribuição factual falsa | rejeitada |
+| Criar taxonomia pública nova | maior detalhe | amplia contrato sem necessidade | rejeitada |
+| Usar categorias existentes a partir do código | correção compatível e auditável | códigos futuros exigem revisão explícita | escolhida |
+
+#### Evidência, trade-offs e validação
+
+- **FACT:** `ACQUIRER_ERROR`, `EXCESSIVE_RETRY_BLOCKED` e `ISSUER_UNAVAILABLE` estão no catálogo versionado.
+- **TEST:** testes focados, contrato e parser serão executados antes da publicação.
+- **Ganhamos:** logs, eventos e investigação deixam de atribuir erro do PSP ao emissor.
+- **Abrimos mão de:** uma categoria pública específica para cada indisponibilidade.
+- **Risco residual:** código novo não presente no mapeamento conserva o fallback atual até revisão deliberada.
+
+#### Consequências e gatilhos de revisão
+
+Não há retry, ação financeira ou mudança de outcome. Novo código não-emissor, divergência entre evento e record, ou mudança de semântica de PSP exige ampliar mapeamento e testes.
+
+### FL-20260830-TEAM-042 — Priorizar o fluxo auditável na apresentação da arquitetura
+
+- **Timestamp:** 2026-08-30T07:55:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** UX | demo | documentation
+- **Escopo:** `docs/architecture-presentation.md` e PDF de arquitetura
+- **Links:** `docs/architecture-presentation.md`; `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O mapa detalhado de módulos era fiel, mas pouco legível em apresentação. Era necessário explicar a arquitetura sem esconder a persistência, a autoridade do núcleo ou o limite do agente.
+
+#### Decisão
+
+Usar camadas para experiência web, FastAPI, núcleo determinístico, dados e contexto pós-Incident. O desenho deixa explícito que o agente é `HUMAN_ONLY` e não altera fatos ou causas.
+
+#### Evidência, trade-offs e validação
+
+- **FACT:** a sequência visual segue o worker, DuckDB e agente existentes.
+- **TEST:** renderização de uma página e inspeção visual pendentes antes do push.
+- **Ganhamos:** menos cruzamentos e leitura de relance.
+- **Abrimos mão de:** inventário de cada arquivo no mesmo desenho.
+- **Gatilho:** mudança de contrato, autoridade do agente ou repositório exige atualizar o diagrama.

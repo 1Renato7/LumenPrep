@@ -30,6 +30,8 @@ def test_mapped_response_code_is_persistable_transaction_fact():
     assert adapted.classification["refusal_resolution"]["lookup_status"] == "MATCH_FOUND"
     assert adapted.classification["refusal_resolution"]["normalized_code"] == "INSUFFICIENT_FUNDS"
     assert adapted.outcome["normalized_decline_code"] == "INSUFFICIENT_FUNDS"
+    assert adapted.classification["category"] == "ISSUER_DECLINE"
+    assert adapted.event["decline"]["category"] == "ISSUER"
     assert adapted.event["decline"]["raw_message"] == "Insufficient funds"
 
 
@@ -50,6 +52,26 @@ def test_stripe_lowercase_code_resolves_and_preserves_the_raw_provider_value():
     assert adapted.outcome["normalized_decline_code"] == "DO_NOT_HONOR"
     assert adapted.event["decline"]["raw_code"] == "do_not_honor"
     assert adapted.classification["refusal_resolution"]["response_code"] == "DO_NOT_HONOR"
+
+
+def test_acquirer_error_is_not_misclassified_as_an_issuer_decline():
+    get_connection()
+    adapted = _generate_outcome("txn_refusal_acquirer", _input("4"), "corr_refusal")
+
+    assert adapted.result == "FAILED"
+    assert adapted.outcome["normalized_decline_code"] == "ACQUIRER_ERROR"
+    assert adapted.classification["category"] == "PROVIDER_ERROR"
+    assert adapted.event["decline"]["category"] == "PROVIDER"
+
+
+def test_issuer_unavailability_is_a_technical_timeout_not_an_issuer_decline():
+    get_connection()
+    adapted = _generate_outcome("txn_refusal_unavailable", _input("91"), "corr_refusal")
+
+    assert adapted.result == "FAILED"
+    assert adapted.outcome["normalized_decline_code"] == "ISSUER_UNAVAILABLE"
+    assert adapted.classification["category"] == "TIMEOUT"
+    assert adapted.event["decline"]["category"] == "TECHNICAL"
 
 
 def test_refusal_summary_is_explicit_agent_evidence_not_database_access():

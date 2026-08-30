@@ -657,6 +657,14 @@ Sob o lock compartilhado do DuckDB, uma única transação remove os fatos sint�
 | --- | --- | --- | --- | --- |
 | `CTR-AGT-RUN-001 v1` | IMPLEMENTED | Railway Variables / `Settings` → `DiagnosticAgentService` → OpenAI Responses API | `OPENAI_API_KEY` secreto; `OPENAI_MODEL=gpt-5.6-sol`; `OPENAI_REASONING_EFFORT=medium`. Sem chave: template. Falha/timeout: `UNAVAILABLE`, sem retry. | Rogério; teste unitário dos defaults; smoke Railway sintético pendente. |
 
+### DEC-040 — classificar falhas pela semântica do código resolvido
+
+**Estado:** `IMPLEMENTED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-041`.
+
+`FAILED` registra apenas que a tentativa não concluiu; não autoriza atribuir a decisão ao emissor. No worker, `ACQUIRER_ERROR` e `EXCESSIVE_RETRY_BLOCKED` viram `PROVIDER_ERROR`, `ISSUER_UNAVAILABLE` vira `TIMEOUT` e as recusas conhecidas restantes preservam `ISSUER_DECLINE`. O evento canônico acompanha `PROVIDER`, `TECHNICAL` ou `ISSUER`; `UNKNOWN` permanece explícito.
+
+`RefusalCodeResolution` passa a exigir `normalized_code` e `observed_response_code` no `TransactionRecord`, schema e parser web. Não há mudança de outcome, retry, pagamento, endpoint nem schema de topo; o catálogo DuckDB continua a autoridade.
+
 ## 20. Recuperação de demo — janela de sete horas
 
 ### DEC-027 — priorizar prova ao vivo do mecanismo causal sobre integrações amplas

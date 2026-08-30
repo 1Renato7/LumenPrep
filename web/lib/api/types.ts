@@ -150,10 +150,11 @@ export interface TransactionClassification {
 export interface RefusalCodeResolution {
   lookup_status: "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS";
   provider_id: string;
-  issuer_bank: string;
-  card_brand: string;
-  response_code: string;
-  outcome: OutcomeResult;
+    issuer_bank: string;
+    card_brand: string;
+    response_code: string;
+    observed_response_code: string;
+    outcome: OutcomeResult;
   normalized_code: string | null;
   reason: string | null;
   source: string | null;
