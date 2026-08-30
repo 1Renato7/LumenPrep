@@ -35,7 +35,7 @@ export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [form, setForm] = useState(createInitialFormState);
   const [issues, setIssues] = useState<FieldIssue[]>([]);
-  const [sampleCount, setSampleCount] = useState("60");
+  const [sampleCount, setSampleCount] = useState("1");
   const [sampleError, setSampleError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -103,7 +103,7 @@ export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
   const generateSamples = async () => {
     if (!api) return;
     const count = Number(sampleCount);
-    if (!Number.isInteger(count) || count < 60 || count > 100) { setSampleError("Sample quantity must be a whole number between 60 and 100."); return; }
+    if (!Number.isInteger(count) || count < 1 || count > 100) { setSampleError("Sample quantity must be a whole number between 1 and 100."); return; }
     setSampleError(null); setIsGenerating(true);
     try { const response = await api.generateTransactionSamples({ schema_version: "1.0", count }); setForm((current) => replaceRowsWithSamples(current, response)); setIssues([]); resetIdempotency(); }
     catch (error) { setSampleError(errorMessage(error, "Sample transactions could not be generated.")); }
@@ -159,10 +159,10 @@ export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
         </header>
 
         <section className={styles.panel} aria-labelledby="sample-title">
-          <div className={styles.panelHeader}><div><h2 className={styles.sectionTitle} id="sample-title">Generate incident samples</h2><p className={styles.sectionHint}>Creates four healthy baseline windows followed by a concentrated issuer-unavailable decline, so the deterministic engine can detect an Incident after submission.</p></div></div>
+          <div className={styles.panelHeader}><div><h2 className={styles.sectionTitle} id="sample-title">Generate samples</h2><p className={styles.sectionHint}>Creates normal editable traffic below 60 transactions. With 60–100, it creates a baseline plus a concentrated decline so the deterministic engine can detect an Incident after submission.</p></div></div>
           <div className={styles.generatorGrid}>
-            <TextInput id="sample-count" label="Quantity (60–100)" type="number" min="60" max="100" value={sampleCount} onChange={setSampleCount} />
-            <button className={`${styles.button} ${styles.secondaryButton}`} type="button" onClick={() => void generateSamples()} disabled={isGenerating}>{isGenerating ? "Generating incident samples…" : "Generate incident samples"}</button>
+            <TextInput id="sample-count" label="Quantity (1–100)" type="number" min="1" max="100" value={sampleCount} onChange={setSampleCount} />
+            <button className={`${styles.button} ${styles.secondaryButton}`} type="button" onClick={() => void generateSamples()} disabled={isGenerating}>{isGenerating ? "Generating samples…" : "Generate samples"}</button>
           </div>
           {sampleError ? <p className={styles.errorPanel} role="alert">{sampleError}</p> : null}
         </section>

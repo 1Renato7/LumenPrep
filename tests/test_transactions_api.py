@@ -43,12 +43,13 @@ def test_catalog_and_seeded_samples_are_public_facts_only():
     assert {"code": "0", "reason": "(none)"} in catalog.json()["provider_response_options"]
     assert len(catalog.json()["provider_response_options"]) == 42
 
-    first = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 60, "seed": 42})
-    second = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 60, "seed": 42})
+    first = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 3, "seed": 42})
+    second = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 3, "seed": 42})
     assert first.status_code == second.status_code == 200
     assert first.json()["transactions"] == second.json()["transactions"]
     assert "outcome" not in first.json()["transactions"][0]
     assert "status" not in first.json()["transactions"][0]
+    assert first.json()["transactions"][0]["provider_response_code"] is None
 
 
 def test_samples_build_a_detectable_incident_dataset(monkeypatch):

@@ -79,7 +79,7 @@ class SampleDefaults(_StrictModel):
 
 class SampleRequest(_StrictModel):
     schema_version: Literal["1.0"]
-    count: int = Field(ge=MIN_INCIDENT_SAMPLE_SIZE, le=MAX_BATCH_SIZE)
+    count: int = Field(ge=1, le=MAX_BATCH_SIZE)
     seed: int | None = Field(default=None, ge=0)
     defaults: SampleDefaults | None = None
 
@@ -152,6 +152,9 @@ def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, An
     defaults = _validate_sample_defaults(request.defaults)
     seed = request.seed if request.seed is not None else _SYSTEM_RANDOM.randrange(0, 2**31)
     random = Random(seed)
+    if request.count < MIN_INCIDENT_SAMPLE_SIZE:
+        return seed, _normal_sample_transactions(request.count, defaults, random)
+
     transactions: list[dict[str, Any]] = []
     merchant_id = defaults.merchant_id or "merchant_br_01"
     country = defaults.country or "BR"
@@ -182,6 +185,29 @@ def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, An
             }
         )
     return seed, transactions
+
+
+def _normal_sample_transactions(count: int, defaults: SampleDefaults, random: Random) -> list[dict[str, Any]]:
+    """Return small, editable traffic samples without implying an Incident."""
+    return [
+        {
+            "client_reference": f"sample-{index + 1}-{random.randrange(1_000_000, 10_000_000)}",
+            "occurred_at": _iso(datetime(2026, 1, 1) + timedelta(seconds=random.randrange(31_536_000))),
+            "merchant_id": defaults.merchant_id or random.choice(_CATALOG["merchants"]),
+            "provider_id": random.choice(_CATALOG["providers"]),
+            "issuer_bank": random.choice(_CATALOG["issuer_banks"]),
+            "country": defaults.country or random.choice(_CATALOG["countries"]),
+            "currency": defaults.currency or random.choice(_CATALOG["currencies"]),
+            "amount_minor": random.randint(1, 500_000),
+            "payment_method_category": random.choice(_CATALOG["payment_method_categories"]),
+            "card_brand": random.choice(_CATALOG["card_brands"]),
+            "card_type": random.choice(_CATALOG["card_types"]),
+            "provider_connection_id": None,
+            "provider_response_code": None,
+            "channel": random.choice(("WEB", "MOBILE", "POS", "API")),
+        }
+        for index in range(count)
+    ]
 
 
 def _fingerprint(request: BatchRequest) -> str:
