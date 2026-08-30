@@ -57,7 +57,7 @@ def create_memory_runtime(
             raise RuntimeError("Install the optional Neo4j driver: pip install -r requirements-neo4j.txt") from error
         driver_factory = GraphDatabase.driver
 
-    driver = driver_factory(resolved.uri, (resolved.user, resolved.password))
+    driver = driver_factory(resolved.uri, auth=(resolved.user, resolved.password))
     fallback = InMemoryIncidentRepository()
     seed_mastercard_d2(fallback)
     service = IncidentMemoryService(

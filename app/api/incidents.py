@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.explanation import GroundedExplainer
-from app.memory import Incident, IncidentMemoryService, InMemoryIncidentRepository
+from app.memory import Incident, IncidentMemoryService, InMemoryIncidentRepository, create_memory_runtime
 from app.memory.seed import seed_mastercard_d2
 
 router = APIRouter()
@@ -90,6 +90,26 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
     }
 
 
+def _fallback_memory_service(incident: Incident) -> IncidentMemoryService:
+    """Keep the fixture-backed API demonstrable when Neo4j is not configured."""
+    fallback = InMemoryIncidentRepository()
+    seed_mastercard_d2(fallback, now=incident.detected_at)
+    return IncidentMemoryService(InMemoryIncidentRepository(available=False), fallback=fallback)
+
+
+def _retrieve_memory(incident: Incident):
+    """Prefer the configured graph runtime without changing the HTTP contract."""
+    try:
+        runtime = create_memory_runtime()
+    except (OSError, RuntimeError, ValueError):
+        return _fallback_memory_service(incident).retrieve(incident)
+
+    try:
+        return runtime.service.retrieve(incident)
+    finally:
+        runtime.close()
+
+
 def _memory_and_explanation(incident_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     incident_id = str(incident_payload["incident_id"])
     if incident_id not in _REAL_ENRICHMENT_INCIDENT_IDS:
@@ -98,9 +118,7 @@ def _memory_and_explanation(incident_payload: dict[str, Any]) -> tuple[dict[str,
         raise KeyError(incident_id)
 
     incident = Incident.from_contract(incident_payload)
-    repository = InMemoryIncidentRepository()
-    seed_mastercard_d2(repository, now=incident.detected_at)
-    memory = IncidentMemoryService(repository).retrieve(incident)
+    memory = _retrieve_memory(incident)
     explanation = GroundedExplainer(()).explain(incident, memory)
     return memory.to_contract(), explanation.to_contract()
 

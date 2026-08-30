@@ -33,7 +33,7 @@ class MemoryRuntimeTest(unittest.TestCase):
         driver = FakeDriver()
         captured: dict[str, object] = {}
 
-        def factory(uri, auth):
+        def factory(uri, *, auth):
             captured.update(uri=uri, auth=auth)
             return driver
 

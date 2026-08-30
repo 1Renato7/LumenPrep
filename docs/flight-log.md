@@ -1216,6 +1216,100 @@ o bootstrap Python exige revisar este runbook.
   estados esperados. Os cinco evals automatizados continuam passando. Holdout
   independente, latência sob carga e rerank continuam `NOT RUN`.
 
+### FL-20260829-ALTOE-006 — Conectar a API à memória Neo4j com fallback explícito
+
+- **Timestamp:** 2026-08-29T19:38:23-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Altoé
+- **Participantes:** Altoé; Codex; Rogério como owner de `CTR-API-001`
+- **Categoria:** architecture | Git/integration | quality
+- **Escopo:** LUM2-39, `app/api/incidents.py`, `CMP-API-001` → `CMP-MEM-001`
+- **Links:** CTR-API-001 v1, CTR-MEM-001 v1.1, LUM2-15, LUM2-39, PR #1
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O endpoint de incidente consumia somente uma memória em RAM, embora o runtime
+Neo4j e seu fallback já existissem na branch. Era necessário avançar a
+integração sem esperar o RCA real e sem trocar a fonte fixture de `Incident`.
+
+#### Decisão
+
+Para os incidentes enriquecidos existentes, a API tentará construir o runtime
+Neo4j de Altoé; se a configuração, o driver ou a conexão local não estiverem
+disponíveis, usará uma memória em RAM explicitamente marcada como fallback,
+semeada no horário do incidente consultado. O runtime aberto pela request é
+sempre fechado. A resposta HTTP e os fixtures de incidentes não mudam.
+
+#### Critérios e por que agora
+
+O handoff `CTR-MEM-001 v1.1` já é estável e a API precisa provar sua fronteira
+real antes da entrega do RCA. Fallback verificável evita bloquear a demo em
+ambientes sem Neo4j, sem ocultar o estado no `retrieval_trace`.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter somente fixture em RAM | Menor diff | Neo4j permanece desconectado da API | FACT: o runtime Neo4j já existe | Não prova o handoff real |
+| Exigir Neo4j em toda request | Exercita sempre o grafo | Bloqueia dev/demo sem configuração | FACT: `NEO4J_PASSWORD` é opcional no ambiente da API | Incompatível com o fallback planejado |
+| Preferir Neo4j e cair para memória marcada | Integração real e demo resiliente | Cria caminho operacional adicional para testar | TEST: pendente nesta entrada | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `CTR-MEM-001 v1.1` possui `fallback_used`; `CTR-API-001 v1` mantém
+  memória separada de `root_cause`.
+- **TEST:** NOT RUN — testes unitários/API e smoke do grafo serão executados
+  após a implementação.
+- **ASSUMPTION:** o RCA real substituirá somente `_fixture_records()`, pois a
+  fronteira aceita `Incident.from_contract`.
+- **UNKNOWN:** o lifecycle ideal de driver no deploy; a abertura por request é
+  segura para a fatia atual, mas pode exigir pool no ciclo de vida da app.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** integração progressiva e estado de fallback auditável.
+- **Abrimos mão de:** reutilizar uma conexão global nesta primeira fatia.
+- **Dívida/limitação:** cada request configurada constrói/fecha um driver.
+- **Risco residual:** seed demonstrativo pode não representar o histórico
+  produtivo; o trace e a evidência distinguem o caminho usado.
+
+#### Consequências e propagação
+
+- **Produto/demo:** o mesmo endpoint funciona com Neo4j local ou sem ele.
+- **Arquitetura/contratos:** nenhum schema ou contrato muda.
+- **Pessoas/branches:** Rogério conserva a fonte fixture até RCA; Altoé mantém
+  runtime e fallback compatíveis.
+- **Plano/Linear:** registrar evidência em LUM2-39, sem marcar a tarefa inteira
+  concluída enquanto RCA permanecer pendente.
+- **Testes/observabilidade:** cobrir runtime configurado, ausência de runtime,
+  fechamento do driver e resposta HTTP.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** a API retorna `MATCH_FOUND` e `fallback_used=true`
+  sem grafo, e consome o serviço do runtime quando ele existe.
+- **Caminho feliz:** `GET /incidents/{id}` usa o grafo configurado.
+- **Caso difícil/adverso:** driver/configuração ausente não muda a causa atual
+  nem derruba a resposta.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** memória em RAM com seed D-2 alinhado ao `detected_at` da query.
+
+#### Gatilhos de revisão
+
+Adicionar lifecycle compartilhado/pool se latência ou concorrência o exigir;
+revisar quando RCA substituir fixtures ou o histórico Neo4j passar a ser
+ingerido por incidentes reais.
+
+#### Adendos
+
+- **2026-08-29T19:38:23-03:00:** a primeira prova contra a instância Neo4j
+  local encontrou incompatibilidade real: o driver instalado aceita `auth`
+  somente como argumento nomeado, enquanto `create_memory_runtime()` o passava
+  por posição. A correção e um teste com factory keyword-only são obrigatórios
+  antes de validar a rota configurada; até então o caminho Neo4j é `FAIL` e o
+  fallback continua `PASS`.
+
 
 ## Rogério
 
