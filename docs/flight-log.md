@@ -1341,6 +1341,51 @@ Issue concluída que receba novo escopo, alteração de owner/contrato, bloqueio
 
 - **2026-08-29T19:44:45-03:00:** sincronização autorizada pelo usuário, escrita em duas passagens e auditada antes da atualização documental.
 
+### FL-20260829-TEAM-020 — Adotar sidebar e fila de atenção técnica sem fabricar Incident
+
+- **Timestamp:** 2026-08-29T20:53:42-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Categoria:** product | UX | contract
+- **Escopo:** `CMP-WEB-001`, `TASK-UI-002..006`, `CTR-TXL-001 v1`, `CTR-INC-001 v1`
+
+#### Decisão e trade-off
+
+Usar uma sidebar com `Input`, `Logs` e `Incidents` no desktop e uma barra inferior no mobile. `UNKNOWN + PIPELINE_FAILED` entra em atenção técnica, mas não recebe `incident_id`, causa ou recommendation até o backend devolver `CTR-INC-001`. A alternativa de converter todo `UNKNOWN` em Incident foi rejeitada porque fabrica causalidade; o custo aceito é explicar separadamente atenção técnica e diagnóstico confirmado.
+
+#### Evidência e validação
+
+- **FACT:** `CTR-TXL-001` permite `UNKNOWN` sem outcome/classification; `CTR-INC-001` exige diagnóstico/evidência próprios.
+- **VALIDAÇÃO:** unit/contract, lint, typecheck e build do frontend passam; browser live continua gate separado.
+
+### FL-20260829-TEAM-021 — Publicar `web/` na main como superfície compartilhada de integração
+
+- **Timestamp:** 2026-08-29T22:06:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Categoria:** integration | ownership | delivery
+- **Escopo:** `CMP-WEB-001`, `web/`, `TASK-UI-002..006`, `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`
+- **Links:** `origin/main@103073b`, `FL-20260829-TEAM-020`, `DEC-021`
+
+#### Contexto e decisão
+
+André pediu que o time visse e integrasse o frontend no repositório comum. A main já contém API/worker/fixtures transaction-first, mas não a pasta `web/`. Publicar a única pasta `web/` evita uma cópia paralela e mantém os mocks como modo explícito; não marca a interface como deployed/live.
+
+#### Alternativas e consequências
+
+| Alternativa | Resultado | Decisão |
+| --- | --- | --- |
+| Esperar Railway/Vercel | reduz risco de deploy, mas bloqueia colaboração | rejeitada por pedido explícito |
+| Criar segunda pasta de frontend | duplica código e lockfile | rejeitada |
+| Publicar `web/` sobre a main v3 | compartilhamento imediato, live acceptance pendente | escolhida |
+
+- **FACT:** a main remota possui batch/list/detail e `GET /incidents?transaction_id`; o consumidor foi alinhado e não envia `correlation_id`.
+- **VALIDAÇÃO:** build, lint, typecheck, testes e contract validation são obrigatórios antes do push; browser, Railway, CORS e Vercel continuam bloqueios de `LUM2-10..13`.
+
+#### Adendo de integração
+
+- **2026-08-29:** `code-review-gate` aprovou a publicação sem achado bloqueante no diff; `browser-acceptance-gate` permanece bloqueado pela política local de navegação para localhost. `integration-contract-guardian` classificou a promoção como `READY WITH WARNINGS` para preview compartilhado: formulário/client v3 alinhado a `transaction_id`, enquanto Logs, Detail e Incidents continuam fixture-backed até `LUM2-12`. Não declarar `LUM2-10`, `LUM2-11` ou `LUM2-12` concluídas.
+
 ## André
 
 <!-- ANDRE: faça append de novas entradas imediatamente antes da próxima seção. -->

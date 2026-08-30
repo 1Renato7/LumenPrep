@@ -2,18 +2,19 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.0.2
+- **Versão:** 2.1.0
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
-- **Change class:** `MAJOR`; muda a entrada pública, a API, o frontend final e o deployment.
+- **Change class:** `MINOR`; publica o frontend já planejado sobre a API v3 implementada, sem alterar contratos públicos.
 - **Fonte de verdade:** este arquivo; planos em `docs/plans/people/` são projeções.
 - **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
 - **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
 - **Base implementada preservada:** runtime Python 3.14.4, Docker/Railway, ingestion, aggregation, detection, simulation, incidents, memory/explanation e API já presentes na `main` em 2026-08-29; a revisão 2.0 estende essa base.
-- **Escopo desta publicação na `main`:** a especificação e coordenação públicas de `CTR-TXN/TXL/API v3` permanecem pendentes de implementação/revisão. O harness interno histórico/stream de `renato/tarefa44@602ae9d` é integrado somente como base técnica, sem promover seu endpoint ou fila local a contrato público.
+- **Escopo desta publicação na `main`:** API/worker transaction-first, schemas e fixtures v3 estão implementados; `web/` é publicado como frontend compartilhado com mocks explícitos. Railway, Vercel, CORS e acceptance live continuam pendentes.
 - **Changelog 2.0.0:** substitui o construtor público de efeitos por entrada de uma ou várias transações; métricas, outcomes, classificação e anomalias passam a ser derivados pelo backend; Streamlit vira protótipo/fallback; o gerador existente vira harness interno.
 - **Changelog 2.0.1:** registra a implementação validada de histórico/stream mediado por servidor em `renato/tarefa44@602ae9d` como evidência do harness interno. Ela não implementa nem congela `CTR-TXN/TXL/API v3`; `TASK-DATA-009 / LUM2-62` deve adaptá-la à batch API comum antes de integração funcional.
 - **Changelog 2.0.2:** integra `renato/tarefa44@602ae9d` na `main` como `CMP-HARNESS-001`; `CTR-TXN/TXL/API v3` continuam sendo a única fronteira pública planejada, e `LUM2-61/62` continuam responsáveis pelo adapter e tráfego de fundo compatíveis.
+- **Changelog 2.1.0:** publica a pasta única `web/` com shell desktop/mobile, formulário, logs, detalhes e Incidents. O formulário consome a API v3; Logs, Detail e Incidents permanecem em fixtures explícitas até o adapter live de `LUM2-12`. Não confirma deploy/live acceptance.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -57,11 +58,16 @@ O MVP vence quando uma pessoa:
 
 ## 3. Experiência pública
 
+### Shell desktop e mobile
+
+- Sidebar esquerda compacta com `Input`, `Logs` e `Incidents`; hover ou foco visível expande rótulos sem sobrepor o conteúdo.
+- Até 760 px, os mesmos destinos ficam em uma barra inferior fixa, com safe area e espaço reservado no conteúdo.
+
 ### `/transactions/new` — adicionar transações
 
 - Uma linha inicial e controles `Add transaction`, `Duplicate` e `Remove`.
 - O catálogo vem de `GET /v1/transaction-catalog`; nenhum option ID fica hardcoded.
-- `Generate sample transactions` recebe quantidade de 1 a 100 e seed opcional, chama `POST /v1/transaction-samples` e preenche linhas editáveis. A resposta nunca inclui outcome, status, métricas, causa ou ground truth.
+- `Generate sample transactions` recebe quantidade de 1 a 100, chama `POST /v1/transaction-samples` e preenche linhas editáveis. Seed continua uma capacidade opcional da API, mas não é exposta como controle público. A resposta nunca inclui outcome, status, métricas, causa ou ground truth.
 - Campos: referência opcional, timestamp opcional, merchant, provider, banco emissor, país, moeda, valor em unidade mínima, método, bandeira/tipo quando aplicáveis e conexão opcional.
 - Um `Submit batch` envia de 1 a 100 itens com `Idempotency-Key`.
 - A resposta `202` redireciona para `/transactions?batch_id=...`; erro preserva os dados digitados.
@@ -72,16 +78,18 @@ O MVP vence quando uma pessoa:
 - Filtros por todos, sucesso, falha, processando e desconhecido; paginação por cursor.
 - Polling somente enquanto houver item `PROCESSING`; a UI não inventa timers nem progresso.
 - Loading, vazio, erro e stale state têm texto, ícone e contraste; cor nunca é o único sinal.
+- Cada linha resume somente outcome, classificação, reason, confidence, evidence IDs e Incident retornados pelo backend; `FAILED` e `UNKNOWN` têm texto distinto.
 
 ### `/transactions/[transaction_id]` — detalhe
 
 - Input imutável, lifecycle, outcome do provider, motivo normalizado e evidências.
 - “Falha da transação” é diferente de `processing.failure_code`, que representa falha técnica da pipeline.
-- Incidentes correlacionados apontam para `/incidents/[incident_id]`; um item isolado pode corretamente não ter incidente.
+- Incidentes correlacionados apontam para `/incidents/[incident_id]`; o detalhe mostra a recommendation devolvida pelo Incident e um item isolado informa honestamente sua ausência.
 
 ### `/incidents` — diagnóstico agregado
 
 - Preserva o dashboard de incidentes, métricas, causa atual, memória e recomendações humanas.
+- Inclui uma fila de atenção técnica para `UNKNOWN`, sem fabricar `incident_id`, causa ou recommendation antes da correlação do backend.
 - `SUPPORTED|INCONCLUSIVE` e `MATCH_FOUND|NO_PRECEDENT|MEMORY_UNAVAILABLE` continuam eixos independentes.
 
 ## 4. Decisões materiais
@@ -94,6 +102,8 @@ O MVP vence quando uma pessoa:
 | DEC-015 | DECIDED | Entrada pública transaction-first em batch, com sample generation por quantidade/seed; analytics e classificação automáticos | cria `CTR-TXN-001`, `CTR-TXL-001` e `CTR-API-001 v3` | `FL-20260829-TEAM-015` |
 | DEC-016 | DECIDED | Next.js/Vercel consome uma única API FastAPI/Railway | Railway é data plane; CORS allowlist; sem acesso direto a stores | `FL-20260829-TEAM-016` |
 | DEC-017 | DECIDED | Progresso é persistido pelo backend; preservar DuckDB/Volume e gerador como harness interno | polling honesto, uma réplica no MVP e mínimo retrabalho; adapter permite Postgres/SSE posterior | `FL-20260829-TEAM-017` |
+| DEC-020 | DECIDED | Navegação usa três destinos e `UNKNOWN` entra na atenção técnica sem virar Incident por inferência da UI | preserva `CTR-TXL-001` e `CTR-INC-001` | `FL-20260829-TEAM-020` |
+| DEC-021 | DECIDED | Publicar `web/` na main como superfície compartilhada de integração | elimina duplicação sem alegar readiness live | `FL-20260829-TEAM-021` |
 
 ## 5. Arquitetura 2.0
 
@@ -163,9 +173,9 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 
 | ID/versão | Estado | Produtor → consumidores | Propósito | Erros/fallback | Evidência |
 | --- | --- | --- | --- | --- | --- |
-| CTR-TXN-001 v1 | FROZEN SPEC / IMPLEMENTATION PENDING | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | draft executável `cc24c7a`; TASK-TXN-API-001 publica na main |
-| CTR-TXL-001 v1 | FROZEN SPEC / IMPLEMENTATION PENDING | TXN/worker → API/WEB | record/list, lifecycle, outcome e classificação | stale/unknown explícitos | draft executável `cc24c7a`; TASK-TXN-WORKER-001 publica na main |
-| CTR-API-001 v3 | FROZEN SPEC / IMPLEMENTATION PENDING | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | OpenAPI draft `cc24c7a`; API atual da main ainda é anterior |
+| CTR-TXN-001 v1 | FROZEN / IMPLEMENTED ON MAIN | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | endpoints, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
+| CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome e classificação | stale/unknown explícitos | worker, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
+| CTR-API-001 v3 | FROZEN / IMPLEMENTED ON MAIN | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | endpoints e OpenAPI em `origin/main@103073b`; CORS/deploy pendentes |
 | CTR-SCN-001 v2 | INTERNAL MIGRATION PENDING | DATA/HARNESS → DATA | injeção e ground truth apenas para teste | nunca exposto na UI pública | scenario draft `cc24c7a`; código atual será adaptado pelo harness |
 | CTR-EVT-001 v1 | FROZEN | DATA/TXN → ING | canonical payment attempt event | quarantine/dedupe/watermark | schema existente |
 | CTR-AGG-001 v1 | FROZEN | AGG → DET/RCA | métricas calculadas | `INSUFFICIENT_VOLUME` | schema existente |
@@ -269,7 +279,7 @@ Checkpoints:
 - A incompatibilidade pública é deliberadamente versionada em `CTR-API-001 v3`; não existe adapter silencioso para endpoints `/demo/scenarios`.
 - A fatia ponta a ponta precede polimento, RAG adicional ou pitch.
 - Linear está sincronizado com a revisão 2.0; issues concluídas foram preservadas e novas necessidades receberam novos IDs.
-- **Integração da branch:** `READY TO HAND OFF`, mas não `READY TO MERGE` como produto completo. O código vindo da main ainda implementa a API/demo anterior; `TASK-TXN-API-001`, `TASK-TXN-WORKER-001` e `TASK-UI-002..006` devem eliminar essa divergência antes do merge funcional.
+- **Integração da branch:** `web/` foi publicada na main como superfície de integração. Continua `NOT READY FOR LIVE ACCEPTANCE`: a próxima fatia é conectar logs/detail/incidents ao Railway, validar CORS/Vercel e executar browser acceptance permitido antes de marcar tarefas live como concluídas.
 
 ## 14. Fontes operacionais
 

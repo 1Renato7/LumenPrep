@@ -1,20 +1,22 @@
 # Plano individual — André
 
-## Missão 2.0
+## Missão 2.1
 
-> Os contratos/fixtures executáveis usados como mocks estão na branch `codex/andre-dashboard-pitch@cc24c7a` até as tasks produtoras publicarem suas versões revisadas na `main`.
+> A pasta `web/` e os contratos/fixtures v3 estão publicados na `main` para integração compartilhada. O formulário usa o client v3; Logs, Detail e Incidents seguem fixtures explícitas até `LUM2-12`. Deploy e smoke Railway/Vercel continuam pendentes.
 
-- **Plano geral:** 2.0.0
+- **Plano geral:** 2.1.0
 - **Objetivo:** `OBJ-ANDRE-001`
 - **Papel:** frontend Next.js, experiência transaction-first, integração Vercel → Railway e acceptance visual.
-- **Resultado:** inserir uma ou várias transações manualmente ou gerar samples por quantidade/seed, acompanhar logs vivos e abrir classificação/incidentes sem calcular nenhum fato no navegador.
+- **Resultado:** inserir uma ou várias transações manualmente ou gerar samples por quantidade, acompanhar logs e abrir classificação/incidentes sem calcular nenhum fato no navegador; seed permanece capacidade opcional da API.
 - **Prioridade atual:** sistema front funcional; pitch só depois da fatia ao vivo.
 
 ## O que mudou
 
 O Streamlit de `TASK-UI-001` continua como protótipo visual e fallback. O produto final passa a ser Next.js na Vercel. O construtor de efeitos de `TASK-UI-005` não é mais uma tela pública: cenários ficam internos para gerar tráfego/evals. André não pede approval rate, queda, latência, timeout, decline, causa ou ground truth.
 
-A tela inicial aceita de 1 a 100 `TransactionInput`. Para acelerar a demo, `Generate sample transactions` chama o Railway com quantidade e seed opcional, recebe apenas inputs válidos e editáveis e os mostra antes do `Submit batch`. Todos os outcomes, classificações, métricas e incidentes surgem depois, no backend.
+A tela inicial aceita de 1 a 100 `TransactionInput`. Para acelerar a demo, `Generate sample transactions` chama o Railway somente com a quantidade visível, recebe inputs válidos e editáveis e os mostra antes do `Submit batch`; seed permanece opcional/interna na API. Todos os outcomes, classificações, métricas e incidentes surgem depois, no backend.
+
+O shell desktop usa sidebar `sticky` e conteúdo em colunas separadas; em mobile, os mesmos destinos ficam numa barra inferior fixa com safe area. Logs destacam dados retornados para `FAILED` e `UNKNOWN`; Incidents expõe diagnóstico, memória e uma atenção técnica sem inventar causa para `UNKNOWN`.
 
 ## Ownership e limites
 
@@ -29,7 +31,7 @@ A tela inicial aceita de 1 a 100 `TransactionInput`. Para acelerar a demo, `Gene
 ### `/transactions/new`
 
 - linhas dinâmicas com add, duplicate, remove e validação por campo;
-- gerador de samples: quantidade 1..100, seed opcional, `POST /v1/transaction-samples`;
+- gerador de samples: quantidade 1..100, `POST /v1/transaction-samples`; seed é opcional/interna na API;
 - review dos samples; nada é persistido até `Submit batch`;
 - `POST /v1/transaction-batches` com idempotency key; resposta `202` redireciona para o log do batch;
 - erro preserva todas as linhas e indica exatamente o item/campo inválido.
@@ -40,6 +42,7 @@ A tela inicial aceita de 1 a 100 `TransactionInput`. Para acelerar a demo, `Gene
 - polling 1–2s somente quando há item `PROCESSING`;
 - progress bar recebe `stage` e `progress_percent` do Railway; sem timer simulado;
 - status não depende apenas de cor; loading, empty, error, stale e retry são explícitos.
+- cada linha expõe somente outcome, classificação, reason, confidence, evidence IDs e incidentes retornados pelo backend.
 
 ### `/transactions/[id]`
 
@@ -50,7 +53,8 @@ A tela inicial aceita de 1 a 100 `TransactionInput`. Para acelerar a demo, `Gene
 ### `/incidents`
 
 - migra os cards já construídos, incluindo recorrência e limites causais;
-- mostra separadamente causa atual e memória histórica.
+- mostra separadamente causa atual e memória histórica, incluindo recommendation `HUMAN_ONLY`, limitations e trace.
+- inclui fila de atenção para `UNKNOWN`; somente `CTR-INC-001` recebe causa/recommendation de Incident.
 
 ## Microtarefas e ordem
 
@@ -61,22 +65,24 @@ A tela inicial aceita de 1 a 100 `TransactionInput`. Para acelerar a demo, `Gene
 
 ### TASK-UI-002 / LUM2-9 — Next.js + formulário multi-input + samples
 
+- **Linear:** `Done`; a integração live permanece em `LUM2-12`.
+
 - Criar shell Next.js responsivo, client tipado, `NEXT_PUBLIC_API_BASE_URL` e `/transactions/new`.
-- Implementar 1..100 linhas, add/duplicate/remove e `Generate sample transactions` por quantidade/seed.
+- Implementar 1..100 linhas, add/duplicate/remove e `Generate sample transactions` por quantidade.
 - **Mock:** catálogo, sample request/response e batch fixtures.
-- **Aceite:** nenhum option hardcoded; sample com a mesma seed repete o lote; editar sample não muda a seed histórica; envio 1 e múltiplos funciona; erro preserva formulário.
+- **Aceite:** nenhum option hardcoded; geração preenche lote editável; envio 1 e múltiplos funciona; erro preserva formulário.
 - **Independe de:** backend real; começa pelas fixtures congeladas.
 
 ### TASK-UI-003 / LUM2-10 — log, filtros, progresso e detalhe
 
 - Implementar `/transactions`, `/transactions/[id]`, filtros, cursor, polling e estados.
-- **Aceite:** processing mostra stage real; filtros não misturam falha técnica e decline; refresh preserva URLs; detalhe linka Incident.
+- **Aceite:** processing mostra stage real; filtros não misturam falha técnica e decline; falha/UNKNOWN exibem diagnóstico disponível; refresh preserva URLs; detalhe linka Incident sem fabricar action.
 - **Independe de:** API real usando `transaction-list.json` e records.
 
 ### TASK-UI-004 / LUM2-11 — incidentes e recorrência dentro do novo fluxo
 
-- Migrar cards já iniciados para `/incidents` e linkar a partir do detalhe da transação.
-- **Aceite:** `INCONCLUSIVE + MATCH` continua inconclusivo; evidence IDs são navegáveis; sem incidente é honesto.
+- Migrar cards para `/incidents`, adicionar o destino à sidebar e linkar a partir do detalhe da transação.
+- **Aceite:** `INCONCLUSIVE + MATCH` continua inconclusivo; diagnóstico contratado fica legível; `UNKNOWN` aparece em atenção técnica sem causa inventada.
 - **Bloqueio live:** `TASK-EXP-004` e filtro `transaction_id` de Rogério; layout pode avançar por fixture.
 
 ### TASK-UI-005 / LUM2-12 — adapter Railway e estados live
