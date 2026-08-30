@@ -115,6 +115,12 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 - **Plano geral:** 2.8.0; **contratos:** `CTR-INC-001 v1` e `CTR-TXL-001 v1` aditivos; **decisão:** `DEC-036` / `FL-20260830-TEAM-039`.
 - A persistência calcula uma assinatura de recorrência por categoria causal, métrica e escopo completo, separada do fingerprint de entrega por janela. O primeiro `detected_at` dessa assinatura permanece estável nas ocorrências futuras.
 - A API devolve `recurrence_first_detected_at` no Incident e, nos logs de transação, em cada Incident relacionado. A interface deve exibir a data explicitamente, sem inferi-la de precedentes GraphRAG.
+## Adendo 2.9.1 — default do runtime OpenAI
+
+- **Plano geral:** 2.9.1; **contrato interno:** `CTR-AGT-RUN-001 v1`; **decisão:** `DEC-039` / `FL-20260830-ROGERIO-031`.
+- O runtime configurado passa a `gpt-5.6-sol` com `reasoning.effort=medium`; o `EvidencePack`, o `RetrievalTrace`, o prompt e a validação grounded não mudam.
+- A saída segue somente `HUMAN_ONLY`: sem ferramentas, promoção causal, escrita de Incident ou ação financeira. Falha de modelo, SDK ou timeout continua `UNAVAILABLE` e sem retry; sem chave, o fallback é `deterministic-template-v1`.
+- **Handoff para Rogério:** defaults e runbook sincronizados; a prova externa permanece um smoke sintético no Railway, condicionado à chave e ao acesso ao modelo.
 
 ## Definition of Done
 

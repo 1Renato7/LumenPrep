@@ -137,7 +137,7 @@ def test_configured_client_uses_template_without_an_api_key():
     assert isinstance(client, TemplateSuggestionClient)
 
 
-def test_configured_openai_client_uses_terra_high_responses_request(monkeypatch):
+def test_configured_openai_client_uses_sol_medium_defaults_in_responses_request(monkeypatch):
     calls = {}
 
     class FakeResponses:
@@ -155,8 +155,6 @@ def test_configured_openai_client_uses_terra_high_responses_request(monkeypatch)
         Settings(
             _env_file=None,
             openai_api_key="test-key",
-            openai_model="gpt-5.6-terra",
-            openai_reasoning_effort="high",
             openai_timeout_seconds=9,
         )
     )
@@ -172,8 +170,8 @@ def test_configured_openai_client_uses_terra_high_responses_request(monkeypatch)
     )
     assert client.suggest(pack, trace) == '{"status":"SUGGESTED"}'
     assert calls["initialization"] == {"api_key": "test-key", "timeout": 9, "max_retries": 0}
-    assert calls["request"]["model"] == "gpt-5.6-terra"
-    assert calls["request"]["reasoning"] == {"effort": "high"}
+    assert calls["request"]["model"] == "gpt-5.6-sol"
+    assert calls["request"]["reasoning"] == {"effort": "medium"}
     assert calls["request"]["store"] is False
     assert calls["request"]["text"] == {"format": {"type": "json_object"}}
     assert "JSON" in calls["request"]["input"]

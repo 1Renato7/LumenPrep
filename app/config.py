@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     neo4j_database: str = "neo4j"
 
     openai_api_key: str | None = None
-    openai_model: str = "gpt-5.6-terra"
-    openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "high"
+    openai_model: str = "gpt-5.6-sol"
+    openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "medium"
     openai_timeout_seconds: float = 20.0
 
     @model_validator(mode="after")

@@ -19,7 +19,7 @@ class Neo4jSettings:
     user: str
     password: str
     database: str = "neo4j"
-    include_evaluation: bool = True
+    include_evaluation: bool = False
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> "Neo4jSettings":
@@ -32,7 +32,7 @@ class Neo4jSettings:
             user=values.get("NEO4J_USER", "neo4j"),
             password=password,
             database=values.get("NEO4J_DATABASE", "neo4j"),
-            include_evaluation=True,
+            include_evaluation=False,
         )
 
 
