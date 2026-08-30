@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.simulation import LiveStreamController, ScenarioV1Contract, load_generator_config
+from app.simulation.background_traffic import submit_background_batch
 from app.simulation.scenario_contract import ScenarioContractError
 from app.streaming import get_transaction_server
 
@@ -67,3 +69,19 @@ def inject_scenario(scenario_id: str) -> dict[str, Any]:
         "matched_attempts": result.matched_attempts,
         "events_published": result.events_published,
     }
+
+
+class BackgroundTrafficRequest(BaseModel):
+    count: int = Field(ge=1, le=100)
+    seed: int | None = Field(default=None, ge=0)
+
+
+@router.post("/demo/background-traffic", status_code=202)
+def emit_background_traffic(request: BackgroundTrafficRequest) -> dict[str, Any]:
+    """TASK-DATA-009: demo-only trigger for background traffic through the batch API."""
+    if not settings.demo_mode:
+        raise HTTPException(status_code=403, detail="DEMO_MODE_REQUIRED")
+    try:
+        return submit_background_batch(request.count, seed=request.seed)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
