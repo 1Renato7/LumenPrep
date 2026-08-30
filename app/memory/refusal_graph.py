@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -137,3 +138,31 @@ SET observation.match_type = link.match_type,
     observation.catalog_source = code.source,
     observation.mapping_version = code.mapping_version
 """
+
+
+def main() -> None:
+    """Synchronise only refusal-code graph facts using standard Neo4j settings."""
+    try:
+        from neo4j import GraphDatabase
+    except ImportError as error:
+        raise RuntimeError("Install the optional driver with: pip install '.[neo4j]'") from error
+
+    password = os.getenv("NEO4J_PASSWORD")
+    if not password:
+        raise RuntimeError("NEO4J_PASSWORD is required for refusal-code graph synchronisation.")
+    driver = GraphDatabase.driver(
+        os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+        auth=(os.getenv("NEO4J_USER", "neo4j"), password),
+    )
+    try:
+        driver.verify_connectivity()
+        result = sync_and_backfill_refusal_graph(
+            driver, database=os.getenv("NEO4J_DATABASE", "neo4j")
+        )
+    finally:
+        driver.close()
+    print(f"Synced {result.catalog_rows} refusal-code mappings and {result.incident_links} incident links.")
+
+
+if __name__ == "__main__":
+    main()
