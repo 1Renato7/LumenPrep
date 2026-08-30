@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { LumenApiError, type LumenApiClient } from "@/lib/api/client-interface";
 import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
 import type { DiagnosticSuggestion, HumanReviewResponse, IncidentDetail as IncidentDetailData } from "@/lib/api/types";
+import { formatMetricValue } from "@/lib/format/metric";
 import styles from "./incidents.module.css";
 
 export function IncidentDetail({ incidentId, api: suppliedApi }: { incidentId: string; api?: LumenApiClient }) {
@@ -150,10 +151,6 @@ function Field({ label, value }: { label: string; value: string }) { return <div
 function EvidenceIds({ ids }: { ids: string[] }) { return ids.length ? <ul className={styles.inlineIds}>{ids.map((id) => <li key={id}><code>{id}</code></li>)}</ul> : <p>No evidence IDs were returned.</p>; }
 function formatMoney(amountMinor: number, currency: string): string { return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(amountMinor / 100); }
 function formatOptionalMoney(amountMinor: number | null | undefined, currency: string): string { return amountMinor === null || amountMinor === undefined ? "Not provided" : formatMoney(amountMinor, currency); }
-export function formatMetricValue(value: IncidentDetailData["incident"]["metrics"][string]): string {
-  if (value === null || value === undefined) return "Not available";
-  return Array.isArray(value) ? value.join(", ") || "Not available" : String(value);
-}
 function formatDate(value: string): string { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)); }
 function humanize(value: string): string { return value.toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase()); }
 function BackIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /><path d="M9 12h10" /></svg>; }

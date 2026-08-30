@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatMetricValue } from "../../components/incidents/incident-detail";
+import { formatMetricValue } from "../../lib/format/metric";
 
 import batchAcceptedFixture from "../../../contracts/fixtures/transaction-batch-accepted.json";
 import catalogFixture from "../../../contracts/fixtures/transaction-catalog.json";
