@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.0.4
+- **Versão:** 2.0.5
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
 - **Change class:** `MAJOR`; muda a entrada pública, a API, o frontend final e o deployment.
@@ -16,6 +16,7 @@
 - **Changelog 2.0.2:** integra `renato/tarefa44@602ae9d` na `main` como `CMP-HARNESS-001`; `CTR-TXN/TXL/API v3` continuam sendo a única fronteira pública planejada, e `LUM2-61/62` continuam responsáveis pelo adapter e tráfego de fundo compatíveis.
 - **Changelog 2.0.3:** `CTR-INC-001 v1` recebe os campos aditivos `root_cause.alternatives` e `recommendation_class`. Produtores os publicam; consumidores devem tolerar sua ausência em payloads v1 legados. Alternativas são ordenadas por confiança decrescente e nunca promovem a causa atual.
 - **Changelog 2.0.4:** a priorização de incidentes ordena `impact.amount_minor` somente dentro da mesma moeda. Sem uma fonte FX versionada, BRL e MXN são retornados em buckets independentes e não recebem ranking global fabricado.
+- **Changelog 2.0.5:** correlação de `CTR-DET-001` em `CTR-INC-001` usa fingerprint exato de `correlation_id + slice`; candidatos de causas com apenas uma dimensão em comum não formam um Incident único.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -190,6 +191,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 - `root_cause.alternatives` é uma lista ordenada por confiança decrescente; cada item é hipótese, não causa atual, e não altera `root_cause.status`.
 - `recommendation_class` só classifica a recomendação humana (`INVESTIGATE`, `MONITOR` ou `ESCALATE`); `execution` permanece obrigatoriamente `HUMAN_ONLY`.
 - Incidentes são ordenados por `impact.amount_minor` apenas dentro do bucket da mesma `currency`; sem FX versionado não há comparação global entre moedas.
+- Candidatos só compartilham Incident quando `correlation_id`, janela sobreposta e fingerprint completo de `slice` coincidem; similaridade parcial de escopo não é suficiente.
 - UI consome exclusivamente `NEXT_PUBLIC_API_BASE_URL`; não possui credencial de banco/agent.
 
 ## 8. Persistência, processamento e segurança

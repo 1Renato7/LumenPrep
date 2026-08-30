@@ -2961,6 +2961,66 @@ Pedido de ranking global, nova moeda de apresentação, ou fonte FX auditável e
 
 - **2026-08-29T22:32:00-03:00:** PASS: `python -m pytest -q` aprovou 94 testes; os testes específicos cobriram GMV local, não duplicação de perdas em candidatos correlacionados, buckets BRL/MXN e janela sem tentativas. `python scripts/validate_contracts.py`, `python -m compileall -q app` e `git diff --check` também passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve alteração de rota, UI ou fluxo executável no navegador.
 
+### FL-20260829-ROGERIO-008 — Exigir fingerprint causal exato para separar incidentes simultâneos
+
+- **Timestamp:** 2026-08-29T22:45:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** data | product | quality
+- **Escopo:** `LUM2-35`, `TASK-INC-001`, `CTR-DET-001`, `CTR-INC-001`, `app/incidents/__init__.py`
+- **Links:** `docs/plans/system-plan.md` v2.0.5; `tests/test_incident_correlation.py`
+- **Supersedes / superseded by:** substitui a compatibilidade parcial de slices para correlação de Incident.
+
+#### Contexto e pergunta
+
+O agrupamento existente aceitava candidates com uma dimensão compartilhada. Assim, um problema de provider no Brasil e uma queda de issuer no mesmo país podiam formar uma narrativa única mesmo com fingerprints causais diferentes.
+
+#### Decisão
+
+Correlacionar apenas candidates com mesmo `correlation_id`, janelas sobrepostas e fingerprint completo de `slice`. Métricas diferentes para o mesmo slice ainda se unem; causa com qualquer dimensão diferente permanece em Incident separado.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Compatibilidade parcial de slice | agrega possíveis relações pai-filho | pode mesclar causas simultâneas por país ou método | FACT: trial by fire inclui incidentes simultâneos | risco de narrativa falsa |
+| Agrupar só por correlation_id | implementação mínima | une todo o conteúdo da janela | FACT: correlation cobre janela, não causa | insuficiente |
+| Fingerprint exato de slice | determinístico e auditável | pode separar relação pai-filho até haver RCA explícito | TEST: provider BR e issuer MX serão independentes | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `slice` é a saída causal de `CTR-DET-001`; `correlation_id` sozinho representa a janela.
+- **TEST:** NOT RUN no momento deste registro; casos de mesmo slice, provider BR e issuer MX serão executados.
+- **UNKNOWN:** se o RCA futuro precisa ligar explicitamente uma hipótese pai e filha; isso exigirá contrato de relação, não heurística implícita.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** dois problemas simultâneos não viram uma causa narrativa falsa.
+- **Abrimos mão de:** deduzir hierarquia causal por sobreposição parcial.
+- **Risco residual:** um incidente real com slices complementares pode aparecer dividido até o RCA publicar vínculo explícito.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** não muda schema; muda a semântica da correlação do produtor de Incident.
+- **Pessoas/branches:** LUM2-36 recebe grupos independentes para priorização; memória/API/UI recebem IDs distintos.
+- **Linear:** LUM2-35 recebe evidência após testes e review.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** métricas approval/latency para o mesmo provider BR formam um Incident.
+- **Caso difícil/adverso:** provider BR e issuer MX simultâneos formam dois; mesma country isolada não basta para unir.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** expor incidents separados até existir vínculo causal explícito.
+
+#### Gatilhos de revisão
+
+RCA que publique relação pai-filho ou trial que demonstre fragmentação inadequada exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:55:00-03:00:** PASS: 97 testes completos aprovados; os casos específicos cobriram métricas múltiplas no mesmo slice, provider BR + issuer MX simultâneos e provider/issuer no mesmo país sem mesclagem indevida. Contratos, compilação e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve alteração de rota, UI ou fluxo executável no navegador.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._

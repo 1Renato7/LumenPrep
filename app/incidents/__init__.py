@@ -30,10 +30,17 @@ def _window_overlaps(left: Candidate, right: Candidate) -> bool:
         return False
 
 
+def _causal_fingerprint(candidate: Candidate) -> tuple[tuple[str, str], ...] | None:
+    """Canonicalize the full causal slice; partial overlap is not causality."""
+    slice_values = candidate.get("slice")
+    if not isinstance(slice_values, Mapping) or not slice_values:
+        return None
+    return tuple(sorted((str(dimension), str(value)) for dimension, value in slice_values.items()))
+
+
 def _slices_compatible(left: Candidate, right: Candidate) -> bool:
-    left_slice = left.get("slice", {})
-    right_slice = right.get("slice", {})
-    return all(left_slice[dimension] == right_slice[dimension] for dimension in left_slice.keys() & right_slice.keys())
+    left_fingerprint = _causal_fingerprint(left)
+    return left_fingerprint is not None and left_fingerprint == _causal_fingerprint(right)
 
 
 @dataclass(frozen=True)
