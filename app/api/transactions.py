@@ -17,7 +17,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.ingestion.storage import get_connection
+from app.ingestion.storage import CONNECTION_LOCK, get_connection
 from app.worker.transaction_worker import run_batch_to_completion
 
 router = APIRouter(prefix="/v1", tags=["transactions"])
@@ -210,52 +210,53 @@ def _batch_response(batch_id: str) -> dict[str, Any]:
 
 
 def _create_batch(request: BatchRequest) -> dict[str, Any]:
-    con = get_connection()
-    fingerprint = _fingerprint(request)
-    existing = con.execute(
-        "SELECT batch_id, payload_fingerprint FROM transaction_batches WHERE idempotency_key = ?",
-        [request.idempotency_key],
-    ).fetchone()
-    if existing:
-        if existing[1] != fingerprint:
-            raise IdempotencyConflict()
-        return _batch_response(existing[0])
+    with CONNECTION_LOCK:
+        con = get_connection()
+        fingerprint = _fingerprint(request)
+        existing = con.execute(
+            "SELECT batch_id, payload_fingerprint FROM transaction_batches WHERE idempotency_key = ?",
+            [request.idempotency_key],
+        ).fetchone()
+        if existing:
+            if existing[1] != fingerprint:
+                raise IdempotencyConflict()
+            return _batch_response(existing[0])
 
-    batch_id = f"batch_{uuid4().hex}"
-    accepted_at = _now()
-    correlation_id = _correlation_id()
-    try:
-        con.execute("BEGIN TRANSACTION")
-        con.execute(
-            """INSERT INTO transaction_batches
-               (batch_id, idempotency_key, payload_fingerprint, accepted_at, correlation_id)
-               VALUES (?, ?, ?, ?, ?)""",
-            [batch_id, request.idempotency_key, fingerprint, accepted_at, correlation_id],
-        )
-        for position, item in enumerate(request.transactions):
-            transaction_id = f"txn_{uuid4().hex}"
+        batch_id = f"batch_{uuid4().hex}"
+        accepted_at = _now()
+        correlation_id = _correlation_id()
+        try:
+            con.execute("BEGIN TRANSACTION")
             con.execute(
-                """INSERT INTO transaction_records
-                   (transaction_id, batch_id, batch_position, created_at, updated_at, status,
-                    input_json, processing_json, outcome_json, classification_json, correlation_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)""",
-                [
-                    transaction_id,
-                    batch_id,
-                    position,
-                    accepted_at,
-                    accepted_at,
-                    "PROCESSING",
-                    json.dumps(item.model_dump(mode="json"), sort_keys=True),
-                    json.dumps({"stage": "RECEIVED", "progress_percent": 0, "failure_code": None}),
-                    correlation_id,
-                ],
+                """INSERT INTO transaction_batches
+                   (batch_id, idempotency_key, payload_fingerprint, accepted_at, correlation_id)
+                   VALUES (?, ?, ?, ?, ?)""",
+                [batch_id, request.idempotency_key, fingerprint, accepted_at, correlation_id],
             )
-        con.execute("COMMIT")
-    except Exception:
-        con.execute("ROLLBACK")
-        raise
-    return _batch_response(batch_id)
+            for position, item in enumerate(request.transactions):
+                transaction_id = f"txn_{uuid4().hex}"
+                con.execute(
+                    """INSERT INTO transaction_records
+                       (transaction_id, batch_id, batch_position, created_at, updated_at, status,
+                        input_json, processing_json, outcome_json, classification_json, correlation_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)""",
+                    [
+                        transaction_id,
+                        batch_id,
+                        position,
+                        accepted_at,
+                        accepted_at,
+                        "PROCESSING",
+                        json.dumps(item.model_dump(mode="json"), sort_keys=True),
+                        json.dumps({"stage": "RECEIVED", "progress_percent": 0, "failure_code": None}),
+                        correlation_id,
+                    ],
+                )
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        return _batch_response(batch_id)
 
 
 def _list_records(*, batch_id: str | None = None, state: str | None = None, cursor: str | None = None, limit: int = 50) -> dict[str, Any]:
@@ -274,11 +275,12 @@ def _list_records(*, batch_id: str | None = None, state: str | None = None, curs
         clauses.append("status = ?")
         values.append(state)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    rows = get_connection().execute(
-        f"SELECT {_RECORD_COLUMNS} FROM transaction_records {where} "
-        "ORDER BY created_at DESC, transaction_id DESC LIMIT ? OFFSET ?",
-        [*values, limit + 1, offset],
-    ).fetchall()
+    with CONNECTION_LOCK:
+        rows = get_connection().execute(
+            f"SELECT {_RECORD_COLUMNS} FROM transaction_records {where} "
+            "ORDER BY created_at DESC, transaction_id DESC LIMIT ? OFFSET ?",
+            [*values, limit + 1, offset],
+        ).fetchall()
     has_next = len(rows) > limit
     records = [_record_from_row(row) for row in rows[:limit]]
     return {
@@ -320,11 +322,12 @@ def create_transaction_batch(
 
 @router.get("/transaction-batches/{batch_id}")
 def get_transaction_batch(batch_id: str) -> dict[str, Any]:
-    try:
-        _batch_response(batch_id)
-    except KeyError as error:
-        raise HTTPException(status_code=404, detail="BATCH_NOT_FOUND") from error
-    return _list_records(batch_id=batch_id, limit=MAX_BATCH_SIZE)
+    result = _list_records(batch_id=batch_id, limit=MAX_BATCH_SIZE)
+    if not result["items"]:
+        # A batch is always inserted atomically with 1..100 records, so an empty
+        # result means the batch itself never existed — no separate lookup needed.
+        raise HTTPException(status_code=404, detail="BATCH_NOT_FOUND")
+    return result
 
 
 @router.get("/transactions")
@@ -338,9 +341,10 @@ def list_transactions(
 
 @router.get("/transactions/{transaction_id}")
 def get_transaction(transaction_id: str) -> dict[str, Any]:
-    row = get_connection().execute(
-        f"SELECT {_RECORD_COLUMNS} FROM transaction_records WHERE transaction_id = ?", [transaction_id]
-    ).fetchone()
+    with CONNECTION_LOCK:
+        row = get_connection().execute(
+            f"SELECT {_RECORD_COLUMNS} FROM transaction_records WHERE transaction_id = ?", [transaction_id]
+        ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="TRANSACTION_NOT_FOUND")
     return _record_from_row(row)

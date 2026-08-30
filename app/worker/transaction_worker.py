@@ -21,7 +21,7 @@ from random import Random
 from typing import Any
 from uuid import uuid4
 
-from app.ingestion.storage import get_connection
+from app.ingestion.storage import CONNECTION_LOCK, get_connection
 
 STAGE_ORDER = ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING", "COMPLETE"]
 _PROGRESS_BY_STAGE = {stage: index * 20 for index, stage in enumerate(STAGE_ORDER)}
@@ -178,12 +178,19 @@ def _advance_locked(con, transaction_id: str) -> None:
 
 def advance_transaction(transaction_id: str, *, worker_id: str | None = None, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> bool:
     """Advance ``transaction_id`` by exactly one stage. Returns False if it is not a
-    leasable PROCESSING record (already terminal, or currently leased by someone else)."""
+    leasable PROCESSING record (already terminal, or currently leased by someone else).
+
+    Holds CONNECTION_LOCK for the whole lease-acquire-then-advance sequence — the
+    shared DuckDB connection is not safe for concurrent use across threads, and
+    ``create_transaction_batch``'s background task means this genuinely runs from
+    several threadpool threads at once.
+    """
     con = get_connection()
     worker_id = worker_id or f"worker_{uuid4().hex[:8]}"
-    if not _acquire_lease(con, transaction_id, worker_id, lease_seconds):
-        return False
-    _advance_locked(con, transaction_id)
+    with CONNECTION_LOCK:
+        if not _acquire_lease(con, transaction_id, worker_id, lease_seconds):
+            return False
+        _advance_locked(con, transaction_id)
     return True
 
 
@@ -192,12 +199,13 @@ def advance_one(*, worker_id: str | None = None, lease_seconds: int = DEFAULT_LE
     one stage. Returns its transaction_id, or None if nothing is leasable right now."""
     con = get_connection()
     now = _now()
-    candidate = con.execute(
-        """SELECT transaction_id FROM transaction_records
-           WHERE status = 'PROCESSING' AND (lease_expires_at IS NULL OR lease_expires_at < ?)
-           ORDER BY updated_at ASC LIMIT 1""",
-        [now],
-    ).fetchone()
+    with CONNECTION_LOCK:
+        candidate = con.execute(
+            """SELECT transaction_id FROM transaction_records
+               WHERE status = 'PROCESSING' AND (lease_expires_at IS NULL OR lease_expires_at < ?)
+               ORDER BY updated_at ASC LIMIT 1""",
+            [now],
+        ).fetchone()
     if candidate is None:
         return None
     transaction_id = candidate[0]
@@ -210,8 +218,10 @@ def run_to_completion(transaction_id: str, *, worker_id: str | None = None) -> N
     """Drive one transaction through every remaining stage. Safe to call again on an
     already-terminal or already-leased transaction — it becomes a no-op."""
     for _ in range(len(STAGE_ORDER)):
-        con = get_connection()
-        row = con.execute("SELECT status FROM transaction_records WHERE transaction_id = ?", [transaction_id]).fetchone()
+        with CONNECTION_LOCK:
+            row = get_connection().execute(
+                "SELECT status FROM transaction_records WHERE transaction_id = ?", [transaction_id]
+            ).fetchone()
         if row is None or row[0] != "PROCESSING":
             return
         if not advance_transaction(transaction_id, worker_id=worker_id):
@@ -219,10 +229,10 @@ def run_to_completion(transaction_id: str, *, worker_id: str | None = None) -> N
 
 
 def run_batch_to_completion(batch_id: str) -> None:
-    con = get_connection()
-    ids = [r[0] for r in con.execute(
-        "SELECT transaction_id FROM transaction_records WHERE batch_id = ?", [batch_id]
-    ).fetchall()]
+    with CONNECTION_LOCK:
+        ids = [r[0] for r in get_connection().execute(
+            "SELECT transaction_id FROM transaction_records WHERE batch_id = ?", [batch_id]
+        ).fetchall()]
     for transaction_id in ids:
         run_to_completion(transaction_id)
 
@@ -231,10 +241,10 @@ def reconcile_stuck(*, max_records: int = 1000) -> int:
     """Resume every PROCESSING record found at startup (or on demand). Records with a
     live lease from a still-running worker are simply skipped by ``advance_transaction``'s
     lease check, so calling this concurrently with an active worker is harmless."""
-    con = get_connection()
-    ids = [r[0] for r in con.execute(
-        "SELECT transaction_id FROM transaction_records WHERE status = 'PROCESSING' LIMIT ?", [max_records]
-    ).fetchall()]
+    with CONNECTION_LOCK:
+        ids = [r[0] for r in get_connection().execute(
+            "SELECT transaction_id FROM transaction_records WHERE status = 'PROCESSING' LIMIT ?", [max_records]
+        ).fetchall()]
     for transaction_id in ids:
         run_to_completion(transaction_id)
     return len(ids)

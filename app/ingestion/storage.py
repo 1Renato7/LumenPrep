@@ -7,10 +7,20 @@ canonical_attempts: estado atual por attempt_id, só atualizado quando ordering.
 
 import json
 from datetime import datetime
+from threading import Lock
 
 import duckdb
 
 from app.config import settings
+
+# The single shared DuckDB connection below is not safe for concurrent use from
+# multiple threads (FastAPI runs sync `def` handlers, and background tasks, in a
+# threadpool). Every caller that executes a query against get_connection() from
+# request/background-task code must hold this lock for the duration of that access —
+# see app.api.transactions._create_batch and app.worker.transaction_worker for the
+# pattern. Reproduced directly without it: concurrent access corrupts query parameter
+# binding across threads and DuckDB raises TransactionException / ConversionException.
+CONNECTION_LOCK = Lock()
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS raw_events (

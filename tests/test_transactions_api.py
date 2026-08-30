@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 from fastapi.testclient import TestClient
@@ -90,3 +91,19 @@ def test_batch_rejects_non_facts_and_enforces_header_contract():
     too_many = _batch("too-many-items-0001")
     too_many["transactions"] = [_transaction() for _ in range(101)]
     assert _submit(too_many).status_code == 422
+
+
+def test_concurrent_batch_submissions_do_not_corrupt_the_shared_connection():
+    """Reproduces the real failure: DuckDB's single shared connection interleaving
+    BEGIN/INSERT/COMMIT across FastAPI's threadpool without _BATCH_LOCK fails ~100%
+    of the time under concurrent load."""
+
+    def _submit_unique(index: int):
+        return _submit(_batch(f"concurrent-key-{index:04d}"))
+
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        responses = list(pool.map(_submit_unique, range(40)))
+
+    assert [r.status_code for r in responses] == [202] * 40
+    transaction_ids = {r.json()["transaction_ids"][0] for r in responses}
+    assert len(transaction_ids) == 40

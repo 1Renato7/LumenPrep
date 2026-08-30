@@ -110,9 +110,6 @@ paths:
   /incidents:
     get:
       operationId: listIncidents
-      parameters:
-        - {name: transaction_id, in: query, required: false, schema: {type: string}}
-        - {name: correlation_id, in: query, required: false, schema: {type: string}}
       responses:
         "200": {description: Incident list}
   /incidents/{incident_id}:
