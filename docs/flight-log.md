@@ -4911,3 +4911,38 @@ O usuário solicitou um botão que realmente limpe o histórico antes de inserir
 A limpeza ocorre em uma transação DuckDB sob o lock compartilhado e remove fatos sintéticos e todas as projeções derivadas: batches, records, eventos raw/canônicos, tentativas, links, Incidents, sugestões e notificações. O catálogo versionado de códigos de recusa permanece porque é referência da aplicação, não histórico da demo. Alternativas rejeitadas: remover só a lista (não persistente), apagar apenas records (deixa projeções inconsistentes) e substituir o arquivo inteiro (remove referência e amplia risco operacional).
 
 **Validação:** `uv run --locked pytest -q tests/test_transactions_api.py tests/test_api_routing.py` passou com **7 testes**; cobre configuração ausente, credencial inválida, confirmação inválida, limpeza, contagens, batch removido e reuso da chave de idempotência. `uv run --locked python scripts/validate_contracts.py` passou. Lint/build/testes/browser acceptance do `web/` continuam `NOT RUN`: o diretório `web/node_modules` não está instalado neste ambiente. Nenhum dado local ou remoto foi apagado durante esta implementação.
+
+### FL-20260830-ROGERIO-030 — Bloquear avaliação sintética na memória pública
+
+- **Timestamp:** 2026-08-30T09:12:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** Team
+- **Participantes:** Rogério
+- **Categoria:** contract | data | quality
+- **Escopo:** `CTR-MEM-001 v1.1`, adaptadores de memória, API de Incident e agente
+- **Links:** `app/memory/service.py`; `contracts/v1/similar-incidents.schema.json`; `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O diagnóstico publicado retornou `EVALUATION_CONFIRMED`, mas o contrato e o parser web aceitam apenas `HUMAN_CONFIRMED`, impedindo a abertura do Incident.
+
+#### Decisão
+
+Desabilitar avaliação sintética por padrão nos adaptadores operacionais e aplicar uma guarda no serviço de memória, de modo que nenhum repositório permissivo consiga publicá-la.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Aceitar avaliação no frontend | oculta o erro visual | viola o contrato e trata dado sintético como revisão humana | rejeitada |
+| Filtrar só o Neo4j | patch menor | outro adaptador ainda contamina a resposta | rejeitada |
+| Filtrar adaptadores e serviço | reforça a fronteira pública | avaliação deixa de servir como memória operacional | escolhida |
+
+#### Evidência, trade-offs e validação
+
+- **FACT:** a reprodução pública exibiu `SimilarIncidentResult.match.confirmation must be HUMAN_CONFIRMED`.
+- **TEST:** 25 testes focados passaram; contratos, fixtures e OpenAPI validaram; `npm test` passou com 41 testes e 1 skip.
+- **Browser acceptance:** no ambiente local, `Open full diagnosis` carregou o detalhe com precedente humano confirmado, persistiu após refresh e não emitiu erros/warnings no console.
+- **Code Review Gate:** PASS; sem achado bloqueante. A suíte Python completa travou sem saída e não é alegada como evidência.
+- **Risco residual:** o ambiente publicado só deixa de exibir o erro após consumir esta `main`; qualquer exposição futura de avaliação requer nova versão de contrato.
