@@ -48,8 +48,8 @@ const samples: TransactionSampleResponse = {
       payment_method_category: "CARD",
       card_brand: "MASTERCARD",
       card_type: "CREDIT",
-      provider_connection_id: "(none)",
-      provider_response_code: "0",
+      provider_connection_id: null,
+      provider_response_code: null,
     },
     {
       merchant_id: "merchant_mx_01",
@@ -60,8 +60,8 @@ const samples: TransactionSampleResponse = {
       amount_minor: 7990,
       payment_method_category: "DIGITAL_WALLET",
       card_type: "NOT_APPLICABLE",
-      provider_connection_id: "Refused",
-      provider_response_code: "2",
+      provider_connection_id: null,
+      provider_response_code: null,
     },
   ],
   correlation_id: "corr_sample_test",
@@ -156,19 +156,17 @@ test("a 422 field issue identifies its row and preserves editable row values", (
   assert.deepEqual(state.rows.map((row) => row.values), before);
 });
 
-test("provider response code is required before submitting a batch", () => {
+test("provider response code is optional for normally simulated batches", () => {
   const state = replaceRowsWithSamples(createInitialFormState(), samples);
-  const withoutResponseCode = updateTransactionField(state, state.rows[0].id, "provider_response_code", "   ");
-
-  assert.deepEqual(validateTransactionRows(withoutResponseCode.rows, catalog), [
-    { rowIndex: 0, field: "provider_response_code", message: "provider response code is required." },
-  ]);
+  assert.deepEqual(validateTransactionRows(state.rows, catalog), []);
+  assert.equal(toBatchRequest(state.rows, "optional-response-code").transactions[0].provider_response_code, null);
 });
 
 test("provider response code and connection must use the matching Adyen table pair", () => {
   const state = replaceRowsWithSamples(createInitialFormState(), samples);
-  const mismatchedConnection = updateTransactionField(state, state.rows[0].id, "provider_connection_id", "Refused");
-  const nonAdyenProvider = updateTransactionField(state, state.rows[0].id, "provider_id", "provider_alpha");
+  const withResponseCode = updateTransactionField(state, state.rows[0].id, "provider_response_code", "0");
+  const mismatchedConnection = updateTransactionField(withResponseCode, state.rows[0].id, "provider_connection_id", "Refused");
+  const nonAdyenProvider = updateTransactionField(withResponseCode, state.rows[0].id, "provider_id", "provider_alpha");
 
   assert.deepEqual(validateTransactionRows(mismatchedConnection.rows, catalog), [
     { rowIndex: 0, field: "provider_connection_id", message: "Provider connection must match the selected provider response code." },

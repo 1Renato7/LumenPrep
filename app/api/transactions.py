@@ -145,13 +145,12 @@ def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, An
     random = Random(seed)
     transactions: list[dict[str, Any]] = []
     for index in range(request.count):
-        refusal_reason = random.choice(refusal_reason_options())
         transactions.append(
             {
                 "client_reference": f"sample-{index + 1}-{random.randrange(1_000_000, 10_000_000)}",
                 "occurred_at": _iso(datetime(2026, 1, 1) + timedelta(seconds=random.randrange(31_536_000))),
                 "merchant_id": defaults.merchant_id or random.choice(_CATALOG["merchants"]),
-                "provider_id": "adyen",
+                "provider_id": random.choice(_CATALOG["providers"]),
                 "issuer_bank": random.choice(_CATALOG["issuer_banks"]),
                 "country": defaults.country or random.choice(_CATALOG["countries"]),
                 "currency": defaults.currency or random.choice(_CATALOG["currencies"]),
@@ -159,8 +158,11 @@ def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, An
                 "payment_method_category": random.choice(_CATALOG["payment_method_categories"]),
                 "card_brand": random.choice(_CATALOG["card_brands"]),
                 "card_type": random.choice(_CATALOG["card_types"]),
-                "provider_connection_id": refusal_reason.reason,
-                "provider_response_code": refusal_reason.code,
+                # A response code is an observed provider fact. Supplying a
+                # refusal code in an ordinary sample overrides the outcome
+                # simulator and makes every generated transaction fail.
+                "provider_connection_id": None,
+                "provider_response_code": None,
                 "channel": random.choice(("WEB", "MOBILE", "POS", "API")),
             }
         )

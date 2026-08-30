@@ -4,6 +4,7 @@ from copy import deepcopy
 from fastapi.testclient import TestClient
 
 from app.config import settings
+from app.simulation.transaction_outcomes import adapt_transaction
 from main import app
 
 client = TestClient(app)
@@ -50,7 +51,7 @@ def test_catalog_and_seeded_samples_are_public_facts_only():
     assert "status" not in first.json()["transactions"][0]
 
 
-def test_samples_fill_every_form_field_with_independent_catalog_choices():
+def test_samples_leave_provider_response_blank_for_normal_simulation():
     catalog = client.get("/v1/transaction-catalog").json()
     response = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 50, "seed": 20260830})
 
@@ -66,23 +67,30 @@ def test_samples_fill_every_form_field_with_independent_catalog_choices():
         "card_brand": "card_brands",
         "card_type": "card_types",
     }
-    response_options = {option["code"]: option["reason"] for option in catalog["provider_response_options"]}
     for transaction in transactions:
         assert transaction["client_reference"]
         assert transaction["occurred_at"]
         assert transaction["amount_minor"] >= 1
-        assert transaction["provider_connection_id"]
-        assert transaction["provider_response_code"]
-        assert transaction["provider_id"] == "adyen"
-        assert transaction["provider_response_code"] in response_options
-        assert transaction["provider_connection_id"] == response_options[transaction["provider_response_code"]]
+        assert transaction["provider_connection_id"] is None
+        assert transaction["provider_response_code"] is None
+        assert transaction["provider_id"] in catalog["providers"]
         for transaction_field, catalog_field in catalog_fields.items():
             assert transaction[transaction_field] in catalog[catalog_field]
 
     for transaction_field in catalog_fields:
         assert len({transaction[transaction_field] for transaction in transactions}) > 1
     assert len({transaction["amount_minor"] for transaction in transactions}) > 1
-    assert len({transaction["provider_response_code"] for transaction in transactions}) > 1
+    assert len({transaction["provider_id"] for transaction in transactions}) > 1
+
+    simulated_results = [
+        adapt_transaction(
+            transaction,
+            transaction_id=f"sample-{index}",
+            correlation_id="sample-correlation",
+        ).result
+        for index, transaction in enumerate(transactions)
+    ]
+    assert simulated_results.count("SUCCEEDED") > simulated_results.count("FAILED")
 
 
 def test_batch_persists_before_202_and_can_be_read_back():

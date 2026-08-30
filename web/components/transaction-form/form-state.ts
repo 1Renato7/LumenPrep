@@ -276,7 +276,7 @@ function rowToTransaction(row: TransactionFormRow): TransactionInput {
     card_brand: nullIfBlank(values.card_brand),
     card_type: (nullIfBlank(values.card_type) ?? null) as TransactionInput["card_type"],
     provider_connection_id: nullIfBlank(values.provider_connection_id),
-    provider_response_code: values.provider_response_code.trim(),
+    provider_response_code: nullIfBlank(values.provider_response_code),
   };
 }
 
@@ -299,8 +299,6 @@ const requiredFields: TransactionField[] = [
   "currency",
   "amount_minor",
   "payment_method_category",
-  "provider_connection_id",
-  "provider_response_code",
 ];
 
 const fields = new Set<TransactionField>([
