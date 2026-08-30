@@ -2624,6 +2624,7 @@ Benchmark de `LUM2-47` incompatível, novo provider sem perfil aceitável, ou co
 #### Adendos
 
 - **2026-08-29T21:00:00-03:00:** browser acceptance local passou em servidor com `DEMO_MODE=true` e `DUCKDB_PATH=:memory:`. Pelo Swagger, `POST /demo/scenarios/scenario_provider_br/inject` retornou `202 ACCEPTED` com `events_published=54`; em seguida `GET /transactions/health` retornou `published=54`, `listener_cursor=54` e `backlog=0`. Console sem erros; há somente warning pré-existente do Swagger CDN sobre deep-link whitespace.
+- **2026-08-29T21:16:00-03:00:** a validação de volume revelou que o correlation ID histórico recalculava o fingerprint completo do config para cada evento. O valor agora é calculado uma vez por gerador, sem alterar payload nem seed. PASS: 13 testes focados em 18,11s e validação de contratos aprovada.
 
 ## Prontidão para a banca
 

@@ -49,6 +49,7 @@ class HistoricalTransactionGenerator:
         self._start_at = start_at.astimezone(timezone.utc).replace(second=0, microsecond=0)
         self._random = np.random.default_rng(config.seed)
         self._sequence = 0
+        self._correlation_id = f"history:{config.fingerprint[:12]}"
 
     def iter_batches(
         self,
@@ -163,7 +164,7 @@ class HistoricalTransactionGenerator:
                     "provider_latency_ms": int(provider_latencies[index]),
                     "total_latency_ms": int(total_latencies[index]),
                 },
-                "correlation_id": f"history:{self._config.fingerprint[:12]}",
+                "correlation_id": self._correlation_id,
                 "is_test": True,
             }
             decline = self._sample_decline(str(dimensions["provider_id"][index]), status)
