@@ -11,6 +11,7 @@ from app.api import incidents as incidents_api
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
 from app.memory import MemoryStatus
 from app.memory.models import RetrievalTrace, SimilarIncidentResult
+from app.simulation.background_traffic import submit_background_batch
 from main import app
 
 
@@ -179,3 +180,14 @@ def test_memory_unavailable_keeps_current_cause_and_deterministic_explanation(mo
     assert link["incident"]["root_cause"]["status"] == "SUPPORTED"
     assert link["explanation"]["model_version"] == "deterministic-template"
     assert any("memory is unavailable" in item.lower() for item in link["explanation"]["limitations"])
+
+
+def test_processed_background_traffic_has_no_incident_detail_until_rca_authors_a_link():
+    batch = submit_background_batch(2, seed=707)
+
+    details = [client.get(f"/v1/transactions/{transaction_id}/incidents") for transaction_id in batch["transaction_ids"]]
+
+    assert all(response.status_code == 200 for response in details)
+    assert all(response.json()["status"] == "NO_INCIDENT" for response in details)
+    assert all(response.json()["incidents"] == [] for response in details)
+    assert all("707" not in json.dumps(response.json()) for response in details)

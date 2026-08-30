@@ -2,12 +2,12 @@
 
 from fastapi import APIRouter
 
-from app.api.transactions import router as transactions_router  # noqa: I001 - imported first: app.api.demo pulls in app.simulation.background_traffic, which imports app.api.transactions; importing it here first keeps the package init a clean DAG instead of relying on Python's tolerance for partial-package imports.
 from app.api.demo import router as demo_router
 from app.api.events import router as events_router
 from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
 from app.api.metrics import router as metrics_router
+from app.api.transactions import router as transactions_router
 
 router = APIRouter()
 # CTR-API-001 v3's servers block is https://.../v1 for every documented path — these

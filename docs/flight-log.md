@@ -2359,6 +2359,29 @@ relaxar a regra.
 - **Validação concluída:** `18` testes de grounding/API passaram e
   `scripts/validate_contracts.py` retornou `OK`.
 
+### FL-20260829-ALTOE-009 — Integrar background traffic ao detalhe grounded
+
+- **Timestamp:** 2026-08-29T23:18:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Gabriel Altoé
+- **Escopo:** `LUM2-61`, `LUM2-62`, `LUM2-63`, `LUM2-64`; `CTR-TXL-001` e
+  `CTR-TDI-001 v1`
+- **Contexto:** a `main` recebeu o adapter determinístico e o harness de
+  tráfego, mas mantinha um import circular e ainda não carregava o contrato de
+  detalhe grounded.
+- **Decisão:** montar uma branch de integração sobre a `main`, aplicar a
+  cadeia de trace/contrato/evals e mover o import do harness para o handler
+  `/demo/background-traffic`. O teste de regressão importa o módulo em processo
+  novo para impedir o retorno do ciclo.
+- **Resultado:** tráfego de fundo entra pela batch API, o worker persiste os
+  eventos, métricas passam a refletir o batch processado e o detalhe de cada
+  transação sem vínculo RCA retorna `NO_INCIDENT` sem expor a seed. A associação
+  continua requerendo `related_incident_ids`, evidência e `correlation_id`.
+- **Validação concluída:** `44` testes integrados passaram e
+  `scripts/validate_contracts.py` retornou `OK`.
+- **Pendente:** revisão/merge na `main` e RCA real para autorizar links a
+  Incident em tráfego não controlado.
+
 ## Rogério
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->

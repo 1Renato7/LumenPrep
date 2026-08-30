@@ -47,8 +47,12 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
   memória indisponível com ExplanationBundle determinístico.
 - **Pronto agora:** testes controlados que usam batch/transaction records e não
   importam o harness de background traffic.
-- **Pendente de LUM2-62/61/48:** validação ponta a ponta do tráfego de fundo
-  real e do outcome adapter após os owners publicarem a cadeia integrada.
+- **Evidência de integração:** a branch
+  `codex/integrate-grounded-transactions` valida tráfego de fundo → batch →
+  worker → métricas → detalhe grounded; sem RCA, cada transação retorna
+  `NO_INCIDENT` sem expor a seed.
+- **Pendente de entrega:** revisão e merge dessa integração na `main`; a regra
+  de vínculo continua aguardando o RCA real para preencher Incident/evidência.
 - **Teste:** `tests/test_transaction_memory_evals.py`, além das regressões de
   `test_incident_transaction_filter.py` e `test_transaction_grounding.py`.
 

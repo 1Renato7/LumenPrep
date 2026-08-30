@@ -1,4 +1,7 @@
 import inspect
+from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,6 +10,8 @@ from app.config import settings
 from app.simulation.background_traffic import generate_background_transactions, submit_background_batch
 from main import app
 
+
+ROOT = Path(__file__).resolve().parents[1]
 client = TestClient(app)
 
 
@@ -32,6 +37,18 @@ def test_harness_never_imports_ingestion_directly():
     assert "app.ingestion" not in source
 
 
+def test_background_traffic_imports_in_a_fresh_process_without_api_cycle():
+    completed = subprocess.run(
+        [sys.executable, "-c", "import app.simulation.background_traffic; print('background import OK')"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.stdout.strip() == "background import OK"
+
+
 def test_submit_persists_then_worker_advances_it_to_a_terminal_state():
     response = submit_background_batch(3, seed=7)
     assert response["seed"] == 7
@@ -41,6 +58,16 @@ def test_submit_persists_then_worker_advances_it_to_a_terminal_state():
     assert batch.status_code == 200
     statuses = {item["status"] for item in batch.json()["items"]}
     assert statuses <= {"SUCCEEDED", "FAILED", "UNKNOWN"}
+
+
+def test_background_batch_changes_metrics_only_after_worker_processing():
+    assert client.get("/v1/metrics/current").json() == []
+
+    response = submit_background_batch(3, seed=17)
+
+    metrics = client.get("/v1/metrics/current")
+    assert metrics.status_code == 200
+    assert sum(item["eligible_attempts"] for item in metrics.json()) == len(response["transaction_ids"])
 
 
 def test_endpoint_requires_demo_mode_then_accepts_request(monkeypatch):
