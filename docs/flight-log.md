@@ -2303,6 +2303,16 @@ relaxar a regra.
   de memória, explicação e trace passaram via `unittest`. A descoberta completa
   ficou BLOCKED pelo ambiente: o Python disponível é 3.12.13, mas o projeto
   exige 3.14.4, e faltam `duckdb` e `jsonschema`.
+- **2026-08-29T22:15:19-03:00:** INTEGRATED: o filtro
+  `GET /v1/incidents?transaction_id=` passou a ler o registro persistido e a
+  aplicar o resolvedor de trace antes de devolver qualquer Incident. Assim,
+  `related_incident_ids` sozinho não autoriza exposição: classificação com
+  evidência vazia ou `correlation_id` divergente retorna lista vazia. A resposta
+  pública e os contratos não mudaram; o trace continua interno até o formato de
+  apresentação ser definido. PASS: `validate_contracts.py` e a suíte completa
+  executaram com 109 testes aprovados. Browser acceptance ficou BLOCKED pela
+  política do navegador local para `127.0.0.1`; os testes HTTP automatizados
+  cobrem o endpoint.
 
 ## Rogério
 

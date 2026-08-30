@@ -14,8 +14,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.config import settings
-from app.explanation import GroundedExplainer
-from app.ingestion.storage import related_incident_ids_for_transaction
+from app.explanation import GroundedExplainer, resolve_transaction_grounding_from_api_responses
+from app.ingestion.storage import transaction_record_for_grounding
 from app.memory import (
     Incident,
     IncidentMemoryService,
@@ -165,25 +165,36 @@ def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], ex
 
 @router.get("/incidents")
 def list_incidents(transaction_id: str | None = Query(default=None, min_length=1)) -> list[dict[str, Any]]:
-    """List current records; a `transaction_id` filter returns the full grounded trace per Incident."""
+    """List records; transaction filtering exposes only evidence-authorized Incidents."""
     records = _fixture_records()
     if transaction_id is None:
         return list(records.values())
 
-    related_ids = related_incident_ids_for_transaction(transaction_id)
-    if not related_ids:
+    transaction_record = transaction_record_for_grounding(transaction_id)
+    if transaction_record is None:
         # An unknown transaction and one without a correlated Incident both have no
         # authorized Incident to expose.  The public collection contract therefore
         # remains an empty list instead of manufacturing an error or a record.
         return []
-    responses = []
+
+    classification = transaction_record.get("classification")
+    related_ids = classification.get("related_incident_ids", []) if isinstance(classification, dict) else []
+    candidate_responses: dict[str, dict[str, Any]] = {}
     for incident_id in related_ids:
+        if not isinstance(incident_id, str):
+            continue
         incident = records.get(incident_id)
         if incident is None:
             continue
         memory, explanation = _memory_and_explanation(incident)
-        responses.append(build_incident_response(incident, memory, explanation))
-    return responses
+        candidate_responses[incident_id] = build_incident_response(incident, memory, explanation)
+
+    grounding = resolve_transaction_grounding_from_api_responses(
+        transaction_id,
+        [transaction_record],
+        candidate_responses,
+    )
+    return [candidate_responses[incident_id] for incident_id in grounding.incident_ids]
 
 
 @router.get("/incidents/{incident_id}")

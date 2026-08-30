@@ -124,6 +124,34 @@ def related_incident_ids_for_transaction(transaction_id: str) -> list[str] | Non
     return [incident_id for incident_id in related_ids if isinstance(incident_id, str) and incident_id]
 
 
+def transaction_record_for_grounding(transaction_id: str) -> dict[str, object] | None:
+    """Read only the persisted fields required by the grounded trace resolver.
+
+    The incidents API must not recreate a second transaction view or infer a
+    link from scope.  Returning the authored correlation and classification lets
+    the explanation layer enforce its evidence/correlation guardrail.
+    """
+    with CONNECTION_LOCK:
+        row = get_connection().execute(
+            """SELECT transaction_id, correlation_id, classification_json
+               FROM transaction_records WHERE transaction_id = ?""",
+            [transaction_id],
+        ).fetchone()
+    if row is None:
+        return None
+    classification: object = None
+    if row[2]:
+        try:
+            classification = json.loads(row[2])
+        except (TypeError, json.JSONDecodeError):
+            classification = None
+    return {
+        "transaction_id": row[0],
+        "correlation_id": row[1],
+        "classification": classification,
+    }
+
+
 def store_raw(con, event_id: str, received_at: datetime, raw_payload: dict) -> None:
     con.execute(
         "INSERT INTO raw_events (event_id, received_at, raw_json) VALUES (?, ?, ?)",

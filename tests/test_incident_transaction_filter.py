@@ -33,20 +33,27 @@ def _submit_transaction() -> str:
     return response.json()["transaction_ids"][0]
 
 
-def _set_related_incidents(transaction_id: str, incident_ids: list[str]) -> None:
+def _set_related_incidents(
+    transaction_id: str,
+    incident_ids: list[str],
+    *,
+    evidence_ids: list[str] | None = None,
+    correlation_id: str = "corr_inc_001",
+) -> None:
     with CONNECTION_LOCK:
         get_connection().execute(
-            "UPDATE transaction_records SET classification_json = ? WHERE transaction_id = ?",
+            "UPDATE transaction_records SET classification_json = ?, correlation_id = ? WHERE transaction_id = ?",
             [
                 json.dumps(
                     {
                         "category": "PROVIDER_ERROR",
                         "reason": "test",
                         "confidence": 1.0,
-                        "evidence_ids": [],
+                        "evidence_ids": evidence_ids if evidence_ids is not None else ["evt_txn_001"],
                         "related_incident_ids": incident_ids,
                     }
                 ),
+                correlation_id,
                 transaction_id,
             ],
         )
@@ -72,3 +79,26 @@ def test_incidents_filter_returns_empty_list_when_transaction_has_no_incident():
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_incidents_filter_rejects_links_without_evidence_or_matching_correlation():
+    transaction_id = _submit_transaction()
+    _set_related_incidents(
+        transaction_id,
+        ["inc_current_mastercard_001"],
+        evidence_ids=[],
+        correlation_id="corr_inc_001",
+    )
+
+    without_evidence = client.get("/v1/incidents", params={"transaction_id": transaction_id})
+    assert without_evidence.status_code == 200
+    assert without_evidence.json() == []
+
+    _set_related_incidents(
+        transaction_id,
+        ["inc_current_mastercard_001"],
+        correlation_id="corr_wrong",
+    )
+    wrong_correlation = client.get("/v1/incidents", params={"transaction_id": transaction_id})
+    assert wrong_correlation.status_code == 200
+    assert wrong_correlation.json() == []
