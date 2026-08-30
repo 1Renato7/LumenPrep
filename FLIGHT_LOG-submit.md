@@ -5,7 +5,7 @@
 This is the concise submission version of Lumen's decision log. The complete,
 append-only record — including timestamps, owners, alternatives, validation and
 revisions — remains in [`docs/flight-log.md`](docs/flight-log.md). This document
-selects only the four code decisions that define how Lumen works.
+selects the current implementation decisions that define how Lumen works.
 
 Lumen is a transaction-first control tower: persisted synthetic payment facts flow
 through deterministic processing, detection and RCA before memory or AI can offer a
@@ -63,7 +63,8 @@ We accept lower apparent coverage to avoid false confidence.
 **Decision.** An Incident is persisted before memory retrieval or an agent suggestion.
 Neo4j is optional and stores/retrieves confirmed historical context; the agent receives
 an immutable evidence pack and returns a separate, grounded `HUMAN_ONLY` suggestion.
-Only an explicit human review can promote a precedent.
+Only an explicit, provenance-bearing human review or confirmation can promote a
+precedent; evaluation records are excluded from operational memory.
 
 **Why it matters.** A precedent or fluent model response cannot rewrite the current
 RCA, and an unavailable model cannot erase the evidence-backed Incident. No component
@@ -74,15 +75,48 @@ AI. Memory can be unavailable and an agent can return insufficient evidence.
 
 **Trace.** `FL-20260830-TEAM-029`; `CTR-MEM-001`; `CTR-AGT-003`.
 
+### 5. The browser demonstrates live records through protected, isolated trials
+
+**Decision.** The web runtime reads and displays the live transaction and Incident
+API. Its optional demo controls are enabled only with `DEMO_MODE=false` and
+`DEMO_LIVE_TRIALS_ENABLED=true`; each trial establishes an isolated baseline and
+queues a fixed 25-transaction synthetic batch through the normal worker.
+
+**Why it matters.** An operator can follow a real `PROCESSING` lifecycle, resulting
+log and Incident without allowing the browser to write scenarios directly to storage
+or present a fixture as a production result.
+
+**Trade-off.** The controls are intentionally limited to two fixed synthetic trials
+and one queued worker. The richer scenario-injection harness remains internal and
+fixture-bounded under `DEMO_MODE=true`.
+
+**Trace.** `FL-20260830-TEAM-045`; `FL-20260830-TEAM-046`; `CTR-DEMO-002`.
+
+### 6. Evaluation is independent from operational facts and memory
+
+**Decision.** Conversion/case evaluation and the Railway GraphRAG probe test the
+system with provenance checks, synthetic holdouts and explicit environment guards.
+Their records do not become live Incidents or precedents.
+
+**Why it matters.** A benchmark, evaluator or model response cannot inflate the
+product's operational evidence or make a historical match appear confirmed.
+
+**Trade-off.** Deployed Railway/Vercel proof remains `NOT RUN` until real credentials,
+URLs and acceptance steps are available; local evaluation is not represented as
+production acceptance.
+
+**Trace.** `FL-20260830-ROGERIO-032`; `CTR-EVAL-001`.
+
 ## Evidence and open limits
 
-- The current review found **245 passing backend tests and two reproducible failures**:
-  duplicate multi-metric Incidents in one causal slice, and non-identical deterministic
-  behavior when optional fields are omitted versus `null`.
-- Public Railway/Vercel, Volume/restart/CORS and browser acceptance evidence is
-  **NOT RUN** in the current review.
-- The demo incident read path uses fixtures when `DEMO_MODE=true`; normal mode reads
-  persisted DuckDB Incidents.
+- The current local backend suite has **291 passing tests**, covering lifecycle,
+  grounding, human review, live-demo guards, conversion evaluation and GraphRAG probe
+  behavior.
+- The read-only Railway GraphRAG probe confirmed a primary Neo4j trace without
+  fallback. End-to-end Railway/Vercel, Volume/restart/CORS and browser-acceptance
+  evidence remains **NOT RUN** in the current review.
+- `DEMO_MODE=true` keeps the internal scenario harness fixture-bounded; normal mode
+  reads persisted DuckDB Incidents, and protected live trials require `DEMO_MODE=false`.
 
 These limits are intentional disclosure, not acceptance claims. The full decision
 history and its evidence are available in [`docs/flight-log.md`](docs/flight-log.md).
