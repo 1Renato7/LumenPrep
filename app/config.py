@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5.6-sol"
     openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "medium"
     openai_timeout_seconds: float = 20.0
+
+    @field_validator("demo_mode", "demo_live_trials_enabled", mode="before")
+    @classmethod
+    def blank_feature_flags_are_disabled(cls, value: object) -> object:
+        """Treat empty deployment placeholders as the explicit safe default."""
+
+        return False if isinstance(value, str) and not value.strip() else value
 
     @model_validator(mode="after")
     def default_duckdb_path_to_data_dir(self) -> "Settings":
