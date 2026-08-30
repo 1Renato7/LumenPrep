@@ -39,6 +39,8 @@ def test_catalog_and_seeded_samples_are_public_facts_only():
     assert {"BR", "MX", "CO"}.issubset(catalog.json()["countries"])
     assert {"stripe", "adyen", "dlocal", "mercadopago"}.issubset(catalog.json()["providers"])
     assert {"PIX", "SPEI", "PSE", "CASH_IN_STORE"}.issubset(catalog.json()["payment_method_categories"])
+    assert {"code": "0", "reason": "(none)"} in catalog.json()["provider_response_options"]
+    assert len(catalog.json()["provider_response_options"]) == 42
 
     first = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 3, "seed": 42})
     second = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 3, "seed": 42})
@@ -57,7 +59,6 @@ def test_samples_fill_every_form_field_with_independent_catalog_choices():
     assert len(transactions) == 50
     catalog_fields = {
         "merchant_id": "merchants",
-        "provider_id": "providers",
         "issuer_bank": "issuer_banks",
         "country": "countries",
         "currency": "currencies",
@@ -65,18 +66,23 @@ def test_samples_fill_every_form_field_with_independent_catalog_choices():
         "card_brand": "card_brands",
         "card_type": "card_types",
     }
+    response_options = {option["code"]: option["reason"] for option in catalog["provider_response_options"]}
     for transaction in transactions:
         assert transaction["client_reference"]
         assert transaction["occurred_at"]
         assert transaction["amount_minor"] >= 1
         assert transaction["provider_connection_id"]
         assert transaction["provider_response_code"]
+        assert transaction["provider_id"] == "adyen"
+        assert transaction["provider_response_code"] in response_options
+        assert transaction["provider_connection_id"] == response_options[transaction["provider_response_code"]]
         for transaction_field, catalog_field in catalog_fields.items():
             assert transaction[transaction_field] in catalog[catalog_field]
 
     for transaction_field in catalog_fields:
         assert len({transaction[transaction_field] for transaction in transactions}) > 1
     assert len({transaction["amount_minor"] for transaction in transactions}) > 1
+    assert len({transaction["provider_response_code"] for transaction in transactions}) > 1
 
 
 def test_batch_persists_before_202_and_can_be_read_back():

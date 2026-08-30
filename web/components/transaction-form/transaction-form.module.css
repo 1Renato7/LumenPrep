@@ -87,8 +87,10 @@
 .rowNumber { color: #fff; font-size: 1.05rem; font-weight: 750; letter-spacing: -.015em; }
 .rowActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; }
 .fieldGrid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .8rem; margin-top: 1rem; }
-.fieldGrid > :nth-child(1), .fieldGrid > :nth-child(2), .fieldGrid > :nth-child(12) { grid-column: span 4; }
+.fieldGrid > :nth-child(1), .fieldGrid > :nth-child(2) { grid-column: span 4; }
 .fieldGrid > :nth-child(3), .fieldGrid > :nth-child(4), .fieldGrid > :nth-child(5), .fieldGrid > :nth-child(6), .fieldGrid > :nth-child(7), .fieldGrid > :nth-child(8), .fieldGrid > :nth-child(9), .fieldGrid > :nth-child(10), .fieldGrid > :nth-child(11) { grid-column: span 3; }
+.fieldGrid > :nth-child(12) { grid-column: span 2; }
+.fieldGrid > :nth-child(13) { grid-column: span 6; }
 
 .button { display: inline-flex; align-items: center; justify-content: center; gap: .48rem; min-height: 2.8rem; border: 1px solid transparent; border-radius: .65rem; padding: .65rem .85rem; cursor: pointer; font: inherit; font-size: .84rem; font-weight: 750; line-height: 1; transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, color 160ms ease; }
 .button:focus-visible { outline: 3px solid #b3c0ff; outline-offset: 3px; }

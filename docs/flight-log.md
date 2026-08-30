@@ -5686,3 +5686,26 @@ Ao solicitar um lote no formulário, o usuário espera que cada campo visível s
 #### Trade-off e validação
 
 Aceitamos que uma combinação sintética possa não representar uma rota de pagamento real (por exemplo, moeda e país independentes), pois o requisito prioriza aleatoriedade de cada campo e a API aceita essas opções do catálogo. O endpoint continua determinístico quando recebe `seed`, o que permite teste reproduzível; o teste de 50 itens verifica preenchimento, pertencimento ao catálogo e variedade em todos os campos sorteados.
+
+### FL-20260830-TEAM-048 — Parear resposta e conexão pela tabela Adyen versionada
+
+- **Timestamp:** 2026-08-30T09:42:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** data | contract | UX | integration
+- **Escopo:** `CTR-TXN-001 v1`, geração de amostras e formulário de novas transações
+- **Links:** `data/adyen-refusal-reasons.md`; `contracts/v1/transaction-catalog.schema.json`; `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** restringe a parte de resposta/conexão de `FL-20260830-TEAM-047`; não altera os demais campos aleatórios.
+
+#### Contexto e decisão
+
+O gerador aleatório anterior preenchia código de resposta e conexão sem uma relação operacional, embora a referência fornecida pelo usuário defina pares numéricos e nomes Adyen. A tabela Markdown fornecida passa a ser a fonte de verdade versionada e lida pelo runtime. O catálogo público expõe esses pares; os lotes gerados escolhem um par inteiro, e o formulário apresenta dois selectores sincronizados. Selecionar código ou nome preenche seu correspondente e define `provider_id` como `adyen`.
+
+#### Alternativas, trade-offs e validação
+
+- **Manter textos e códigos aleatórios:** rejeitado, pois poderia enviar um nome sem relação com o código.
+- **Duplicar a lista em Python e TypeScript:** rejeitado, pois criaria duas fontes de verdade sujeitas a divergência.
+- **Fonte Markdown versionada + catálogo de API:** escolhida; é auditável no GitHub e disponível ao processo real, ao custo de o runtime validar e ler o arquivo no primeiro uso.
+- **Layout:** o campo de código ocupa duas colunas e o de conexão seis, para acomodar os nomes longos sem reduzir os demais campos.
+- **Validação:** testes cobrem as 42 opções, lote de 50 itens com pares válidos, schema/fixture e a rejeição no formulário de combinação ou provider incompatíveis.

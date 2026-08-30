@@ -168,7 +168,25 @@ export function parseTransactionInput(value: unknown): TransactionInput {
 }
 
 export function parseTransactionCatalog(value: unknown): TransactionCatalog {
-  const catalog = exactObject(value, ["schema_version", "max_batch_size", "merchants", "providers", "issuer_banks", "countries", "currencies", "payment_method_categories", "card_brands", "card_types", "correlation_id"], [], "TransactionCatalog");
+  const catalog = exactObject(value, ["schema_version", "max_batch_size", "merchants", "providers", "issuer_banks", "countries", "currencies", "payment_method_categories", "card_brands", "card_types", "provider_response_options", "correlation_id"], [], "TransactionCatalog");
+  if (!Array.isArray(catalog.provider_response_options) || catalog.provider_response_options.length < 1) {
+    fail("TransactionCatalog.provider_response_options must contain at least one item.", value);
+  }
+  const providerResponseOptions = catalog.provider_response_options.map((option, index) => {
+    const parsed = exactObject(option, ["code", "reason"], [], `TransactionCatalog.provider_response_options[${index}]`);
+    const code = string(parsed.code, `TransactionCatalog.provider_response_options[${index}].code`);
+    const reason = string(parsed.reason, `TransactionCatalog.provider_response_options[${index}].reason`);
+    if (!/^\d+$/.test(code) || reason.length > 100) {
+      fail(`TransactionCatalog.provider_response_options[${index}] is invalid.`, option);
+    }
+    return { code, reason };
+  });
+  if (new Set(providerResponseOptions.map((option) => option.code)).size !== providerResponseOptions.length) {
+    fail("TransactionCatalog.provider_response_options must use unique codes.", value);
+  }
+  if (new Set(providerResponseOptions.map((option) => option.reason)).size !== providerResponseOptions.length) {
+    fail("TransactionCatalog.provider_response_options must use unique reasons.", value);
+  }
   return {
     schema_version: schemaVersion(catalog.schema_version, "TransactionCatalog.schema_version"),
     max_batch_size: integer(catalog.max_batch_size, "TransactionCatalog.max_batch_size", 1, 100),
@@ -180,6 +198,7 @@ export function parseTransactionCatalog(value: unknown): TransactionCatalog {
     payment_method_categories: stringArray(catalog.payment_method_categories, "TransactionCatalog.payment_method_categories"),
     card_brands: stringArray(catalog.card_brands, "TransactionCatalog.card_brands"),
     card_types: stringArray(catalog.card_types, "TransactionCatalog.card_types"),
+    provider_response_options: providerResponseOptions,
     correlation_id: string(catalog.correlation_id, "TransactionCatalog.correlation_id"),
   };
 }

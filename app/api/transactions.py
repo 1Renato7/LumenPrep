@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import settings
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
+from app.refusal_codes.adyen_refusal_reasons import refusal_reason_options
 from app.worker.transaction_worker import run_batch_to_completion
 
 router = APIRouter(prefix="/v1", tags=["transactions"])
@@ -119,6 +120,10 @@ def _catalog_response() -> dict[str, Any]:
         "schema_version": "1.0",
         "max_batch_size": MAX_BATCH_SIZE,
         **{key: list(value) for key, value in _CATALOG.items()},
+        "provider_response_options": [
+            {"code": option.code, "reason": option.reason}
+            for option in refusal_reason_options()
+        ],
         "correlation_id": _correlation_id(),
     }
 
@@ -140,12 +145,13 @@ def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, An
     random = Random(seed)
     transactions: list[dict[str, Any]] = []
     for index in range(request.count):
+        refusal_reason = random.choice(refusal_reason_options())
         transactions.append(
             {
                 "client_reference": f"sample-{index + 1}-{random.randrange(1_000_000, 10_000_000)}",
                 "occurred_at": _iso(datetime(2026, 1, 1) + timedelta(seconds=random.randrange(31_536_000))),
                 "merchant_id": defaults.merchant_id or random.choice(_CATALOG["merchants"]),
-                "provider_id": random.choice(_CATALOG["providers"]),
+                "provider_id": "adyen",
                 "issuer_bank": random.choice(_CATALOG["issuer_banks"]),
                 "country": defaults.country or random.choice(_CATALOG["countries"]),
                 "currency": defaults.currency or random.choice(_CATALOG["currencies"]),
@@ -153,8 +159,8 @@ def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, An
                 "payment_method_category": random.choice(_CATALOG["payment_method_categories"]),
                 "card_brand": random.choice(_CATALOG["card_brands"]),
                 "card_type": random.choice(_CATALOG["card_types"]),
-                "provider_connection_id": f"conn-{random.randrange(1_000_000, 10_000_000)}",
-                "provider_response_code": random.choice(("00", "05", "14", "51", "54", "57", "61", "65", "68", "91")),
+                "provider_connection_id": refusal_reason.reason,
+                "provider_response_code": refusal_reason.code,
                 "channel": random.choice(("WEB", "MOBILE", "POS", "API")),
             }
         )

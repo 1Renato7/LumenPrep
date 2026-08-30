@@ -91,7 +91,7 @@ O MVP vence quando uma pessoa:
 - Uma linha inicial e controles `Add transaction`, `Duplicate` e `Remove`.
 - O catálogo vem de `GET /v1/transaction-catalog`; nenhum option ID fica hardcoded.
 - `Generate sample transactions` recebe quantidade de 1 a 100, chama `POST /v1/transaction-samples` e preenche linhas editáveis. Seed continua uma capacidade opcional da API, mas não é exposta como controle público. A resposta nunca inclui outcome, status, métricas, causa ou ground truth.
-- Campos: referência opcional, timestamp opcional, merchant, provider, banco emissor, país, moeda, valor em unidade mínima, método, bandeira/tipo quando aplicáveis, código de resposta do provedor quando disponível e conexão opcional.
+- Campos: referência opcional, timestamp opcional, merchant, provider, banco emissor, país, moeda, valor em unidade mínima, método e bandeira/tipo quando aplicáveis. `Provider response code` e `Provider connection` formam um par Adyen obrigatório: ambos são selectores sincronizados a partir de `data/adyen-refusal-reasons.md`; escolher um completa o outro e fixa o provider como `adyen`.
 - Um `Submit batch` envia de 1 a 100 itens com `Idempotency-Key`.
 - A resposta `202` redireciona para `/transactions?batch_id=...`; erro preserva os dados digitados.
 
@@ -202,7 +202,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 
 | ID/versão | Estado | Produtor → consumidores | Propósito | Erros/fallback | Evidência |
 | --- | --- | --- | --- | --- | --- |
-| CTR-TXN-001 v1 | FROZEN / IMPLEMENTED ON MAIN | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | endpoints, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
+| CTR-TXN-001 v1 | COMPATÍVEL / IMPLEMENTED ON MAIN | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas; `provider_response_options` expõe pares código/motivo da tabela Adyen versionada | `422`, `409`, `503`; idempotência e seed; o formulário impede pares Adyen incompatíveis | `data/adyen-refusal-reasons.md`, schema, fixture e testes HTTP/UI |
 | CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome, classificação e a primeira ocorrência de cada Incident relacionado | stale/unknown explícitos; campo aditivo pode estar ausente em registros legados até a migração local | worker, schemas e fixtures; validação de recorrência em `FL-20260830-TEAM-039` |
 | `DEC-037` behavior | COMPATÍVEL / IMPLEMENTADO | worker → `CTR-TXL-001`/`CTR-INC-001` | um `INCONCLUSIVE` é vinculado somente ao lote terminal homogêneo de recusa mapeada | mesmo `correlation_id`, código, escopo e evidência por transação; não cria causa ou schema novo | regressões de código 68 e controles mistos/abaixo do limiar |
 | CTR-API-001 v3 | FROZEN / IMPLEMENTED ON MAIN | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | endpoints e OpenAPI em `origin/main@103073b`; CORS/deploy pendentes |

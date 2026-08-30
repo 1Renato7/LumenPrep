@@ -20,13 +20,17 @@ const catalog: TransactionCatalog = {
   schema_version: "1.0",
   max_batch_size: 100,
   merchants: ["merchant_br_01", "merchant_mx_01"],
-  providers: ["provider_alpha", "provider_beta"],
+  providers: ["provider_alpha", "provider_beta", "adyen"],
   issuer_banks: ["bank_br_a", "bank_br_b"],
   countries: ["BR", "MX"],
   currencies: ["BRL", "MXN"],
   payment_method_categories: ["CARD", "DIGITAL_WALLET"],
   card_brands: ["MASTERCARD", "VISA"],
   card_types: ["CREDIT", "DEBIT", "NOT_APPLICABLE"],
+  provider_response_options: [
+    { code: "0", reason: "(none)" },
+    { code: "2", reason: "Refused" },
+  ],
   correlation_id: "corr_catalog_test",
 };
 
@@ -36,7 +40,7 @@ const samples: TransactionSampleResponse = {
   transactions: [
     {
       merchant_id: "merchant_br_01",
-      provider_id: "provider_alpha",
+      provider_id: "adyen",
       issuer_bank: "bank_br_a",
       country: "BR",
       currency: "BRL",
@@ -44,18 +48,20 @@ const samples: TransactionSampleResponse = {
       payment_method_category: "CARD",
       card_brand: "MASTERCARD",
       card_type: "CREDIT",
-      provider_response_code: "00",
+      provider_connection_id: "(none)",
+      provider_response_code: "0",
     },
     {
       merchant_id: "merchant_mx_01",
-      provider_id: "provider_beta",
+      provider_id: "adyen",
       issuer_bank: "bank_br_b",
       country: "MX",
       currency: "MXN",
       amount_minor: 7990,
       payment_method_category: "DIGITAL_WALLET",
       card_type: "NOT_APPLICABLE",
-      provider_response_code: "00",
+      provider_connection_id: "Refused",
+      provider_response_code: "2",
     },
   ],
   correlation_id: "corr_sample_test",
@@ -89,6 +95,7 @@ test("catalog options contain every value supplied by the API catalog", () => {
   assert.deepEqual(options.payment_method_categories, catalog.payment_method_categories);
   assert.deepEqual(options.card_brands, catalog.card_brands);
   assert.deepEqual(options.card_types, catalog.card_types);
+  assert.deepEqual(options.provider_response_options, catalog.provider_response_options);
 });
 
 test("a sample response keeps the received batch editable", () => {
@@ -155,5 +162,18 @@ test("provider response code is required before submitting a batch", () => {
 
   assert.deepEqual(validateTransactionRows(withoutResponseCode.rows, catalog), [
     { rowIndex: 0, field: "provider_response_code", message: "provider response code is required." },
+  ]);
+});
+
+test("provider response code and connection must use the matching Adyen table pair", () => {
+  const state = replaceRowsWithSamples(createInitialFormState(), samples);
+  const mismatchedConnection = updateTransactionField(state, state.rows[0].id, "provider_connection_id", "Refused");
+  const nonAdyenProvider = updateTransactionField(state, state.rows[0].id, "provider_id", "provider_alpha");
+
+  assert.deepEqual(validateTransactionRows(mismatchedConnection.rows, catalog), [
+    { rowIndex: 0, field: "provider_connection_id", message: "Provider connection must match the selected provider response code." },
+  ]);
+  assert.deepEqual(validateTransactionRows(nonAdyenProvider.rows, catalog), [
+    { rowIndex: 0, field: "provider_id", message: "Adyen response codes require the Adyen provider." },
   ]);
 });

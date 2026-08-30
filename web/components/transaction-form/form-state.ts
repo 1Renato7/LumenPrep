@@ -50,6 +50,7 @@ export type CatalogOptions = Pick<
   | "payment_method_categories"
   | "card_brands"
   | "card_types"
+  | "provider_response_options"
 >;
 
 let nextRowId = 1;
@@ -135,6 +136,7 @@ export function catalogOptions(catalog: TransactionCatalog): CatalogOptions {
     payment_method_categories: catalog.payment_method_categories,
     card_brands: catalog.card_brands,
     card_types: catalog.card_types,
+    provider_response_options: catalog.provider_response_options,
   };
 }
 
@@ -187,6 +189,15 @@ export function validateTransactionRows(
     }
     if (values.card_type) {
       assertOption(issues, rowIndex, "card_type", values.card_type, catalog.card_types);
+    }
+    const responseOption = catalog.provider_response_options.find((option) => option.code === values.provider_response_code);
+    if (values.provider_response_code.trim() && !responseOption) {
+      issues.push({ rowIndex, field: "provider_response_code", message: "Provider response code is not available in the Adyen reference table." });
+    } else if (responseOption && values.provider_connection_id !== responseOption.reason) {
+      issues.push({ rowIndex, field: "provider_connection_id", message: "Provider connection must match the selected provider response code." });
+    }
+    if (responseOption && values.provider_id !== "adyen") {
+      issues.push({ rowIndex, field: "provider_id", message: "Adyen response codes require the Adyen provider." });
     }
   }
   return uniqueIssues(issues);
@@ -288,6 +299,7 @@ const requiredFields: TransactionField[] = [
   "currency",
   "amount_minor",
   "payment_method_category",
+  "provider_connection_id",
   "provider_response_code",
 ];
 

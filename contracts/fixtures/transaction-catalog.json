@@ -9,5 +9,6 @@
   "payment_method_categories": ["CARD", "DIGITAL_WALLET", "BANK_TRANSFER"],
   "card_brands": ["MASTERCARD", "VISA"],
   "card_types": ["CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE"],
+  "provider_response_options": [{"code": "0", "reason": "(none)"}, {"code": "2", "reason": "Refused"}, {"code": "4", "reason": "Acquirer Error"}],
   "correlation_id": "corr_demo_catalog_0001"
 }

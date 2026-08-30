@@ -49,7 +49,13 @@ export interface TransactionCatalog {
   payment_method_categories: string[];
   card_brands: string[];
   card_types: string[];
+  provider_response_options: ProviderResponseOption[];
   correlation_id: string;
+}
+
+export interface ProviderResponseOption {
+  code: string;
+  reason: string;
 }
 
 export interface TransactionSampleRequest {
