@@ -54,7 +54,7 @@ class HistoricalTransactionGenerator:
     def iter_batches(
         self,
         *,
-        transactions_per_minute: int,
+        transactions_per_minute: float,
         batch_minutes: int = 60,
         total_minutes: int | None = None,
     ) -> Iterator[HistoricalBatch]:
@@ -88,7 +88,7 @@ class HistoricalTransactionGenerator:
         self,
         publisher: TransactionPublisher,
         *,
-        transactions_per_minute: int,
+        transactions_per_minute: float,
         batch_minutes: int = 60,
         total_minutes: int | None = None,
     ) -> HistoricalGenerationReport:
@@ -114,7 +114,7 @@ class HistoricalTransactionGenerator:
             low_sample_start_at=_iso_z(low_sample_at),
         )
 
-    def _minute_counts(self, indices: np.ndarray, rate: int, total_minutes: int) -> np.ndarray:
+    def _minute_counts(self, indices: np.ndarray, rate: float, total_minutes: int) -> np.ndarray:
         absolute_minutes = self._start_at.weekday() * 24 * 60 + self._start_at.hour * 60 + self._start_at.minute + indices
         weekday = (absolute_minutes // (24 * 60)) % 7
         minute_of_day = absolute_minutes % (24 * 60)

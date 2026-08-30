@@ -159,6 +159,35 @@ def store_raw(con, event_id: str, received_at: datetime, raw_payload: dict) -> N
     )
 
 
+def existing_event_ids(con, event_ids: list[str]) -> set[str]:
+    if not event_ids:
+        return set()
+    placeholders = ", ".join("?" for _ in event_ids)
+    return {row[0] for row in con.execute(f"SELECT event_id FROM raw_events WHERE event_id IN ({placeholders})", event_ids).fetchall()}
+
+
+def current_attempt_states(con, attempt_ids: list[str]) -> dict[str, tuple[str, datetime]]:
+    if not attempt_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in attempt_ids)
+    return {
+        attempt_id: (status, event_time)
+        for attempt_id, status, event_time in con.execute(
+            f"SELECT attempt_id, status, event_time FROM canonical_attempts WHERE attempt_id IN ({placeholders})",
+            attempt_ids,
+        ).fetchall()
+    }
+
+
+def store_raw_many(con, rows: list[tuple[str, datetime, dict]]) -> None:
+    if not rows:
+        return
+    con.executemany(
+        "INSERT INTO raw_events (event_id, received_at, raw_json) VALUES (?, ?, ?)",
+        [(event_id, received_at, json.dumps(raw_payload)) for event_id, received_at, raw_payload in rows],
+    )
+
+
 def store_canonical_event(
     con, canonical: dict, event_time: datetime, applied: bool, is_late: bool
 ) -> None:
@@ -175,6 +204,29 @@ def store_canonical_event(
             is_late,
             applied,
             json.dumps(canonical),
+        ],
+    )
+
+
+def store_canonical_events_many(con, rows: list[tuple[dict, datetime, bool, bool]]) -> None:
+    if not rows:
+        return
+    con.executemany(
+        """INSERT INTO canonical_events
+           (event_id, attempt_id, payment_id, event_time, status, is_late, applied, canonical_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        [
+            (
+                canonical["event_id"],
+                canonical["attempt_id"],
+                canonical["payment_id"],
+                event_time,
+                canonical["status"],
+                is_late,
+                applied,
+                json.dumps(canonical),
+            )
+            for canonical, event_time, applied, is_late in rows
         ],
     )
 
@@ -197,4 +249,39 @@ def upsert_current_state(con, canonical: dict, event_time: datetime) -> None:
             canonical["status"],
             json.dumps(canonical),
         ],
+    )
+
+
+def upsert_current_states_many(con, rows: list[tuple[dict, datetime]]) -> None:
+    if not rows:
+        return
+    con.executemany(
+        """INSERT INTO canonical_attempts
+               (attempt_id, payment_id, latest_event_id, event_time, status, canonical_json)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (attempt_id) DO UPDATE SET
+               latest_event_id = excluded.latest_event_id,
+               event_time = excluded.event_time,
+               status = excluded.status,
+               canonical_json = excluded.canonical_json""",
+        [
+            (
+                canonical["attempt_id"],
+                canonical["payment_id"],
+                canonical["event_id"],
+                event_time,
+                canonical["status"],
+                json.dumps(canonical),
+            )
+            for canonical, event_time in rows
+        ],
+    )
+
+
+def quarantine_many(con, rows: list[tuple[str, datetime, dict, str]]) -> None:
+    if not rows:
+        return
+    con.executemany(
+        "INSERT INTO quarantine (event_id, received_at, reason, raw_json) VALUES (?, ?, ?, ?)",
+        [(event_id, received_at, reason, json.dumps(raw_payload)) for event_id, received_at, raw_payload, reason in rows],
     )

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from threading import Event, Thread
 from time import sleep
 
-from app.ingestion import IngestResult, ingest_event
+from app.ingestion import IngestResult, ingest_events
 from app.streaming.server import TransactionServer
 
 
@@ -35,12 +35,11 @@ class IngestionListener:
 
     def consume_available(self, *, limit: int = 100) -> ConsumeReport:
         envelopes = self._server.read_after(self._cursor, limit=limit)
-        results: list[IngestResult] = []
+        # Do not advance the cursor when the ingestion boundary itself raises:
+        # the complete transaction rolls back and retrying the same event IDs
+        # remains safe through the existing dedupe rule.
+        results: tuple[IngestResult, ...] = ingest_events([envelope.payload for envelope in envelopes])
         for envelope in envelopes:
-            # Do not advance the cursor when the ingestion boundary itself
-            # raises: retrying the same event is safe because it deduplicates.
-            result = ingest_event(envelope.payload)
-            results.append(result)
             self._cursor = envelope.sequence
         return ConsumeReport(
             consumed=len(results),

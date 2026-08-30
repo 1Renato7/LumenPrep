@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 
-from app.ingestion import ingest_event
+import pytest
+
+from app.ingestion import ingest_event, ingest_events, storage
+from app.streaming import IngestionListener, TransactionServer
 
 
 def test_valid_attempt_accepted(valid_attempt):
@@ -15,6 +18,47 @@ def test_duplicate_event_id_rejected(valid_attempt):
     second = ingest_event(valid_attempt)
     assert first.status == "ACCEPTED"
     assert second.status == "DUPLICATE"
+
+
+def test_listener_batch_ingestion_preserves_order_and_deduplication(valid_attempt):
+    first = dict(valid_attempt)
+    second = dict(valid_attempt)
+    second["event_id"] = "evt_second"
+
+    results = ingest_events([first, second, first])
+
+    assert [result.status for result in results] == ["ACCEPTED", "ACCEPTED", "DUPLICATE"]
+    assert [result.event_id for result in results] == [first["event_id"], "evt_second", first["event_id"]]
+
+
+def test_batch_write_failure_rolls_back_preceding_raw_events(monkeypatch, valid_attempt):
+    def fail_canonical_write(*_args):
+        raise RuntimeError("simulated storage failure")
+
+    monkeypatch.setattr(storage, "store_canonical_events_many", fail_canonical_write)
+
+    with pytest.raises(RuntimeError, match="simulated storage failure"):
+        ingest_events([valid_attempt])
+
+    connection = storage.get_connection()
+    assert connection.execute("SELECT count(*) FROM raw_events").fetchone()[0] == 0
+    assert connection.execute("SELECT count(*) FROM canonical_events").fetchone()[0] == 0
+
+
+def test_listener_does_not_advance_cursor_when_batch_rolls_back(monkeypatch, valid_attempt):
+    server = TransactionServer()
+    server.publish([valid_attempt])
+    listener = IngestionListener(server)
+
+    def fail_canonical_write(*_args):
+        raise RuntimeError("simulated storage failure")
+
+    monkeypatch.setattr(storage, "store_canonical_events_many", fail_canonical_write)
+
+    with pytest.raises(RuntimeError, match="simulated storage failure"):
+        listener.consume_available()
+
+    assert listener.cursor == 0
 
 
 def test_unknown_status_enum_quarantined(valid_attempt):

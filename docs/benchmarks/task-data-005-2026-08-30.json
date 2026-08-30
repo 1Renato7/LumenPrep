@@ -1,0 +1,21 @@
+{
+  "accepted_events": 8256,
+  "analyzed_windows": 8068,
+  "batch_minutes": 60,
+  "config_fingerprint": "8b222ad7d859a75b4267c3412f21d899d86e7747d74ad46c3506db5a184ba806",
+  "duration_seconds": 1127.3941964000114,
+  "event_digest": "d3fb6959c92d545f05aecfa49d483fde1744551f47e81daf6dcd8c472c5d2461",
+  "generated_events": 8256,
+  "horizon_minutes": 129600,
+  "listener_consumed": 8256,
+  "low_sample_events": 12,
+  "parquet_bytes": 734214,
+  "parquet_partitions": 90,
+  "parquet_rows": 8256,
+  "peak_process_rss_bytes": 207917056,
+  "published_events": 8256,
+  "quarantined_events": 0,
+  "seed": 29082026,
+  "start_at": "2026-06-01T00:00:00Z",
+  "transactions_per_minute": 0.1
+}

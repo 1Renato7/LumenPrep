@@ -3615,3 +3615,65 @@ _Preencher no modo `FINALIZE`._
 | Resolve o problema real | NOT READY | — | Ligar decisões ao enunciado e casos difíceis |
 | Originalidade | NOT READY | — | Explicar o insight original como mecanismo |
 | Experiência e clareza | PARTIAL | Este arquivo é legível no repo | Validar com leitor externo e demo |
+
+### FL-20260830-RENATO-008 — Materializar somente fatos aceitos após a fronteira do servidor
+
+- **Timestamp:** 2026-08-30T00:05:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** solicitante; Codex como implementador e recorder
+- **Categoria:** data | quality | integration | operation
+- **Escopo:** `LUM2-47` / `TASK-DATA-005`, `CMP-ING-001`, `CTR-STR-001`, handoff `ING-001`
+- **Links:** `app/benchmark/parquet.py`, `app/streaming/listener.py`, `docs/benchmarks/task-data-005-2026-08-30.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O refactor já integrado estabelece o caminho gerador → servidor de transações → listener backend → análise. A tarefa exige materializar Parquet e medir o caminho real, sem transformar o benchmark em uma exportação direta do gerador nem misturar dados de execuções distintas.
+
+#### Decisão
+
+Executar o benchmark por lotes através de `TransactionServer` e `IngestionListener`, ingerindo cada lote em uma transação DuckDB e exportando somente `canonical_events` aceitos para Parquet ZSTD particionado por `event_date`. A materialização e o relatório recusam sobrescrita. A branch operacional foi normalizada para `renato/tarefa-47`, pois Git não aceita espaço em nomes de branch; o trabalho foi isolado em worktree enquanto outra tarefa mantinha um rebase pendente.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Exportar diretamente os lotes do gerador | Mais rápido e simples | Ignora validação, dedupe e ordenação do caminho real | FACT: o refactor define o listener como fronteira de ingestão | Não mede o comportamento que será operado |
+| Inserir evento a evento no benchmark | Sem nova API de lote | O custo de commits e consultas repetidas domina a medida | TEST: o benchmark inicial ficou lento com validação e I/O repetidos | Não representa o consumo em lote do servidor |
+| Lote transacional e Parquet de fatos aceitos | Mantém a fronteira e reduz overhead sem pular regras | Uma falha exige retry do lote completo | TEST: rollback preserva ausência de fatos parciais | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o run de 90 dias com seed `29082026` publicou, ouviu e aceitou `8256` eventos; gerou `90` partições e `734214` bytes de Parquet.
+- **TEST:** a duração observada foi `1127.394` s e o pico RSS do processo foi `207917056` bytes; o digest canônico foi `d3fb6959c92d545f05aecfa49d483fde1744551f47e81daf6dcd8c472c5d2461`.
+- **UNKNOWN:** o RSS inclui Python, DuckDB nativo e o log em memória do adaptador local; não isola cada componente.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** dados reproduzíveis que passaram pelo mesmo servidor, listener e validações do produto.
+- **Abrimos mão de:** continuação automática em uma pasta de saída já existente; a recusa evita mistura silenciosa de seeds/configurações.
+- **Risco residual:** retry de lote redispõe todos os eventos desse lote, compensado pela deduplicação por `event_id`.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** nenhum schema público muda; o Parquet é uma projeção dos fatos canônicos aceitos.
+- **Pessoas/branches:** `ING-001` recebe dados particionados e relatório reprodutível; gerador, servidor e listener permanecem desacoplados da exportação.
+- **Linear/plano:** `LUM2-47` deve receber o relatório, commit e gates somente após a validação final.
+- **Testes/observabilidade:** há cobertura de caminho servidor→listener→Parquet, determinismo, provider novo compatível, recusa de sobrescrita e rollback de lote.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** dados do gerador atravessam servidor e listener antes de gerar Parquet particionado.
+- **Caso difícil/adverso:** falha após escrever raw faz rollback integral; provider novo compatível mantém o layout; baixa amostra retorna `12` eventos.
+- **Resultado observado:** benchmark final concluído; gates automatizados finais pendentes deste registro.
+- **Fallback:** reexecutar em novo diretório de artefatos com a mesma seed e comparar o digest.
+
+#### Gatilhos de revisão
+
+Qualquer mudança no envelope do servidor, no contrato canônico, na semântica de dedupe ou na estratégia de armazenamento exige revalidar o digest, o layout Parquet e o benchmark de 90 dias.
+
+#### Adendos
+
+- **2026-08-30T00:20:00-03:00:** PASS: `20` testes focados (ingestão, listener, histórico, agregação e Parquet), `compileall` e validação de contratos passaram. O smoke do CLI com banco novo confirmou `52/52` eventos gerados/publicados/aceitos e `52` linhas em uma partição. Um run tentou reutilizar armazenamento já populado; a proteção foi adicionada para recusar esse estado, sem apagar dados existentes.
+- **2026-08-30T00:22:00-03:00:** O solicitante determinou que o benchmark de 90 dias já concluído não deve ser repetido. Uma nova execução iniciada para atualização de configuração foi interrompida antes de produzir relatório final; os únicos números publicados permanecem os do relatório salvo de `90` dias.
