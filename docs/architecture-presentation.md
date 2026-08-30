@@ -1,54 +1,68 @@
-# Arquitetura de apresentação — LumenPrep
+# Arquitetura de apresentação - LumenPrep
+
+Este desenho é intencionalmente orientado ao fluxo operacional. Setas contínuas representam
+processamento ou persistência; setas tracejadas representam consulta ou tráfego interno.
 
 ```mermaid
 flowchart TB
-    Operator([Operador]) --> Web
-    subgraph Web["Experiência web — Next.js"]
+    Operator([Operador]) --> Client
+
+    subgraph Web["Experiência web - Next.js"]
         direction LR
-        Input["Input<br/>transações e samples"] --> Client["Cliente API tipado<br/>HTTP JSON"]
-        Observe["Logs · detalhe<br/>Incidents · notificações"] --> Client
+        Input["Entrada<br/>transações e samples"] --> Client["Cliente API tipado<br/>HTTP JSON"] --> Observe["Logs, detalhe, incidentes<br/>e notificações"]
     end
-    subgraph API["Fronteira pública — FastAPI"]
+
+    subgraph API["Fronteira pública - FastAPI"]
         direction LR
-        TxAPI["Transaction API<br/>batch · catálogo · logs"]
-        IncAPI["Incident API<br/>detalhe · review · sugestão"]
-        OpsAPI["Operação<br/>health · métricas · demo"]
+        TxAPI["Transaction API<br/>batch, catálogo e logs"]
+        OpsAPI["Operação<br/>health, métricas e demo"]
+        IncAPI["Incident API<br/>detalhe, review e sugestão"]
     end
-    Client --> TxAPI
-    Client --> IncAPI
-    Client --> OpsAPI
-    subgraph Core["Núcleo determinístico — fonte da verdade operacional"]
+
+    Client -->|batch, catálogo e logs| TxAPI
+    Client -->|health, métricas e demo| OpsAPI
+    Client -->|incidents, review e sugestão| IncAPI
+
+    subgraph Core["Núcleo determinístico - fonte da verdade operacional"]
         direction LR
-        Accept["1. Aceitar lote<br/>persistir PROCESSING"] --> Worker["2. Worker durável<br/>lease · retomada · progresso"] --> Outcome["3. Outcome e classificação<br/>catálogo de refusal codes"] --> Ingest["4. Ingestão<br/>normalizar · validar · deduplicar"] --> Detect["5. Métricas e detecção<br/>baseline · anomalia · RCA"] --> Incident["6. Incident persistido<br/>evidências · links · notificação"]
+        Accept["1. Aceitar lote<br/>persistir PROCESSING"] --> Worker["2. Worker durável<br/>lease, retomada e progresso"] --> Outcome["3. Outcome e classificação<br/>catálogo de refusal codes"] --> Ingest["4. Ingestão<br/>normalizar, validar e deduplicar"] --> Detect["5. Métricas e detecção<br/>baseline, anomalia e RCA"] --> Incident["6. Incident persistido<br/>evidências, links e notificação"]
     end
-    TxAPI --> Accept
+
+    TxAPI -->|persiste antes do 202| Accept
     OpsAPI -. tráfego sintético .-> Ingest
-    subgraph Intelligence["Contexto pós-incidente — nunca altera fatos ou causa"]
+
+    subgraph Context["Contexto pós-incidente - nunca altera fatos ou causa"]
         direction LR
-        Explain["Explicação grounded<br/>detalhe por transação"] --> Memory["Memória de precedentes<br/>Neo4j opcional · fallback em memória"]
-        Agent["Agente opcional<br/>hipótese HUMAN_ONLY"] --> Memory
+        Explain["Explicação grounded<br/>detalhe por transação"]
+        Agent["Agente opcional<br/>hipótese HUMAN_ONLY"]
+        Review["Revisão humana<br/>decisão idempotente"]
+        Memory["Memória de precedentes<br/>Neo4j opcional, fallback em memória"]
     end
-    Incident --> Explain
-    Incident --> Agent
-    IncAPI --> Explain
-    IncAPI --> Agent
-    Review["Revisão humana APPROVED<br/>promoção somente com Neo4j"]
-    IncAPI --> Review --> Memory
-    subgraph Data["DuckDB — estado operacional persistente"]
+
+    Incident -->|fatos e evidências| Explain
+    Incident -->|fatos e evidências| Agent
+    IncAPI -->|registra decisão| Review
+    Review -->|somente APPROVED| Memory
+    Explain -. consulta de precedente .-> Memory
+    Agent -. consulta de precedente .-> Memory
+
+    subgraph Data["DuckDB - estado operacional persistente"]
         direction LR
         TxData["Lotes e transações<br/>status e outcomes"]
         EventData["Eventos raw e canônicos<br/>tentativas e agregações"]
         IncData["Incidents, links<br/>notificações e reviews"]
         AssistData["Sugestões e catálogo<br/>de refusal codes"]
     end
+
     Accept --> TxData
     Worker --> TxData
     Ingest --> EventData
     Detect --> EventData
     Incident --> IncData
+    IncAPI -. consulta .-> IncData
     Agent --> AssistData
-    Outcome --> AssistData
-    IncAPI --> IncData
+    Outcome -. consulta catálogo .-> AssistData
+
     classDef ui fill:#eaf2ff,stroke:#2563eb,color:#172554,stroke-width:2px;
     classDef api fill:#eef2ff,stroke:#4f46e5,color:#312e81,stroke-width:2px;
     classDef core fill:#ecfdf5,stroke:#059669,color:#064e3b,stroke-width:2px;
@@ -62,3 +76,10 @@ flowchart TB
     class Explain,Agent,Memory intel;
     class Review human;
 ```
+
+## Leitura do diagrama
+
+- A UI é consumidora da API: não consulta DuckDB ou Neo4j diretamente.
+- O lote é gravado como `PROCESSING` antes da resposta `202`; o worker pode retomar o trabalho.
+- DuckDB guarda os fatos operacionais. Explicação, agente e memória apenas enriquecem a leitura pós-incidente.
+- Neo4j é opcional e recebe um precedente somente depois de uma revisão humana `APPROVED`.
