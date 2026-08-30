@@ -59,7 +59,9 @@ def test_incidents_filter_exposes_only_authorized_transaction_links():
     response = client.get("/v1/incidents", params={"transaction_id": transaction_id})
 
     assert response.status_code == 200
-    assert [incident["incident_id"] for incident in response.json()] == ["inc_current_mastercard_001"]
+    body = response.json()
+    assert [item["incident"]["incident_id"] for item in body] == ["inc_current_mastercard_001"]
+    assert all({"incident", "memory", "explanation"} <= item.keys() for item in body)
 
 
 def test_incidents_filter_returns_empty_list_when_transaction_has_no_incident():
