@@ -149,6 +149,11 @@ test("accepts string-array incident metrics allowed by CTR-INC-001", () => {
   assert.equal(formatMetricValue(incident.metrics.decline_codes), "DO_NOT_HONOR, INSUFFICIENT_FUNDS, SUSPECTED_FRAUD");
 });
 
+test("formats decimal incident metrics with two decimal places", () => {
+  assert.equal(formatMetricValue(0.928374), "0,93");
+  assert.equal(formatMetricValue(492), "492");
+});
+
 test("submits CTR-HRV-001 to the incident review route and parses its audit response", async () => {
   let requestUrl = "";
   let requestBody = "";
