@@ -66,6 +66,13 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
       <div className={styles.meta}><Field label="Detected" value={formatDate(incident.detected_at)} /><Field label="First occurrence" value={incident.recurrence_first_detected_at ? formatDate(incident.recurrence_first_detected_at) : "Not available"} /><Field label="Estimated start" value={formatDate(incident.estimated_started_at)} /><Field label="Correlation ID" value={incident.correlation_id} /><Field label="Model" value={explanation.model_version} /></div>
     </section>
 
+    <section className={`${styles.card} ${styles.authorityCard}`} aria-labelledby="detection-authority-title">
+      <p className={styles.label}>Decision boundary</p><h2 id="detection-authority-title">Incident detection remains deterministic</h2>
+      <p>The engine created this Incident from current transaction signals. GraphRAG only adds historical context and cannot create, suppress, or change this Incident.</p>
+      <div className={styles.meta}><Field label="Incident engine" value="DETERMINISTIC" /><Field label="GraphRAG retrieval" value={memory.memory_status} /></div>
+      <p className={styles.muted}>{graphRagEffect(memory.memory_status)}</p>
+    </section>
+
     <section className={styles.twoColumn}>
       <article className={`${styles.card} ${styles.current}`}><p className={styles.label}>Deterministic engine</p><h2>Engine cause</h2><div className={styles.meta}><Field label="Cause status" value={incident.root_cause.status} /><Field label="Category" value={incident.root_cause.category ?? "Not isolated"} /><Field label="Confidence" value={`${Math.round(incident.root_cause.confidence * 100)}%`} /></div>
         {inconclusive ? <p className={styles.warning}><strong>Current cause remains INCONCLUSIVE.</strong> Historical similarity can guide investigation, but it does not confirm this cause.</p> : null}
@@ -112,6 +119,12 @@ function AgentHypothesis({ suggestion, error, loading, onRetry }: { suggestion: 
       {suggestion.status === "SUGGESTED" ? <><h3>Reasons cited by the agent</h3><div className={styles.agentReasons}>{suggestion.reasons.map((reason) => <article key={`${reason.statement}-${reason.evidence_ids.join("-")}`}><p>{reason.statement}</p><EvidenceIds ids={reason.evidence_ids} /></article>)}</div><h3>Agent-proposed investigation steps</h3><div className={styles.actionList}>{suggestion.recommended_actions.map((action) => <article key={`${action.action}-${action.rationale_evidence_ids.join("-")}`}><p>{action.action}</p><small>{action.execution} · Rationale: {action.rationale_evidence_ids.join(", ") || "Not provided"}</small></article>)}</div></> : <p className={styles.warning}><strong>{suggestion.status}.</strong> The agent did not publish a causal hypothesis; use the engine cause and current evidence for the investigation.</p>}
       {suggestion.limitations.length ? <><h3>Agent limitations</h3><ul className={styles.limitations}>{suggestion.limitations.map((item) => <li key={item}>{item}</li>)}</ul></> : null}</> : null}
   </section>;
+}
+
+function graphRagEffect(status: IncidentDetailData["memory"]["memory_status"]): string {
+  if (status === "MATCH_FOUND") return "A historical precedent is available for investigation only; it is not proof of the current cause.";
+  if (status === "NO_PRECEDENT") return "No historical precedent was found. The deterministic Incident and its current evidence remain valid.";
+  return "Historical retrieval is unavailable. The deterministic Incident and its current evidence remain available.";
 }
 
 function HumanReviewPanel({ incident, defaultPlaybookId, api, source }: { incident: IncidentDetailData["incident"]; defaultPlaybookId: string; api: LumenApiClient | null; source: string }) {

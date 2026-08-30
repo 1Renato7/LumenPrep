@@ -20,6 +20,9 @@
 .incidentMeta span { padding: .33rem .48rem; border-radius: .45rem; background: rgba(44, 58, 127, .36); color: #b7c2e2; font-size: .69rem; }
 .executiveCard { border-top: 3px solid #8297ff; background: linear-gradient(135deg, rgba(40, 55, 133, .32), rgba(7, 11, 27, .9) 58%); }
 .executiveCard h2 { margin: 1rem 0 .35rem; }
+.authorityCard { border-left: .35rem solid #64c6ff; background: linear-gradient(110deg, rgba(20, 76, 117, .25), rgba(7, 11, 27, .86) 55%); }
+.authorityCard h2 { margin: .25rem 0 .65rem; }
+.authorityCard > p:not(.label):not(.muted) { max-width: 70rem; margin: 0 0 .85rem; color: #e6f5ff; line-height: 1.5; }
 .lead { max-width: 70rem; margin: 0 0 1.2rem; color: #f4f6ff; font-size: clamp(1.05rem, 2vw, 1.35rem); line-height: 1.55; }
 .twoColumn { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(20rem, .75fr); gap: 1rem; }
 .current { border-left: .35rem solid #7990ff; }
