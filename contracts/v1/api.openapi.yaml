@@ -110,6 +110,8 @@ paths:
   /incidents:
     get:
       operationId: listIncidents
+      parameters:
+        - {name: transaction_id, in: query, required: false, schema: {type: string, minLength: 1}, description: Restrict results to Incident IDs authored on the transaction classification.}
       responses:
         "200": {description: Incident list}
   /incidents/{incident_id}:

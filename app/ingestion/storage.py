@@ -101,6 +101,29 @@ def reset_connection() -> None:
     _connection = None
 
 
+def related_incident_ids_for_transaction(transaction_id: str) -> list[str] | None:
+    """Return the contract-authored incident links for one transaction.
+
+    ``None`` means the transaction is unknown; an empty list is a known transaction
+    with no related Incident.  Keeping this query in the storage adapter prevents
+    the incident API from inventing a second view of transaction persistence.
+    """
+    with CONNECTION_LOCK:
+        row = get_connection().execute(
+            "SELECT classification_json FROM transaction_records WHERE transaction_id = ?",
+            [transaction_id],
+        ).fetchone()
+    if row is None:
+        return None
+    if not row[0]:
+        return []
+    try:
+        related_ids = json.loads(row[0]).get("related_incident_ids", [])
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return [incident_id for incident_id in related_ids if isinstance(incident_id, str) and incident_id]
+
+
 def store_raw(con, event_id: str, received_at: datetime, raw_payload: dict) -> None:
     con.execute(
         "INSERT INTO raw_events (event_id, received_at, raw_json) VALUES (?, ?, ?)",

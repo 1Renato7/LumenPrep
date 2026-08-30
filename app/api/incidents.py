@@ -11,10 +11,18 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
+from app.config import settings
 from app.explanation import GroundedExplainer
-from app.memory import Incident, IncidentMemoryService, InMemoryIncidentRepository
+from app.ingestion.storage import related_incident_ids_for_transaction
+from app.memory import (
+    Incident,
+    IncidentMemoryService,
+    InMemoryIncidentRepository,
+    Neo4jIncidentRepository,
+)
+from app.memory.repository import IncidentMemoryRepository
 from app.memory.seed import seed_mastercard_d2
 
 router = APIRouter()
@@ -22,6 +30,36 @@ _FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
 _REAL_ENRICHMENT_INCIDENT_IDS = frozenset(
     {"inc_current_mastercard_001", "inc_current_mastercard_uncertain_002"}
 )
+
+_neo4j_driver: Any | None = None
+_neo4j_driver_failed = False
+
+
+def _neo4j_driver_instance() -> Any | None:
+    """Build the Neo4j driver once; a construction failure disables the driver for the process."""
+    global _neo4j_driver, _neo4j_driver_failed
+    if _neo4j_driver is not None or _neo4j_driver_failed:
+        return _neo4j_driver
+    try:
+        from neo4j import GraphDatabase
+
+        _neo4j_driver = GraphDatabase.driver(
+            settings.neo4j_uri,
+            auth=(settings.neo4j_user, settings.neo4j_password),
+        )
+    except Exception:
+        _neo4j_driver_failed = True
+    return _neo4j_driver
+
+
+def _memory_repository() -> IncidentMemoryRepository | None:
+    """Neo4j primary when configured and reachable; None makes fallback the sole repository."""
+    if not settings.neo4j_uri:
+        return None
+    driver = _neo4j_driver_instance()
+    if driver is None:
+        return None
+    return Neo4jIncidentRepository(driver)
 
 
 def _fixture(name: str) -> dict[str, Any]:
@@ -98,9 +136,11 @@ def _memory_and_explanation(incident_payload: dict[str, Any]) -> tuple[dict[str,
         raise KeyError(incident_id)
 
     incident = Incident.from_contract(incident_payload)
-    repository = InMemoryIncidentRepository()
-    seed_mastercard_d2(repository, now=incident.detected_at)
-    memory = IncidentMemoryService(repository).retrieve(incident)
+    fallback = InMemoryIncidentRepository()
+    seed_mastercard_d2(fallback, now=incident.detected_at)
+    primary = _memory_repository()
+    service = IncidentMemoryService(primary, fallback=fallback) if primary else IncidentMemoryService(fallback)
+    memory = service.retrieve(incident)
     explanation = GroundedExplainer(()).explain(incident, memory)
     return memory.to_contract(), explanation.to_contract()
 
@@ -122,9 +162,19 @@ def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], ex
 
 
 @router.get("/incidents")
-def list_incidents() -> list[dict[str, Any]]:
-    """List current records. Fixture-only until TASK-RCA-002 lands."""
-    return list(_fixture_records().values())
+def list_incidents(transaction_id: str | None = Query(default=None, min_length=1)) -> list[dict[str, Any]]:
+    """List current records, optionally restricted to a transaction's authored links."""
+    records = _fixture_records()
+    if transaction_id is None:
+        return list(records.values())
+
+    related_ids = related_incident_ids_for_transaction(transaction_id)
+    if not related_ids:
+        # An unknown transaction and one without a correlated Incident both have no
+        # authorized Incident to expose.  The public collection contract therefore
+        # remains an empty list instead of manufacturing an error or a record.
+        return []
+    return [records[incident_id] for incident_id in related_ids if incident_id in records]
 
 
 @router.get("/incidents/{incident_id}")
