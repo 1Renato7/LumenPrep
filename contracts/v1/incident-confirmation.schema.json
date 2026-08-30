@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.example/contracts/incident-confirmation.schema.json",
+  "title": "CTR-MEM-PROMOTE-001 Human Confirmation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "incident_id", "correlation_id", "review_id", "reviewer_id", "confirmation", "confirmed_cause", "prior_playbook_id", "evidence_ids", "provenance", "occurred_at"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "incident_id": {"type": "string", "minLength": 1},
+    "correlation_id": {"type": "string", "minLength": 1},
+    "review_id": {"type": "string", "minLength": 1},
+    "reviewer_id": {"type": "string", "minLength": 1},
+    "confirmation": {"const": "HUMAN_CONFIRMED"},
+    "confirmed_cause": {"type": "string", "minLength": 1},
+    "prior_playbook_id": {"type": "string", "minLength": 1},
+    "evidence_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "provenance": {"const": "REAL_HUMAN_REVIEW"},
+    "occurred_at": {"type": "string", "format": "date-time"}
+  }
+}

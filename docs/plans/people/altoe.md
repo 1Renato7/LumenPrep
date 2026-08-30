@@ -28,6 +28,7 @@ O scenario generator vira harness interno; Graph RAG nunca recebe ground truth, 
 - **Consome:** `CTR-INC-001` com evidence refs/transaction links e alternativas causais; memória pode contextualizá-las, mas não reordená-las nem promover a causa atual.
 - **Produz:** memória e explicação para a API de Rogério e UI de André.
 - **Autoridade:** causa atual vem do detector/RCA; causa histórica só é confirmada para o incidente histórico; ação sempre `HUMAN_ONLY`.
+- **Adendo 2.4.4:** `CTR-MEM-PROMOTE-001 v1` recebe uma revisão humana declarada via API e grava no Neo4j somente após validação de campos/evidências. Falha do Neo4j é erro explícito, não promoção em fallback; autenticação real do revisor é uma dependência de produção fora do MVP sintético.
 
 ## Trabalho preservado
 

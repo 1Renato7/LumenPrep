@@ -2,10 +2,10 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.4.3
+- **Versão:** 2.4.4
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
-- **Change class:** `INTEGRATION`; preserva contratos públicos e consolida pipeline, persistência, frontend live e runtime de deploy sem alterar `CTR-API-001 v3`.
+- **Change class:** `CHANGE CONTROL`; adiciona `CTR-MEM-PROMOTE-001 v1` e o path compatível `POST /v1/incidents/{incident_id}/confirmation` a `CTR-API-001 v3.1`, sem alterar `CTR-INC-001 v1`.
 - **Fonte de verdade:** este arquivo; planos em `docs/plans/people/` são projeções.
 - **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
 - **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
@@ -23,6 +23,9 @@
 - **Changelog 2.4.1:** diante de sete horas restantes de hackathon, congela o escopo de demo em uma fatia vertical: stream sintético contínuo, duas degradações simultâneas, diagnóstico causal/evidência, recomendação humana e trial by fire. Integração real Yuno e RAG/agente amplo saem do caminho crítico.
 - **Changelog 2.4.2:** torna a primeira etapa da demo reproduzível por `CTR-DEMO-001 v1`: um endpoint restrito a `DEMO_MODE` semeia janelas temporais de baseline pelo stream interno. Não recebe payload Yuno nem altera a entrada pública de transações.
 - **Changelog 2.4.3:** congela a fatia implementada do agente proativo em `CTR-AGT-001`–`003 v1`: EvidencePack imutável, recuperação somente da memória/playbooks já autorizados, sugestão `HUMAN_ONLY` separada de `CTR-INC-001` e cliente determinístico padrão. O caminho OpenAI é opt-in e não integra a demo crítica.
+- **Changelog 2.4.4:** fecha a captura explícita de revisão humana para memória: `POST /v1/incidents/{incident_id}/confirmation` só promove um Incident já persistido após receber revisão com identidade declarada, causa, playbook, perfil temporal e evidências existentes. Falha ou ausência do Neo4j responde erro; não há fallback em memória local apresentado como confirmação. Autenticação de produção do revisor continua fora do MVP sintético.
+- **Changelog 2.3.1:** adiciona `CMP-QA-001`, um avaliador local do case. O modelo OpenAI seleciona apenas probes allowlisted contra uma instância isolada em memória e redige o parecer; não recebe ferramentas abertas, dados reais ou rota pública.
+- **Changelog 2.3.2:** torna `CMP-QA-001` um auditor de proveniência de erro. O parecer não pode aprovar se a falha exibida não for reconstruível a partir do input, do adaptador sintético determinístico e dos eventos bruto/canônico persistidos, ou se a serialização da mesma entrada mudar o resultado.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -112,6 +115,7 @@ O MVP vence quando uma pessoa:
 | DEC-017 | DECIDED | Progresso é persistido pelo backend; preservar DuckDB/Volume e gerador como harness interno | polling honesto, uma réplica no MVP e mínimo retrabalho; adapter permite Postgres/SSE posterior | `FL-20260829-TEAM-017` |
 | DEC-020 | DECIDED | Navegação usa três destinos e `UNKNOWN` entra na atenção técnica sem virar Incident por inferência da UI | preserva `CTR-TXL-001` e `CTR-INC-001` | `FL-20260829-TEAM-020` |
 | DEC-021 | DECIDED | Publicar `web/` na main como superfície compartilhada de integração | elimina duplicação sem alegar readiness live | `FL-20260829-TEAM-021` |
+| DEC-030 | DECIDED | Exigir revisão humana explícita antes de promover Incident atual ao Neo4j | adiciona `CTR-MEM-PROMOTE-001 v1` e path aditivo; não altera causa atual | `FL-20260830-TEAM-034` |
 
 ## 5. Arquitetura 2.0
 
@@ -128,7 +132,8 @@ flowchart LR
     DB --> AGG[Aggregate and baseline]
     AGG --> DET[Detect and RCA]
     DET --> INC[Incidents]
-    INC --> MEM[Neo4j memory]
+    INC --> REVIEW[Human review]
+    REVIEW --> MEM[Neo4j memory]
     INC --> EXP[Grounded explainer]
     MEM --> EXP
     EXP --> API
@@ -174,6 +179,7 @@ RECEIVED → NORMALIZING → CLASSIFYING → AGGREGATING → ANALYZING → COMPL
 | CMP-MEM/EXP-001 | memória e explicação grounded | Altoé | CTR-INC → CTR-MEM/LLM | RAG eval matrix |
 | CMP-HARNESS-001 | cenários e tráfego interno | Renato | internal config → batch API | existing scenario fixtures |
 | CMP-DEPLOY-001 | Railway runtime/volume/env | Rogério | repo/env → health | deploy smoke |
+| CMP-QA-001 | avaliador local e auditor de proveniência | Team | `avaliacao.md` + API local → parecer e evidências | oráculos de grounding + reconstrução de erro + equivalência de transporte |
 
 Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, dependency lock e env; André coordena `web/`; Renato coordena simulator/detector; Altoé coordena graph/prompts. Mudança de contrato começa aqui.
 
@@ -183,7 +189,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | --- | --- | --- | --- | --- | --- |
 | CTR-TXN-001 v1 | FROZEN / IMPLEMENTED ON MAIN | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | endpoints, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
 | CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome e classificação | stale/unknown explícitos | worker, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
-| CTR-API-001 v3 | FROZEN / IMPLEMENTED ON MAIN | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | endpoints e OpenAPI em `origin/main@103073b`; CORS/deploy pendentes |
+| CTR-API-001 v3.1 | IMPLEMENTED / READY FOR REVIEW | API → WEB | health, batch, logs, detail, metrics, incidents e confirmação humana aditiva | timeout e códigos tipados; confirmação retorna `404`, `409`, `422` ou `503` | OpenAPI, schemas, fixtures e testes de confirmação locais |
 | CTR-TDI-001 v1 | IMPLEMENTED / READY FOR REVIEW | API → WEB | detalhe grounded de uma transação e seus Incidents autorizados | `404` para transação inexistente; `NO_INCIDENT` e `PARTIAL` explícitos | schema, fixture, OpenAPI e testes HTTP na branch `codex/integrate-grounded-transactions` |
 | CTR-SCN-001 v2 | INTERNAL MIGRATION PENDING | DATA/HARNESS → DATA | injeção e ground truth apenas para teste | nunca exposto na UI pública | scenario draft `cc24c7a`; código atual será adaptado pelo harness |
 | CTR-EVT-001 v1 | FROZEN | DATA/TXN → ING | canonical payment attempt event | quarantine/dedupe/watermark | schema existente |
@@ -191,6 +197,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | CTR-DET-001 v1 | FROZEN | DET → INC | candidatos numéricos | `NO_ANOMALY`, data quality | schema existente |
 | CTR-INC-001 v1 | FROZEN, adendo 2.1.1 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação e impacto local priorizável | `INCONCLUSIVE` válido; moedas não recebem conversão implícita | fixtures existentes + testes de serialização/prioridade/correlação |
 | CTR-MEM-001 v1.1 | FROZEN / RUNTIME READY FOR REVIEW | MEM → EXP/API | precedente tipado via adapter Neo4j opcional | `NO_PRECEDENT`, `MEMORY_UNAVAILABLE`; fallback local explícito | Compose, bootstrap, runtime e testes de fallback na branch `codex/neo4j-docker-runtime` |
+| CTR-MEM-PROMOTE-001 v1 | IMPLEMENTED / READY FOR REVIEW | API/human review → Neo4j | cria precedente histórico somente após revisão humana declarada | `404`, `409`, `422`, `503`; jamais usa fallback local como confirmação | schemas/fixtures `incident-confirmation*`, teste HTTP e adapter Neo4j |
 | CTR-LLM-001 v1 | FROZEN | EXP → API/WEB | explicação grounded | template determinístico | schema existente |
 | CTR-DEP-001 v1 | FROZEN | Railway/Vercel → team | URLs, env, health e CORS | local mode; no fake live | deployment plan |
 

@@ -36,6 +36,437 @@ _Consolidar no modo `FINALIZE`; as entradas originais permanecem nas lanes._
 
 <!-- TEAM: faça append de novas entradas imediatamente antes da próxima seção. -->
 
+### FL-20260830-TEAM-033 — Sincronizar a main sem perder o auditor local
+
+- **Timestamp:** 2026-08-30T07:20:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** usuário solicitante; Codex como executor e recorder
+- **Categoria:** Git/integration | quality
+- **Escopo:** `main`, `origin/main@01b6d51`, `CMP-QA-001`, `CTR-TXL-001`, `CTR-AGT-001`–`003`
+- **Links:** `FL-20260830-TEAM-032`, `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável.
+
+#### Contexto e pergunta
+
+O solicitante pediu que o checkout permanecesse atualizado com a `main` remota. A cópia local estava quatro commits atrás e continha o auditor local ainda não commitado; dois arquivos de decisão compartilhados tinham alterações dos dois lados.
+
+#### Decisão
+
+Preservar todas as mudanças locais num stash recuperável, avançar a `main` por fast-forward até `01b6d51` e reaplicar o trabalho local. No conflito do plano, preservar tanto os contratos do agente proativo remoto quanto `CMP-QA-001`. Adaptar o auditor à correção remota: controles internos de cenário são lidos apenas da entrada persistida interna para reconstituir uma falha, enquanto o `CTR-TXL-001` público permanece sem esse campo.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Risco | Decisão |
+| --- | --- | --- | --- |
+| `pull` direto com working tree suja | mais curto | conflito ou perda de trabalho local | rejeitada |
+| descartar o auditor antes de atualizar | árvore limpa | perde a evidência/progresso do solicitante | rejeitada |
+| stash recuperável + fast-forward + reconciliação | preserva os dois lados e mantém recuperação | exige revisar conflito semântico | escolhida |
+
+#### Evidência e validação
+
+- **FACT:** `origin/main` avançou de `144299d` para `01b6d51` em quatro commits e introduziu `CTR-AGT-001`–`003`.
+- **TEST:** após a reconciliação, 28 testes relevantes de auditoria, fluxo, schema, memória e trace passaram; `compileall` e ambos os `git diff --check` passaram.
+- **FACT:** a correção remota normaliza `scenario_effects: null` no seed e o oculta no record público, fazendo a equivalência de transporte voltar a passar.
+- **LIMIT:** o stash `codex-before-origin-main-sync-20260830` foi mantido como cópia de segurança; não há commit local nem push deste trabalho.
+
+#### Consequências e gatilho de revisão
+
+O próximo run do avaliador passa a inspecionar a `main` atualizada e não deve mais reprovar a antiga diferença de serialização. Qualquer próxima atualização remota, conflito em contrato público ou falha dos oráculos exige repetir a mesma checagem antes de integrar.
+
+### FL-20260830-TEAM-027 — Adotar um agente de QA por cenários para evidência contínua
+
+- **Timestamp:** 2026-08-30T06:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** usuário solicitante; Codex como executor e recorder
+- **Categoria:** quality | operations | demo
+- **Escopo:** `.agents/skills/qa-scenario-agent`, `docs/SKILLS.md`, validação de backend, contratos e web
+- **Links:** `TASK-QA-001`, `CTR-TXN-001 v1`, `CTR-TDI-001 v1`, `CTR-MEM-001 v1.1`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O projeto já possui testes unitários, de contrato e de interface, mas faltava um operador reutilizável que escolha e execute casos variados com evidência comum antes da demo e das integrações. A pergunta foi como ampliar a cobertura de fluxo sem dar ao agente autoridade sobre produção ou mudanças no produto.
+
+#### Decisão
+
+Criar a skill automática `qa-scenario-agent`, orientada por risco. Ela deriva uma matriz mínima de fluxos, limites, vazios, falhas, indisponibilidade e regressões a partir dos contratos e do comportamento real; executa somente testes locais com dados sintéticos e reporta `PASS`, `FAIL` ou `NOT RUN` com reprodução.
+
+#### Critérios e por que agora
+
+O sistema precisa provar mais que o caminho feliz, especialmente nos estados explícitos de incerteza e na transição transação → Incident → detalhe. A skill reutiliza os gates existentes em vez de criar um framework paralelo.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Rodar apenas a suite existente manualmente | Sem artefato novo | Casos de falha e evidências variam entre execuções | FACT: há suites Python e web separadas | Não cria uma prática repetível por fluxo |
+| Criar um runner autônomo com acesso externo | Maior automação potencial | Poderia tocar dados/serviços reais e ocultar decisões de teste | ASSUMPTION: não há sandbox externo dedicado | Autoridade e custo são desnecessários agora |
+| Skill local orientada por cenários | Reutiliza contratos, gates e dados sintéticos | Ainda requer julgamento e ambiente local disponível | FACT: o repositório possui fixtures, testes e browser gate | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `tests/` e `web/tests/` já cobrem componentes distintos; `browser-acceptance-gate` exige cenário e evidência para superfície web.
+- **TEST:** validação estrutural da nova skill será executada antes da entrega; cenários do produto não foram executados por esta criação.
+- **ASSUMPTION:** o agente reduzirá omissões de casos críticos quando acionado antes de demo ou integração; confirmar no primeiro uso.
+- **UNKNOWN:** quais fluxos serão priorizados no primeiro ciclo de QA.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** cobertura guiada por risco, limites explícitos e relatórios comparáveis.
+- **Abrimos mão de:** automação autônoma contra ambientes externos.
+- **Dívida/limitação:** a qualidade do resultado depende de contratos, fixtures e serviços locais disponíveis.
+- **Risco residual:** um cenário não modelado pode escapar; `NOT RUN` não pode ser interpretado como aprovação.
+
+#### Consequências e propagação
+
+- **Produto/demo:** permite ensaiar falhas e estados de incerteza além do caminho feliz.
+- **Arquitetura/contratos:** não altera contratos públicos; consome os contratos e fixtures existentes.
+- **Pessoas/branches:** qualquer integrante pode invocar `$qa-scenario-agent` antes do handoff.
+- **Plano/Linear:** `TASK-QA-001` ganha procedimento reutilizável; Linear não foi alterado.
+- **Testes/observabilidade:** cada execução deve registrar comando, cenário e resultado honesto.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** para um fluxo escolhido, o agente produz e executa casos de sucesso, falha e indisponibilidade sem usar dados reais.
+- **Caminho feliz:** batch local → processamento → Incident/detalhe com evidência dos testes e, se aplicável, navegador.
+- **Caso difícil/adverso:** API indisponível, repetição idempotente ou estado inconclusivo permanece visível e corretamente classificado.
+- **Resultado observado:** PENDING — skill criada; validação estrutural pendente nesta entrada.
+- **Fallback:** executar os testes focados e o browser gate manualmente, registrando os mesmos campos de evidência.
+
+#### Gatilhos de revisão
+
+Primeiro uso que revele casos sistematicamente ausentes, dependência de infraestrutura externa ou necessidade de mutar o sistema sob teste exige ajuste da skill e novo adendo.
+
+#### Adendos
+
+- **2026-08-30T06:00:00-03:00:** `git diff --check` passou. A revisão manual confirmou frontmatter, nome `qa-scenario-agent`, instruções sem placeholders e metadata com invocação automática. O validador oficial `quick_validate.py` ficou `NOT RUN`: este host não possui `python`, launcher `py` ou o runtime `.python-runtime` instalado. Nenhum cenário de produto foi executado, pois esta alteração cria o procedimento de QA, não uma mudança funcional.
+
+### FL-20260830-TEAM-028 — Elevar o agente de QA a avaliador de conformidade do case
+
+- **Timestamp:** 2026-08-30T06:05:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** usuário solicitante; Codex como executor e recorder
+- **Categoria:** quality | product | demo
+- **Escopo:** `.agents/skills/qa-scenario-agent`, `avaliacao.md`, `docs/plans/system-plan.md`, contratos e trial by fire
+- **Links:** `FL-20260830-TEAM-027`, `TASK-QA-001`
+- **Supersedes / superseded by:** amplia `FL-20260830-TEAM-027`; não a substitui.
+
+#### Contexto e pergunta
+
+O agente criado inicialmente cobria cenários técnicos, mas o solicitante esclareceu que ele deve avaliar se o projeto corresponde ao fluxo e às exigências do case, como faria um avaliador independente.
+
+#### Decisão
+
+O `qa-scenario-agent` passa a produzir um parecer de conformidade baseado no enunciado, em `avaliacao.md`, no plano e nos contratos: cada requisito recebe evidência e status; a demo recebe veredito `PRONTA`, `PRONTA COM LIMITAÇÕES` ou `NÃO PRONTA`.
+
+#### Critérios e por que agora
+
+Testes de componentes não demonstram por si só aderência ao problema, casos feios ou capacidade de sobreviver ao trial by fire. O novo escopo liga teste de fluxo ao que a banca realmente pede.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Decisão |
+| --- | --- | --- | --- | --- |
+| Manter apenas executor de testes | Simples e objetivo | Não responde se o case foi atendido | FACT: solicitação exige avaliação do projeto | Rejeitada |
+| Atribuir nota automática ao projeto | Comparação rápida | Criaria precisão falsa onde a banca usa ranking qualitativo | FACT: `avaliacao.md` declara que não há pontuação oficial | Rejeitada |
+| Parecer por requisito com evidências | Expõe lacunas e limitações honestamente | Requer leitura do case e julgamento explícito | FACT: plano, contratos e avaliação existem no repo | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `avaliacao.md` descreve as lentes, entregáveis e trial by fire; o plano descreve o fluxo transaction-first e os estados esperados.
+- **TEST:** `git diff --check` será repetido após atualizar a skill; avaliação do produto permanece `NOT RUN` até a primeira invocação.
+- **UNKNOWN:** o enunciado integral fornecido pela organização não foi localizado como artefato separado; o agente deve declará-lo se não for entregue no pedido.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** avaliação alinhada à banca, sem esconder cobertura ausente.
+- **Abrimos mão de:** uma nota simples ou promessa automática de aprovação.
+- **Risco residual:** documentos podem estar desatualizados em relação ao case; isso deve aparecer como limitação, nunca ser inferido.
+
+#### Consequências e propagação
+
+- **Produto/demo:** o primeiro uso gera uma lista priorizada de lacunas demonstráveis antes do pitch.
+- **Arquitetura/contratos:** não muda contratos; verifica se sua implementação satisfaz as invariantes.
+- **Plano/Linear:** nenhuma alteração no Linear; `avaliacao.md` continua fonte de avaliação interna.
+- **Testes/observabilidade:** exige fluxo completo, caso adverso e evidência de navegador quando aplicável.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** com um enunciado e ambiente local, o agente consegue distinguir requisito comprovado, parcial e não comprovado.
+- **Caminho feliz:** executa batch → lifecycle → diagnóstico → detalhe e relaciona a prova ao requisito correspondente.
+- **Caso difícil/adverso:** serviço indisponível ou entrada não ensaiada produz limitação explícita, não aprovação fictícia.
+- **Resultado observado:** PENDING — comportamento será exercitado na primeira avaliação do projeto.
+- **Fallback:** usar a matriz manual de `avaliacao.md` e registrar `NOT RUN` para cada item sem evidência.
+
+#### Gatilhos de revisão
+
+Novo enunciado oficial, mudança material de produto ou resultado que revele requisito não rastreável exige atualizar a matriz da skill.
+
+### FL-20260830-TEAM-029 — Executar a avaliação do case com OpenAI apenas sobre probes locais permitidas
+
+- **Timestamp:** 2026-08-30T06:15:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** usuário solicitante; Codex como executor e recorder
+- **Categoria:** AI/RAG | quality | operations | demo
+- **Escopo:** `CMP-QA-001`, `app/evaluation/`, `scripts/run_case_evaluator.py`, `OPENAI_API_KEY`
+- **Links:** `FL-20260830-TEAM-028`, `CTR-API-001 v3`, `TASK-QA-001`
+- **Supersedes / superseded by:** implementa a intenção de `FL-20260830-TEAM-028` sem mudar contratos públicos.
+
+#### Contexto e pergunta
+
+O solicitante confirmou que quer um agente executável, com `OPENAI_API_KEY`, que realize operações e gere feedback sobre a conformidade do projeto com o case.
+
+#### Decisão
+
+Criar um executor local que deixa o modelo selecionar apenas probes nomeadas para health, catálogo, samples, batch, idempotência e input inválido. O executor chama somente `http://localhost`/`127.0.0.1` com dados sintéticos; a Responses API recebe a evidência e redige o parecer.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Decisão |
+| --- | --- | --- | --- | --- |
+| Modelo com URL e comandos livres | Maior flexibilidade | Pode executar operações fora do escopo | ASSUMPTION: não há sandbox dedicada | Rejeitada |
+| Runner determinístico sem LLM | Reproduzibilidade máxima | Não entrega o feedback conversacional pedido | FACT: solicitante pediu `OPENAI_API_KEY` | Rejeitada |
+| Modelo + probes allowlisted locais | Operações reais e feedback contextual | Cobertura inicial é limitada ao catálogo | FACT: API possui fluxo e testes locais | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** a Responses API aceita instruções, texto/JSON e saída estruturada; esta implementação não concede ferramentas remotas ao modelo.
+- **TEST:** teste unitário e chamada real permanecem pendentes porque este host não tem runtime Python nem uma chave configurada.
+- **UNKNOWN:** custo e qualidade de `OPENAI_MODEL`; validar no primeiro run.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** agente conversacional com operações observáveis e superfície de ação limitada.
+- **Abrimos mão de:** exploração livre e avaliação de ambientes deployados.
+- **Risco residual:** a interpretação do modelo pode falhar; probes e evidências permanecem auditáveis.
+
+#### Consequências e propagação
+
+- **Produto/demo:** um comando local produz feedback sobre prontidão e lacunas.
+- **Arquitetura/contratos:** `CMP-QA-001` é interno; não cria endpoint ou mudança em `CTR-API-001`.
+- **Operação:** requer `OPENAI_API_KEY`, exclusivamente no ambiente.
+- **Testes:** cada probe expõe status/evidência; queda da OpenAI falha honestamente.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** com API local e chave, o agente executa apenas probes permitidas e retorna um veredito baseado nos resultados.
+- **Caminho feliz:** seleção do modelo → probes locais → evidências → parecer.
+- **Caso difícil/adverso:** URL não local, ausência de chave ou queda da OpenAI falham sem tocar serviço externo nem alegar aprovação.
+- **Resultado observado:** NOT RUN — runtime Python e chave não estão disponíveis neste host.
+- **Fallback:** executar a suite determinística e usar a matriz de `avaliacao.md` manualmente.
+
+#### Gatilhos de revisão
+
+Novo probe, ambiente remoto ou operação sobre dados reais, pagamento ou contrato exige nova decisão e avaliação de segurança.
+
+### FL-20260830-TEAM-030 — Executar o avaliador em memória, sem servidor manual ou banco persistente
+
+- **Timestamp:** 2026-08-30T06:25:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** usuário solicitante; Codex como executor e recorder
+- **Categoria:** quality | operations | demo
+- **Escopo:** `CMP-QA-001`, `scripts/run_case_evaluator.py`
+- **Links:** `FL-20260830-TEAM-029`
+- **Supersedes / superseded by:** restringe o runtime local de `FL-20260830-TEAM-029`; não altera o modelo de probes.
+
+#### Contexto e pergunta
+
+O fluxo inicial exigia iniciar um servidor separado e configurar vários passos manuais, contrariando a meta de um avaliador simples e repetível.
+
+#### Decisão
+
+O comando do avaliador cria a aplicação FastAPI com DuckDB em memória e a opera pelo cliente de teste interno. Assim, uma execução usa um único comando, não modifica a base persistente e não depende de uma segunda janela de terminal.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Decisão |
+| --- | --- | --- | --- |
+| Exigir API local já iniciada | Testa topologia HTTP externa | Aumenta setup, permite estado residual e falhas operacionais não relacionadas | Rejeitada para o primeiro avaliador |
+| Operar a app em memória | Reproduzível, isolada e um comando | Não substitui smoke de deploy/CORS | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** a suite existente já utiliza `FastAPI TestClient` e DuckDB em memória para isolar testes.
+- **TEST:** execução pendente até o usuário inserir a chave no `.env`.
+- **Risco residual:** deploy e browser continuam verificações separadas, não alegadas por este agente.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o comando único executa probes e preserva o banco do usuário.
+- **Caminho feliz:** `.venv` + `.env` → script → probes → parecer.
+- **Caso difícil/adverso:** chave ausente falha antes de qualquer probe; falha de modelo não cria dados persistentes.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** rodar testes determinísticos diretamente na mesma instância em memória.
+
+#### Adendos
+
+- **2026-08-30T06:25:00-03:00:** PASS — `tests/test_case_evaluator.py` e o teste de configuração de `DEMO_MODE` passaram (2 testes). O script agora prepara o path da raiz e informa falha da OpenAI sem traceback. A chamada real à API OpenAI foi `NOT RUN` neste ambiente isolado porque sockets externos são bloqueados (`PermissionError`); nenhum dado persistente foi criado.
+
+### FL-20260830-TEAM-031 — Fazer testes-oráculo determinísticos decidirem se há grounding, não o texto do modelo
+
+- **Timestamp:** 2026-08-30T06:35:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** usuário solicitante; Codex como executor e recorder
+- **Categoria:** AI/RAG | quality | demo
+- **Escopo:** `CMP-QA-001`, testes de grounding, memória, RCA e trace transacional
+- **Links:** `FL-20260830-TEAM-029`, `CTR-INC-001 v1`, `CTR-MEM-001 v1.1`, `CTR-LLM-001 v1`
+- **Supersedes / superseded by:** restringe o papel explicativo do modelo em `FL-20260830-TEAM-029`.
+
+#### Contexto e pergunta
+
+O solicitante identificou corretamente que um resumo persuasivo da IA não prova que o Lumen deixou de inventar causa, evidência, associação ou certeza. A pergunta passou a ser se o sistema resiste a premissas falsas e só publica conclusões rastreáveis.
+
+#### Decisão
+
+Executar sempre uma suite fixa de testes-oráculo antes do parecer da OpenAI. Ela reprova causa com baixa amostra, empate causal promovido, memória/explicação sem Incident, precedente histórico promovido, ID de evidência desconhecido e vazamento entre transações. A OpenAI recebe o resultado, mas não pode mudar os comandos, os oráculos ou aprovar uma suite que falhou.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Decisão |
+| --- | --- | --- | --- |
+| Pedir ao modelo que avalie sua própria verdade | Feedback fluente | Modelo pode inferir ou afirmar sem prova | Rejeitada |
+| Confiar apenas em smoke de endpoint | Execução rápida | Não testa negação, proveniência ou abstention | Rejeitada |
+| Oráculos determinísticos + modelo explicativo | Resultado reproduzível com comunicação clara | Cobre apenas hipóteses explicitamente modeladas | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** a base já possui testes para `INCONCLUSIVE`, evidência inválida, ausência de Incident, vazamento cross-transaction e promoção indevida.
+- **TEST:** a suite-oráculo será executada no próximo run do avaliador; nenhum veredito anterior deve ser interpretado como prova desses casos.
+- **Risco residual:** o teste não prova corretude para cenário não modelado; novos achados devem virar novo oráculo.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma tentativa de promover hipótese sem evidência resulta em falha de teste ou estado explícito de abstention.
+- **Caminho feliz:** testes-oráculo passam, probes do fluxo passam e o parecer cita ambos.
+- **Caso difícil/adverso:** entrada/associação falsa, precedente ou evidência de outra transação não produz causa nem detalhe autorizado.
+- **Resultado observado:** PENDING.
+- **Fallback:** `NÃO PRONTA` quando a suite não pode ser executada; nunca substituir por inferência da OpenAI.
+
+#### Adendos
+
+- **2026-08-30T06:35:00-03:00:** FAIL — execução da suite-oráculo encontrou 19 testes aprovados e 1 falha em `test_manual_submission_and_background_input_have_transport_independent_event_shape`. Para os mesmos fatos, `adapt_transaction` publicou latências diferentes (`494` e `696` ms) antes/depois de `TransactionInput.model_dump(mode="json")`. O campo opcional ausente passa a existir como `scenario_effects: null`, altera o material do seed e quebra a igualdade esperada de outcome/evento. Até isso ser corrigido, o avaliador deve tratar a equivalência semântica do fluxo como não comprovada e não retornar `PRONTA`.
+
+### FL-20260830-TEAM-032 — Auditar a proveniência de cada erro, não a plausibilidade do texto
+
+- **Timestamp:** 2026-08-30T06:50:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** usuário solicitante; Codex como executor e recorder
+- **Categoria:** quality | simulation | observability
+- **Escopo:** `CMP-QA-001`, `app/evaluation/provenance.py`, worker, raw/canonical events
+- **Links:** `FL-20260830-TEAM-031`, `CTR-TXL-001 v1`, `CTR-EVT-001 v1`
+
+#### Contexto e pergunta
+
+O risco levantado não é somente uma causa agregada inventada: uma operação individual pode exibir um erro que parece coerente, mas não corresponde ao que realmente ocorreu no provider/pipeline. A pergunta é se cada erro exibido possui uma cadeia verificável, e não se um modelo consegue descrevê-lo bem.
+
+#### Decisão
+
+Adicionar um auditor determinístico obrigatório ao avaliador. Ele cria uma falha sintética controlada e compara o registro público com a reconstrução do `adapt_transaction`, o `raw_event` e o `canonical_event` persistidos. Divergência em status, outcome/código, categoria, motivo, confiança, evidência ou evento reprova a execução. Um segundo probe compara os mesmos fatos antes/depois da serialização do contrato público.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Risco | Decisão |
+| --- | --- | --- | --- |
+| LLM julgar se o motivo parece verdadeiro | texto natural | confunde plausibilidade com prova | rejeitada |
+| Comparar apenas HTTP/status | simples | não prova origem da explicação | rejeitada |
+| Reconstruir + comparar eventos duráveis | evidência por campo e reprodutível | no modo sintético a fonte é o adapter | escolhida |
+
+#### Evidência, hipótese e limite
+
+- **FACT:** o worker grava o outcome/classificação, persiste o evento bruto e o evento canônico para cada transação terminal.
+- **TEST:** testes unitários aprovam o caminho coerente e reprovam motivo forjado e evento bruto ausente; o probe de integração reconstitui uma falha `TIMEOUT` persistida.
+- **LIMIT:** o provider atual é um simulador. Em produção, a resposta bruta e autenticada do provider deve se tornar fonte adicional/autoritativa; a IA nunca pode preenchê-la.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** `status`, código, evidência e ambos os eventos correspondem exatamente ao adapter.
+- **Caso adverso:** trocar a razão por um texto convincente ou remover o evento bruto causa reprovação.
+- **Resultado observado:** PASS para reconstrução da falha; FAIL para equivalência de transporte, apontando o campo opcional nulo que muda o seed.
+- **Fallback:** `NÃO PRONTA`; não substituir uma origem ausente por explicação do modelo.
+
+#### Adendos
+
+- **2026-08-30T06:55:00-03:00:** o teste amplo também revelou que `scenario_effects` é aceito em `TransactionInput`, mas persiste no registro `CTR-TXL-001`, cujo schema o proíbe. O teste terminal de schema foi adicionado à suite-oráculo. Isso é um segundo bloqueio independente: uma operação pode ter trilha de proveniência e ainda assim expor uma resposta fora do contrato.
+- **2026-08-30T07:00:00-03:00:** o veredito passou a ser montado pelo executor determinístico, não pelo texto do modelo. Se qualquer probe falha, a saída começa obrigatoriamente com `Veredito: NÃO PRONTA`; a OpenAI recebe somente a tarefa de narrar evidência, lacunas e próximo teste. Isso elimina a possibilidade de um resumo persuasivo contradizer uma reprovação técnica.
+- **2026-08-30T07:05:00-03:00:** PASS — `tests/test_provenance_auditor.py` e `tests/test_case_evaluator.py` aprovaram 10 casos, incluindo razão forjada, evento ausente, campo não auditado, timeout reconstituído e veredito forçado. A suite-oráculo retornou 15 aprovados e 2 falhas reais (equivalência de serialização e schema terminal). `compileall` e `git diff --check` passaram. A suite completa teve ainda 7 erros de infraestrutura por `PermissionError` no diretório temporário global do Windows; eles não foram tratados como aprovação nem como defeito atribuído ao auditor.
+
+### FL-20260830-TEAM-034 — Promover precedente no Neo4j somente após revisão humana explícita
+
+- **Timestamp:** 2026-08-30T08:10:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** usuário solicitante; Codex como executor e recorder
+- **Categoria:** contract | data | operations
+- **Escopo:** `CTR-API-001 v3.1`, `CTR-MEM-PROMOTE-001 v1`, `CTR-INC-001 v1`, API FastAPI, Neo4j
+- **Links:** `DEC-030`; `contracts/v1/incident-confirmation*.schema.json`; `tests/test_incident_confirmation_api.py`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O pipeline detectava e persistia o Incident atual em DuckDB, enquanto o promotor Neo4j existia apenas como serviço interno. Faltava a ponte auditável para capturar a revisão humana e provar que um detector, RCA ou agente não consegue por si só criar precedente histórico.
+
+#### Decisão
+
+Adicionar o contrato aditivo `CTR-MEM-PROMOTE-001 v1` em `POST /v1/incidents/{incident_id}/confirmation`. O endpoint aceita apenas `REAL_HUMAN_REVIEW`, requer `review_id`, `reviewer_id`, causa confirmada, playbook, decline codes e forma temporal; consulta primeiro o Incident durável e só então chama o promotor Neo4j. A causa e o estado atuais em `CTR-INC-001 v1` permanecem inalterados. Repetir exatamente a mesma revisão é idempotente; uma revisão diferente para o mesmo Incident retorna `409`.
+
+#### Critérios e por que agora
+
+A demonstração precisa separar detecção de autoridade humana e apresentar evidência de que o precedente realmente alcançou o Neo4j. Não havia UI/endereço público para a confirmação, portanto a ponte não podia continuar implícita.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Inserir no Neo4j ao detectar | caminho curto | detector ganharia autoridade de confirmação | FACT: o pipeline atual só deve persistir Incident em DuckDB | viola o requisito humano |
+| Aceitar fallback em memória local | mantém demo quando Neo4j cai | resposta pareceria confirmação sem persistência histórica real | FACT: fallback é efêmero | rejeitada |
+| Endpoint explícito com Neo4j obrigatório | rastreável, idempotente e demonstrável | requer captura de revisão e autenticação futura | TEST: casos HTTP focalizados passam | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `IncidentPromoter` já exigia campos de revisão e gravava via `IncidentMemoryRepository`.
+- **TEST:** `python -m pytest tests/test_incident_confirmation_api.py tests/test_memory_promotion.py tests/test_neo4j_repository.py tests/test_incident_pipeline.py -q` — 11 passed; `python scripts/validate_contracts.py` — OK.
+- **ASSUMPTION:** no MVP sintético, `reviewer_id` é atribuição declarada pelo operador; owner Team; revalidar antes de qualquer dado real.
+- **UNKNOWN:** autenticação/autorização corporativa e trilha de identidade verificável não existem nesta API.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** detector → revisão explícita → Neo4j, sem promoção automática.
+- **Abrimos mão de:** confirmar precedentes quando o Neo4j está indisponível.
+- **Dívida/limitação:** o endpoint ainda não autentica `reviewer_id`; não deve ser exposto a usuários não confiáveis fora do ambiente sintético.
+- **Risco residual:** duas confirmações concorrentes em processos distintos dependem da unicidade/idempotência do Neo4j; o teste local cobre repetição e conflito sequenciais.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a UI pode chamar a confirmação após ação humana e exibir o recibo histórico, sem reclassificar o Incident.
+- **Arquitetura/contratos:** adiciona `CTR-MEM-PROMOTE-001 v1` e `CTR-API-001 v3.1`; `CTR-INC-001 v1` continua congelado.
+- **Pessoas/branches:** Rogério coordena rota/OpenAPI; Altoé mantém adapter Neo4j; André precisa consumir o endpoint somente após UX de revisão autenticada.
+- **Plano/Linear:** `docs/plans/system-plan.md` e planos de Rogério/Altoé sincronizados; Linear não alterado.
+- **Testes/observabilidade:** repetir, revisão e smoke API são obrigatórios; indisponibilidade Neo4j deve devolver `503`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** sem POST não há write de memória; POST válido retorna `HUMAN_CONFIRMED` e uma repetição não duplica o precedente.
+- **Caminho feliz:** Incident durável → POST de revisão → `IncidentPromoter` → Neo4j → recibo tipado.
+- **Caso difícil/adverso:** revisão sintética, campos inválidos, Neo4j indisponível e revisão conflitante não geram ou alteram um precedente.
+- **Resultado observado:** PASS nos testes focalizados; conexão Neo4j configurada foi previamente verificada como saudável. O write real não foi disparado contra a base configurada durante este desenvolvimento.
+- **Fallback:** `503 MEMORY_UNAVAILABLE` ou `MEMORY_PERSISTENCE_FAILED`, sem fallback local apresentado como confirmação.
+
+#### Gatilhos de revisão
+
+Qualquer exposição além do ambiente sintético, requisito de identidade verificável, UI de confirmação, escrita concorrente multi-réplica ou mudança em `CTR-INC-001` exige novo change control.
+
+#### Adendos
+
+- 2026-08-30T08:10:00-03:00 — primeira implementação e validação focal; revisão de código, suite completa e smoke HTTP local pendentes neste momento.
+- 2026-08-30T08:20:00-03:00 — `27` testes de API/pipeline/memória/Neo4j passaram, `scripts/validate_contracts.py` e `compileall` passaram, e a revisão do diff não encontrou bloqueador. A suíte completa foi tentada, mas o pytest não tem permissão para listar a pasta temporária global do Windows; a cobertura deste fluxo foi repetida com `--basetemp` isolado. Não houve escrita de teste no Neo4j configurado. Como ainda não há UI de confirmação, a aceitação observável foi a requisição HTTP exercitada por `TestClient`; validação visual/browser fica pendente da tela consumidora.
+
 ### FL-20260829-TEAM-001 — Adotar um Flight Log Markdown, append-only e dividido por lanes
 
 - **Timestamp:** 2026-08-29T11:56:33-03:00

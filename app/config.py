@@ -1,7 +1,7 @@
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     graphrag_evaluation_mode: bool = False
 
     openai_api_key: str | None = None
+    openai_model: str = "gpt-5"
+
+    @field_validator("demo_mode", mode="before")
+    @classmethod
+    def empty_demo_mode_means_false(cls, value: object) -> object:
+        """Allow the documented ``DEMO_MODE=`` placeholder in a local .env file."""
+        return False if value == "" else value
 
     @model_validator(mode="after")
     def default_duckdb_path_to_data_dir(self) -> "Settings":

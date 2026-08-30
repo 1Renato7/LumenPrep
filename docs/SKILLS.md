@@ -14,6 +14,7 @@ Skills automáticas possuem `allow_implicit_invocation: true` e descrições com
 | `linear-microtask-planner` | Automática | Decomposição e sincronização de trabalho no Linear | Parent issues, microtarefas e dependências |
 | `code-review-gate` | Automática | Depois da implementação, antes de considerar a tarefa pronta | Achados priorizados e gate de revisão |
 | `browser-acceptance-gate` | Automática | Depois da revisão, quando há comportamento observável | Matriz de cenários e evidência no navegador |
+| `qa-scenario-agent` | Automática | Avaliar aderência ao case, demo, fluxo ou regressão | Parecer de conformidade, casos feios e evidências reproduzíveis |
 | `rag-quality-engineer` | Automática | RAG, embeddings, recuperação, grounding ou citações | Arquitetura e protocolo de avaliação RAG |
 | `agent-payment-safety` | Automática | Agentes ou sistemas que lidam com dinheiro e pagamentos | Invariantes financeiros e testes de falha |
 | `deep-security-audit` | Somente explícita | Auditoria profunda solicitada pelo usuário | Threat model, achados e plano de remediação |
@@ -98,6 +99,14 @@ Cada critério vira cenário reproduzível com precondição, ações, esperado/
 **Resultados:** `PASS`, `PASS WITH LIMITATIONS` ou `FAIL` com matriz de evidências.
 
 Exemplo: `Valide no navegador local os critérios desta tarefa.`
+
+## `qa-scenario-agent`
+
+**Serve para:** atuar como avaliador do case, confrontando requisitos da banca, produto implementado e evidências de execução.
+
+Lê o enunciado e, na ausência dele, usa `avaliacao.md`, o plano geral e os contratos como fontes registradas. Avalia os cinco eixos da banca sem inventar notas, testa o fluxo ponta a ponta e os casos feios, e emite um parecer `PRONTA`, `PRONTA COM LIMITAÇÕES` ou `NÃO PRONTA`. Usa somente ambiente local e dados sintéticos; quando houver interface, aciona o browser acceptance gate.
+
+Exemplo: `Use $qa-scenario-agent para avaliar se o projeto atende ao case, incluindo o fluxo batch até Incident, queda da API e trial by fire.`
 
 ## `rag-quality-engineer`
 

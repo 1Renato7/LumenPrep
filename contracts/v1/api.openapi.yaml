@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: CTR-API-001 Lumen API
-  version: 3.0.0
+  version: 3.1.0
   description: Public API served by the Railway backend and consumed by the Vercel frontend.
 servers:
   - url: https://api.example.up.railway.app/v1
@@ -147,3 +147,24 @@ paths:
             application/json:
               schema: {$ref: "agent-diagnostic-suggestion.schema.json"}
         "404": {description: "INCIDENT_NOT_FOUND when the Incident does not exist; SUGGESTION_NOT_AVAILABLE when no suggestion has been generated for it."}
+  /incidents/{incident_id}/confirmation:
+    post:
+      operationId: confirmIncident
+      description: "Records a declared human review as a historical Neo4j precedent. It never changes the current RCA diagnosis. Authentication of reviewer_id is deployment-specific and required before exposing this route outside the synthetic demo boundary."
+      parameters:
+        - {name: incident_id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "incident-confirmation-request.schema.json"}
+      responses:
+        "200":
+          description: "Human confirmation persisted in Neo4j, or idempotent replay of the same review."
+          content:
+            application/json:
+              schema: {$ref: "incident-confirmation.schema.json"}
+        "404": {description: "INCIDENT_NOT_FOUND"}
+        "409": {description: "INCIDENT_ALREADY_CONFIRMED"}
+        "422": {description: "INVALID_CONFIRMATION"}
+        "503": {description: "MEMORY_UNAVAILABLE or MEMORY_PERSISTENCE_FAILED; no local fallback is treated as a confirmed precedent."}

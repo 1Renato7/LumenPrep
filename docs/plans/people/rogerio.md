@@ -20,6 +20,7 @@ O MVP adapta o Dockerfile e o runbook Railway já publicados para FastAPI + work
 - **Own:** `CMP-API-001`, `CMP-TXN-001`, `CMP-ING-001`, `CMP-AGG-001`, `CMP-INC-001`, `CMP-DEPLOY-001`.
 - **Coordena:** `contracts/v1/`, OpenAPI, migrations, dependency lock e `.env.example`.
 - **Produz:** `CTR-TXL-001`, `CTR-API-001 v3`, `CTR-DEP-001`; integra `CTR-TXN-001`.
+- **Adendo 2.4.4:** coordena o path aditivo `CTR-API-001 v3.1` `POST /v1/incidents/{incident_id}/confirmation`; ele consulta somente Incident durável, exige revisão humana declarada e não muda `CTR-INC-001` nem `root_cause`.
 - **Consome:** outcome/events de Renato, candidates do detector e memória/explicação de Altoé.
 
 ## Regras obrigatórias

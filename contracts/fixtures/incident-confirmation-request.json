@@ -1,0 +1,9 @@
+{
+  "review_id": "review-demo-001",
+  "reviewer_id": "operator-demo-001",
+  "confirmed_cause": "PROVIDER_DEGRADATION",
+  "playbook_id": "PB-ISSUER-INVESTIGATION",
+  "decline_codes": ["PROVIDER_TIMEOUT"],
+  "temporal_shape": "SUDDEN_STEP",
+  "provenance": "REAL_HUMAN_REVIEW"
+}

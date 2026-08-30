@@ -1,0 +1,7 @@
+interface:
+  display_name: "QA Scenario Agent"
+  short_description: "Avalia o case, a demo e os casos feios"
+  default_prompt: "Use $qa-scenario-agent para avaliar se o projeto atende ao case, testar o fluxo completo e apontar lacunas com evidência."
+
+policy:
+  allow_implicit_invocation: true

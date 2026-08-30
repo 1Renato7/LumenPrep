@@ -58,6 +58,10 @@ def test_cors_rejects_wildcards_and_non_absolute_origins():
         _ = Settings(cors_allowed_origins="https://lumen.vercel.app/preview").cors_origins
 
 
+def test_empty_demo_mode_placeholder_keeps_the_safe_false_default():
+    assert Settings(demo_mode="").demo_mode is False
+
+
 def test_health_is_degraded_when_startup_reconciliation_fails():
     with patch("main.reconcile_stuck", side_effect=RuntimeError("storage unavailable")):
         app = create_app(Settings())

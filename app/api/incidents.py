@@ -9,9 +9,10 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.agent import DiagnosticSuggestionRepository
 from app.config import settings
@@ -24,9 +25,11 @@ from app.incidents import DuckDBIncidentRepository
 from app.ingestion.storage import transaction_record_for_grounding
 from app.memory import (
     Incident,
+    IncidentPromoter,
     IncidentMemoryService,
     InMemoryIncidentRepository,
     Neo4jIncidentRepository,
+    PromotionReview,
 )
 from app.memory.repository import IncidentMemoryRepository
 from app.memory.seed import seed_mastercard_d2
@@ -35,6 +38,25 @@ router = APIRouter()
 _FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
 _neo4j_driver: Any | None = None
 _neo4j_driver_failed = False
+
+
+class IncidentConfirmationRequest(BaseModel):
+    """A human review that may promote an observed Incident into graph memory.
+
+    ``reviewer_id`` is audit attribution supplied by the authenticated caller in a
+    production deployment. This API does not itself implement authentication, so
+    it deliberately does not claim that the identifier proves an identity.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    review_id: str = Field(min_length=1, max_length=128)
+    reviewer_id: str = Field(min_length=1, max_length=128)
+    confirmed_cause: str = Field(min_length=1, max_length=128)
+    playbook_id: str = Field(min_length=1, max_length=128)
+    decline_codes: list[str] = Field(min_length=1, max_length=32)
+    temporal_shape: str = Field(min_length=1, max_length=128)
+    provenance: Literal["REAL_HUMAN_REVIEW"]
 
 
 def _neo4j_driver_instance() -> Any | None:
@@ -158,6 +180,37 @@ def _incident_records() -> dict[str, dict[str, Any]]:
     }
 
 
+def _confirmation_contract(historical: Any, *, correlation_id: str) -> dict[str, Any]:
+    """Serialize the graph-memory write without extending frozen CTR-INC-001."""
+    promotion = historical.metrics.get("promotion", {})
+    return {
+        "schema_version": "1.0",
+        "incident_id": historical.incident_id,
+        "correlation_id": correlation_id,
+        "review_id": promotion.get("review_id"),
+        "reviewer_id": promotion.get("reviewer_id"),
+        "confirmation": historical.confirmation,
+        "confirmed_cause": historical.confirmed_cause,
+        "prior_playbook_id": historical.prior_playbook_id,
+        "evidence_ids": list(historical.evidence_ids),
+        "provenance": historical.provenance,
+        "occurred_at": historical.occurred_at.isoformat(),
+    }
+
+
+def _same_review(historical: Any, review: IncidentConfirmationRequest) -> bool:
+    promotion = historical.metrics.get("promotion", {})
+    return (
+        promotion.get("review_id") == review.review_id
+        and promotion.get("reviewer_id") == review.reviewer_id
+        and historical.confirmed_cause == review.confirmed_cause
+        and historical.prior_playbook_id == review.playbook_id
+        and historical.provenance == review.provenance
+        and set(historical.metrics.get("decline_codes", ())) == set(review.decline_codes)
+        and historical.metrics.get("temporal_shape") == review.temporal_shape
+    )
+
+
 def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], explanation: dict[str, Any]) -> dict[str, Any]:
     """Compose CTR-API-001 without conflating current diagnosis and memory."""
     if memory["memory_status"] == "MATCH_FOUND" and not memory["matches"]:
@@ -272,6 +325,54 @@ def get_incident_suggestion(incident_id: str) -> dict[str, Any]:
     if suggestion is None:
         raise HTTPException(status_code=404, detail="SUGGESTION_NOT_AVAILABLE")
     return suggestion.model_dump(mode="json")
+
+
+@router.post("/incidents/{incident_id}/confirmation")
+def confirm_incident(incident_id: str, review: IncidentConfirmationRequest) -> dict[str, Any]:
+    """Persist a reviewed Incident in Neo4j, never a detector result by itself.
+
+    The current Incident remains an RCA-owned DuckDB record. A promotion failure
+    returns a typed service error instead of falling back to ephemeral memory,
+    because callers need proof that the historical precedent reached Neo4j.
+    """
+    current = DuckDBIncidentRepository().get(incident_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+
+    primary = _memory_repository()
+    if primary is None or not primary.health():
+        raise HTTPException(status_code=503, detail="MEMORY_UNAVAILABLE")
+
+    try:
+        existing = next(
+            (candidate for candidate in primary.confirmed_incidents() if candidate.incident_id == incident_id),
+            None,
+        )
+    except Exception:
+        raise HTTPException(status_code=503, detail="MEMORY_UNAVAILABLE") from None
+
+    if existing is not None:
+        if _same_review(existing, review):
+            return _confirmation_contract(existing, correlation_id=current.correlation_id)
+        raise HTTPException(status_code=409, detail="INCIDENT_ALREADY_CONFIRMED")
+
+    try:
+        historical = IncidentPromoter(primary).promote(
+            Incident.from_contract(current.model_dump(mode="json")),
+            PromotionReview(
+                review_id=review.review_id,
+                incident_id=incident_id,
+                reviewer_id=review.reviewer_id,
+                confirmed_cause=review.confirmed_cause,
+                playbook_id=review.playbook_id,
+                decline_codes=tuple(review.decline_codes),
+                temporal_shape=review.temporal_shape,
+                provenance=review.provenance,
+            ),
+        )
+    except Exception:
+        raise HTTPException(status_code=503, detail="MEMORY_PERSISTENCE_FAILED") from None
+    return _confirmation_contract(historical, correlation_id=current.correlation_id)
 
 
 @router.get("/incidents/{incident_id}")

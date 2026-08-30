@@ -52,6 +52,20 @@ Um plano só é distribuído após `PLAN READY`. Os quality gates verificam prob
 
 O planejamento prioriza uma fatia mínima ponta a ponta executável nas primeiras horas e usa o tempo restante para profundidade, casos difíceis e trial by fire. O número de features, integrações ou linhas de código não substitui evidência de funcionamento e julgamento técnico.
 
+## Avaliador automatizado do case
+
+O avaliador usa `OPENAI_API_KEY` somente para escolher probes permitidas e gerar um parecer conversacional. A decisão não é do modelo: verificações determinísticas tentam forçar causa sem evidência, vazamento cross-transaction, promoção de precedente, baixa amostra, ID de evidência falso e registro fora do schema público. Elas também reconstroem uma falha sintética a partir do input persistido e exigem que status, código, classificação, evidência, evento bruto e evento canônico coincidam. Se uma explicação foi inventada, não há evento de origem, o registro viola contrato, ou a mesma entrada muda ao cruzar o contrato público, o veredito não pode ser `PRONTA`.
+
+Neste MVP o provider é sintético; portanto, a fonte autoritativa auditada é o adaptador determinístico do provider mais os eventos persistidos. Ao integrar um provider real, essa fonte deve ser substituída/adicionada pela resposta bruta do provider, sem deixar o LLM preenchê-la.
+
+Com `OPENAI_API_KEY` configurada em `.env`, rode um único comando:
+
+```powershell
+& .\.venv\Scripts\python.exe .\scripts\run_case_evaluator.py --focus "verifique se algum erro ou diagnóstico foi inventado"
+```
+
+O resultado mostra as operações executadas e um veredito `PRONTA`, `PRONTA COM LIMITAÇÕES` ou `NÃO PRONTA`. Nunca versione a chave. Não é necessário subir a API em outro terminal.
+
 ## Regra de segurança
 
 A auditoria profunda de segurança nunca é automática. Para executá-la, peça explicitamente:
