@@ -58,7 +58,7 @@ _TRIALS: dict[str, LiveDemoTrial] = {
     "deterministic": LiveDemoTrial(
         trial_id="deterministic",
         flow="DETERMINISTIC",
-        title="Provider degradation in Mexico",
+        title="Mexico",
         description="Five approvals, twelve provider timeouts and eight issuer declines in Mexico are compared with this trial's own healthy baseline.",
         response_code="68",
         secondary_response_code="insufficient_funds",
@@ -73,7 +73,7 @@ _TRIALS: dict[str, LiveDemoTrial] = {
     "graph_enriched": LiveDemoTrial(
         trial_id="graph_enriched",
         flow="GRAPH_ENRICHED",
-        title="Issuer decline in Brazil",
+        title="Brazil",
         description="Five approvals, twelve issuer declines and eight provider timeouts in Brazil create the Incident; precedent retrieval then enriches the investigation.",
         response_code="do_not_honor",
         secondary_response_code="68",
