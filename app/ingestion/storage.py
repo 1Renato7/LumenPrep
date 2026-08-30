@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS transaction_records (
 );
 """
 
+_MIGRATION_SQL = """
+ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_owner VARCHAR;
+ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMP;
+"""
+
 _connection: duckdb.DuckDBPyConnection | None = None
 
 
@@ -84,6 +89,9 @@ def get_connection() -> duckdb.DuckDBPyConnection:
     if _connection is None:
         _connection = duckdb.connect(settings.duckdb_path)
         _connection.execute(_SCHEMA_SQL)
+        # Existing Railway Volumes can predate the durable-worker lease columns.
+        # Upgrade them in place before the startup reconciliation reads those fields.
+        _connection.execute(_MIGRATION_SQL)
     return _connection
 
 

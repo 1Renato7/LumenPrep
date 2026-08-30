@@ -2222,6 +2222,145 @@ Reabrir se Renato retomar qualquer uma das 6 tarefas assumidas (risco de trabalh
 
 - Nenhum.
 
+### FL-20260829-ROGERIO-004 — Integrar `origin/main` por merge preservando a branch e o trabalho local
+
+- **Timestamp:** 2026-08-29T21:09:16-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como integration coordinator
+- **Categoria:** Git/integration | operations
+- **Escopo:** branch `RENATO_CONTINUCAO_ROGERIO`; upstream `origin/main@03857ee`; dirty state local
+- **Links:** `docs/plans/system-plan.md` v2.0.0; `FL-20260829-ROGERIO-003`; commits locais `47a1d97`, `8b0d556`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A branch local está 32 commits à frente de sua referência remota e diverge de `origin/main`: possui dois commits exclusivos, enquanto a main possui quatro commits novos relacionados ao harness histórico. Há também alterações locais não commitadas de incident memory, dependência Neo4j, testes e documentação. Era necessário atualizar a base sem descartar esse trabalho ou reescrever commits que ainda não foram publicados.
+
+#### Decisão
+
+Criar um stash temporário incluindo arquivos não rastreados, fazer merge de `origin/main` em `RENATO_CONTINUCAO_ROGERIO` e reaplicar o stash. Não usar rebase nem force-push. Se a reaplicação produzir conflito semântico, interromper a integração e preservar ambos os lados para decisão do owner.
+
+#### Critérios e por que agora
+
+O merge preserva os hashes dos commits locais e torna explícita a integração do harness de `main`; o stash permite atualizar sem transformar trabalho em curso em commit artificial. Os diffs conhecidos em `pyproject.toml` são aditivos e distintos (`numpy` na main e o extra opcional `neo4j` local), mas a reaplicação ainda será validada por teste e diff.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Merge com stash recuperável | preserva histórico e alterações locais; rollback simples | cria commit de merge e exige validar o stash | FACT: branch tem 32 commits não publicados; `main` tem 4 commits exclusivos | escolhida |
+| Rebase sobre `origin/main` | histórico linear | reescreve 32 commits locais e pode dificultar recuperação/coordenação | FACT: commits locais ainda são divergentes da main | risco desnecessário |
+| Descartar ou commitar forçadamente o dirty state | atualização imediata | perda de trabalho ou commit fora da microtarefa | FACT: arquivos locais incluem testes e código em progresso | incompatível com preservação do trabalho |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** preflight do integration-contract-guardian identificou merge-base `4318eba`, 2 commits exclusivos locais e 4 commits exclusivos na main.
+- **FACT:** `git diff --check` passou antes da integração; nenhum arquivo local de incident memory coincide com o código novo da main; `pyproject.toml` tem hunks distintos.
+- **TEST:** NOT RUN — testes e smoke pós-merge serão executados após a integração.
+- **UNKNOWN:** o repositório remoto possui metadados obsoletos de worktrees que impediram o prune no `git fetch`, sem impedir a atualização das referências; avaliar só se voltar a afetar operações Git.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** base atualizada e rastreável, sem perder trabalho local.
+- **Abrimos mão de:** histórico linear nesta branch.
+- **Dívida/limitação:** o commit de merge e o stash demandam validação adicional antes de publicação.
+- **Risco residual:** conflito tardio na reaplicação do stash; mitigado por parar antes de escolher automaticamente uma resolução.
+
+#### Consequências e propagação
+
+- **Produto/demo:** incorpora o harness histórico da main sem alterar contratos públicos por decisão desta integração.
+- **Arquitetura/contratos:** nenhuma mudança de contrato pretendida; conferir `CTR-SCN-001` e componentes de streaming no diff final.
+- **Pessoas/branches:** preserva a frente de Rogério e os commits que ainda não estão em `origin/RENATO_CONTINUCAO_ROGERIO`.
+- **Plano/Linear:** nenhum estado do Linear será escrito; o plano permanece a fonte arquitetural.
+- **Testes/observabilidade:** rodar os testes afetados pelo harness e pelo incidente, além de `git diff --check`; comportamento observável requer browser gate se a API/UI local for alterada.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** após merge e reaplicação, a branch contém os commits de `origin/main`, as alterações locais continuam presentes e a suíte relevante passa.
+- **Caminho feliz:** merge limpo, stash aplicado e imports/testes de `simulation`, `streaming` e `incidents` executados.
+- **Caso difícil/adverso:** conflito no `pyproject.toml` ou no Flight Log; preservar as duas alterações e classificar a integração como bloqueada até decisão explícita.
+- **Resultado observado:** NOT RUN — integração em andamento.
+- **Fallback:** abortar o merge ou reaplicar o stash no `ORIG_HEAD`; nenhum push ou reescrita remota será feito.
+
+#### Gatilhos de revisão
+
+Conflito de reaplicação, falha de testes críticos, descoberta de mudança contratual não documentada ou necessidade de publicar a branch; qualquer um exige novo parecer de integração.
+
+#### Adendos
+
+- **2026-08-29T21:14:00-03:00:** `git merge origin/main` foi interrompido e abortado de forma segura. Há dois conflitos semânticos: `app/api/__init__.py` precisa decidir se expõe apenas `transactions_router` ou também `events_router`; `main.py` precisa compor ou priorizar o `reconcile_stuck()` do lifecycle de transações e o worker de ingestão histórica. Nenhum lado foi escolhido automaticamente. O stash temporário foi reaplicado com sucesso e removido; o trabalho local permanece preservado. Classificação do integration-contract-guardian: `BLOCKED` até decisão do owner sobre essa composição e validação subsequente.
+
+### FL-20260829-ROGERIO-005 — Usar CORS opt-in e health crítico para o Railway Volume
+
+- **Timestamp:** 2026-08-29T21:20:57-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador
+- **Categoria:** operations | contract | security
+- **Escopo:** `TASK-DEPLOY-API-001` / `LUM2-60`; `CMP-DEPLOY-001`; `CTR-DEP-001 v1`
+- **Links:** `DEC-016`; `DEC-017`; `docs/plans/system-plan.md` v2.0.0; `docs/plans/deployment-vercel-railway.md`; `railway.toml`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A API v3 e o worker usam DuckDB persistente, mas o runtime ainda não aplicava CORS nem distinguia uma aplicação viva de um store ou reconciliação indisponível. A Vercel só pode acessar a API Railway por browser, enquanto o Volume impede múltiplas réplicas simultâneas no MVP.
+
+#### Decisão
+
+Manter uma única réplica Railway com Volume em `/data`; configurar CORS somente por `CORS_ALLOWED_ORIGINS` em lista explícita, sem wildcard e sem credentials; e configurar `/v1/health` como health check de deploy, retornando `503` se DuckDB ou a reconciliação inicial do worker falharem. Neo4j e OpenAI permanecem dependências opcionais e aparecem como estado degradado sem impedir o boot.
+
+#### Critérios e por que agora
+
+O browser precisa de origins exatos para consumir a API, e um deploy não pode receber tráfego antes de abrir o banco montado e reconciliar registros presos. Permitir `*` facilitaria a demo local, mas quebraria a fronteira definida em DEC-016. Tratar Neo4j/OpenAI como críticos impediria o fallback determinístico já contratado.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Allowlist CORS e health crítico de API/store/worker | protege a fronteira e bloqueia deploy inconsistente | exige configurar cada origin Vercel | FACT: DEC-016 exige allowlist e domínio Railway público | escolhida |
+| `CORS=*` para a demo | configuração rápida | expõe a API a origins não autorizadas | FACT: browser acessa o data plane Railway | viola DEC-016 |
+| Falhar o health por Neo4j/OpenAI indisponível | sinalização máxima de dependências | derruba os fallbacks contratados | FACT: `MEMORY_UNAVAILABLE` e template determinístico são estados válidos | incompatível com contratos |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Railway usa um endpoint HTTP 200 no deploy e Volume-backed deployments não têm sobreposição sem pequena indisponibilidade.
+- **FACT:** `CORS_ALLOWED_ORIGINS` e `LUMEN_DATA_DIR` são as variáveis previstas pelo plano de deployment.
+- **TEST:** NOT RUN — deploy real requer conta/Volume Railway e será registrado apenas se executado.
+- **UNKNOWN:** os domínios Vercel production/preview ainda não existem; devem ser configurados sem inventar URLs antes do deploy.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** deploy falha cedo quando não pode preservar nem retomar o lifecycle, sem expor stores ao browser.
+- **Abrimos mão de:** CORS local automático e zero-downtime em volume persistente.
+- **Dívida/limitação:** há uma réplica e health não substitui monitoramento contínuo pós-deploy.
+- **Risco residual:** allowlist esquecida bloqueia uma preview; a resposta CORS e o runbook tornam a causa observável.
+
+#### Consequências e propagação
+
+- **Produto/demo:** `BACKEND UNAVAILABLE` é honesto quando API crítica não sobe; browser só usa a API HTTPS autorizada.
+- **Arquitetura/contratos:** implementa sem alterar `CTR-DEP-001 v1`, `CTR-API-001 v3` ou dados públicos.
+- **Pessoas/branches:** André recebe a variável de base URL e deve fornecer origins reais para a allowlist antes da preview.
+- **Plano/Linear:** `LUM2-60` está em andamento; nenhum outro estado é atualizado por esta decisão.
+- **Testes/observabilidade:** cobrir CORS permitido/negado, health degradado, restart local e smoke HTTP; validar Railway real em seguida.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma origin autorizada recebe headers CORS, uma alheia não; o health só retorna 200 após DuckDB e reconciliação inicial.
+- **Caminho feliz:** Volume `/data` preserva um batch após restart e `/v1/health` fica 200.
+- **Caso difícil/adverso:** mount ausente ou worker falha na reconciliação; deploy não passa no health check e não é promovido.
+- **Resultado observado:** NOT RUN — implementação e testes locais pendentes.
+- **Fallback:** manter o deploy anterior; corrigir env/mount sem trocar API pública ou migrar store.
+
+#### Gatilhos de revisão
+
+Necessidade de mais de uma réplica, falha do Volume, autenticação por cookie, ou mudança nos domínios Vercel exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T21:34:00-03:00:** durante o smoke local, um Volume legado sem `lease_owner`/`lease_expires_at` fez a reconciliação retornar `BinderException` e o health ficou `503`. Foi adicionada migração DuckDB aditiva e idempotente (`ADD COLUMN IF NOT EXISTS`) antes da reconciliação; não altera contrato público nem apaga registros. PASS: `python -m pytest -q tests/test_deploy_runtime.py` executou 5 testes, incluindo upgrade de schema legado e persistência de batch em arquivo através de restart; `python -m pytest -q` executou 78 testes. `railway.toml` foi validado por `tomllib` e `git diff --check` passou. Docker não está instalado localmente; o build de imagem e o smoke Railway com Volume/origins reais permanecem `NOT RUN`. O navegador embutido bloqueou `localhost`/`127.0.0.1` antes de carregar a API; CORS foi validado por TestClient, sem declarar browser acceptance executado.
+- **2026-08-29T21:38:00-03:00:** `code-review-gate` classificou o diff de `LUM2-60` como `PASS` após rejeitar origins CORS com path. `integration-contract-guardian` em modo `INTEGRATION` classificou o checkpoint local como `READY WITH WARNINGS`: nenhum schema/contrato público foi alterado, `scripts/validate_contracts.py`, `compileall`, `git diff --check` e a suíte de 78 testes passaram, e os IDs do Flight Log são únicos. Warning bloqueante apenas para encerrar a issue: build/deploy Railway, Volume e browser consumer reais continuam sem evidência local.
+
 ## Renato
 
 <!-- RENATO: faça append de novas entradas ao final desta seção. -->
