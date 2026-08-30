@@ -9,6 +9,8 @@ COPY graph ./graph
 
 RUN pip install --no-cache-dir .
 
+ENV PYTHONUNBUFFERED=1
+ENV LUMEN_DATA_DIR=/data
 ENV DUCKDB_PATH=/data/lumen.duckdb
 EXPOSE 8000
 

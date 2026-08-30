@@ -7,10 +7,20 @@ canonical_attempts: estado atual por attempt_id, só atualizado quando ordering.
 
 import json
 from datetime import datetime
+from threading import Lock
 
 import duckdb
 
 from app.config import settings
+
+# The single shared DuckDB connection below is not safe for concurrent use from
+# multiple threads (FastAPI runs sync `def` handlers, and background tasks, in a
+# threadpool). Every caller that executes a query against get_connection() from
+# request/background-task code must hold this lock for the duration of that access —
+# see app.api.transactions._create_batch and app.worker.transaction_worker for the
+# pattern. Reproduced directly without it: concurrent access corrupts query parameter
+# binding across threads and DuckDB raises TransactionException / ConversionException.
+CONNECTION_LOCK = Lock()
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS raw_events (
@@ -42,6 +52,33 @@ CREATE TABLE IF NOT EXISTS quarantine (
     reason VARCHAR,
     raw_json VARCHAR
 );
+CREATE TABLE IF NOT EXISTS transaction_batches (
+    batch_id VARCHAR PRIMARY KEY,
+    idempotency_key VARCHAR UNIQUE NOT NULL,
+    payload_fingerprint VARCHAR NOT NULL,
+    accepted_at TIMESTAMP NOT NULL,
+    correlation_id VARCHAR NOT NULL
+);
+CREATE TABLE IF NOT EXISTS transaction_records (
+    transaction_id VARCHAR PRIMARY KEY,
+    batch_id VARCHAR NOT NULL,
+    batch_position INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    status VARCHAR NOT NULL,
+    input_json VARCHAR NOT NULL,
+    processing_json VARCHAR NOT NULL,
+    outcome_json VARCHAR,
+    classification_json VARCHAR,
+    correlation_id VARCHAR NOT NULL,
+    lease_owner VARCHAR,
+    lease_expires_at TIMESTAMP
+);
+"""
+
+_MIGRATION_SQL = """
+ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_owner VARCHAR;
+ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMP;
 """
 
 _connection: duckdb.DuckDBPyConnection | None = None
@@ -52,6 +89,9 @@ def get_connection() -> duckdb.DuckDBPyConnection:
     if _connection is None:
         _connection = duckdb.connect(settings.duckdb_path)
         _connection.execute(_SCHEMA_SQL)
+        # Existing Railway Volumes can predate the durable-worker lease columns.
+        # Upgrade them in place before the startup reconciliation reads those fields.
+        _connection.execute(_MIGRATION_SQL)
     return _connection
 
 
@@ -59,6 +99,29 @@ def reset_connection() -> None:
     """Só para testes — força reabertura (fixture in-memory por teste)."""
     global _connection
     _connection = None
+
+
+def related_incident_ids_for_transaction(transaction_id: str) -> list[str] | None:
+    """Return the contract-authored incident links for one transaction.
+
+    ``None`` means the transaction is unknown; an empty list is a known transaction
+    with no related Incident.  Keeping this query in the storage adapter prevents
+    the incident API from inventing a second view of transaction persistence.
+    """
+    with CONNECTION_LOCK:
+        row = get_connection().execute(
+            "SELECT classification_json FROM transaction_records WHERE transaction_id = ?",
+            [transaction_id],
+        ).fetchone()
+    if row is None:
+        return None
+    if not row[0]:
+        return []
+    try:
+        related_ids = json.loads(row[0]).get("related_incident_ids", [])
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return [incident_id for incident_id in related_ids if isinstance(incident_id, str) and incident_id]
 
 
 def store_raw(con, event_id: str, received_at: datetime, raw_payload: dict) -> None:

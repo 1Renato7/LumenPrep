@@ -1,28 +1,37 @@
-# Deploy no Railway (DEC-013)
+# Deploy da API v3 no Railway
 
-Runbook manual — ninguém executou ainda, fica pra quando o Rogério decidir rodar. Contexto completo da decisão: `docs/flight-log.md` → `FL-20260829-ROGERIO-001`.
+Este runbook cobre `TASK-DEPLOY-API-001` / `LUM2-60`. A API FastAPI e o lifecycle worker usam uma única réplica Railway com DuckDB no Volume. A Vercel acessa somente a API HTTPS; ela nunca recebe acesso a DuckDB, Neo4j, OpenAI ou ao Volume.
 
-## O que já existe no repo
+## Arquivos versionados
 
-- `Dockerfile` (raiz) — `python:3.12-slim`, `pip install .`, sobe `uvicorn main:app` bindado em `$PORT`.
-- `.dockerignore` — exclui `.venv`, testes, docs, `.git`, etc. do build context.
-- `DUCKDB_PATH` já tem default `/data/lumen.duckdb` no `Dockerfile` (bate com o volume abaixo).
+- `Dockerfile`: inicia `uvicorn main:app` em `$PORT` e define `LUMEN_DATA_DIR=/data` e `DUCKDB_PATH=/data/lumen.duckdb`.
+- `railway.toml`: usa o Dockerfile, testa `GET /v1/health` durante o deploy e reinicia apenas em falha.
+- `app/api/health.py`: devolve `200` somente quando DuckDB e a reconciliação inicial do worker estão prontos; Neo4j/OpenAI são opcionais.
 
-Validado localmente sem Docker instalado: `pip install .` numa cópia isolada só com os arquivos que o `COPY` do Dockerfile leva (`pyproject.toml`, `main.py`, `app/`, `contracts/`, `graph/`), depois rodou o `CMD` exato — `/health` e `/metrics/current` responderam 200. Não substitui um `docker build` real, mas cobre a mesma superfície de erro (dependências, imports, bind de porta).
+## Configuração no Railway
 
-## Passos manuais (conta Railway, ninguém além do Rogério tem acesso)
+1. Conecte o repositório e selecione a branch que contém a API v3.
+2. Adicione um **Volume** com mount path `/data` e mantenha **uma réplica**. Um redeploy com Volume pode ter uma breve indisponibilidade; não escale horizontalmente com DuckDB.
+3. Em **Variables**, configure:
 
-1. **Conectar o repo** — railway.com → New Project → Deploy from GitHub repo → `1Renato7/LumenPrep`. Apontar pra branch `feat/OBJ-ROGERIO-001-platform-core` (ainda não está na `main`) até o merge acontecer.
-2. **Adicionar um Volume** montado em `/data` — sem isso o DuckDB é recriado do zero a cada redeploy (perde estado entre deploys).
-3. **Variáveis de ambiente** do serviço:
-   - `DEMO_MODE=true` — se quiser o endpoint `/demo/scenarios/{id}/inject` ativo em produção.
-   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` — opcionais. Sem eles, `app/memory` cai no fallback in-memory (funciona, mas não persiste entre restarts).
-   - `OPENAI_API_KEY` — opcional. Sem ela, `app/explanation` usa template determinístico (é o comportamento padrão hoje, funciona sem chave nenhuma).
-   - `DUCKDB_PATH` — só precisa sobrescrever se o volume for montado em outro caminho que não `/data`.
+   - `LUMEN_DATA_DIR=/data`
+   - `DUCKDB_PATH=/data/lumen.duckdb`
+   - `CORS_ALLOWED_ORIGINS=https://<dominio-vercel-production>,https://<dominio-vercel-preview>,http://localhost:3000`
+   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` somente se o grafo estiver disponível.
+   - `OPENAI_API_KEY` somente se a explicação generativa for usada; o template determinístico permanece disponível sem ela.
 
-Railway detecta o `Dockerfile` automaticamente, não precisa de `railway.json`/Nixpacks.
+`CORS_ALLOWED_ORIGINS` aceita uma lista separada por vírgulas de origins HTTP(S) completos. Não use `*`, paths, secrets ou domínios fictícios: substitua os placeholders pelas URLs reais entregues pela Vercel.
 
-## Depois do primeiro deploy
+## Verificação de deploy
 
-- Checar `GET https://<url-railway>/health` — deve responder igual ao localhost.
-- Streamlit (`CMP-UI-001`, André) fica fora deste runbook — ainda não existe código no repo pra ele; quando existir, decidir se entra no mesmo serviço Railway ou um separado (ver `UNKNOWN` na entrada do flight log).
+1. Aguarde o Railway aprovar o health check em `GET /v1/health`.
+2. Confirme resposta `200` com `dependencies.duckdb == "ready"` e `dependencies.worker.status == "ready"`.
+3. Da Vercel autorizada, faça `OPTIONS /v1/transaction-batches` com `Origin`, `Content-Type` e `Idempotency-Key`; a resposta deve expor somente aquela origin.
+4. Repita com uma origin aleatória: ela não pode receber `Access-Control-Allow-Origin`.
+5. Envie um batch, reinicie/redeploye o serviço e confirme que o mesmo `transaction_id` e seu lifecycle continuam disponíveis pelo Volume.
+
+## Limites conhecidos
+
+- O health check do Railway valida a promoção do deploy; não é monitoramento contínuo.
+- Sem Neo4j ou OpenAI a API usa seus fallbacks tipados, não deve falhar o boot.
+- Se o Volume falhar ou houver necessidade de múltiplas réplicas, abra change control antes de migrar o adapter para Postgres.

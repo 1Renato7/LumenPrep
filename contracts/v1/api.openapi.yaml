@@ -1,34 +1,124 @@
 openapi: 3.1.0
 info:
-  title: CTR-API-001 Lumen Read API
-  version: 1.0.0
+  title: CTR-API-001 Lumen API
+  version: 3.0.0
+  description: Public API served by the Railway backend and consumed by the Vercel frontend.
 servers:
-  - url: http://127.0.0.1:8000
+  - url: https://api.example.up.railway.app/v1
+    description: Railway production or preview
+  - url: http://127.0.0.1:8000/v1
+    description: Local development
 paths:
   /health:
     get:
+      operationId: getHealth
       responses:
-        "200": {description: Dependency health}
+        "200": {description: API, worker, DuckDB, Neo4j and OpenAI dependency health}
+  /transaction-catalog:
+    get:
+      operationId: getTransactionCatalog
+      responses:
+        "200":
+          description: Allowed synthetic transaction values and batch limit
+          content:
+            application/json:
+              schema: {$ref: "transaction-catalog.schema.json"}
+        "503": {description: CATALOG_UNAVAILABLE}
+  /transaction-samples:
+    post:
+      operationId: generateTransactionSamples
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "transaction-sample-request.schema.json"}
+      responses:
+        "200":
+          description: Synthetic input rows generated from the current catalog; no outcome, metric or cause is generated
+          content:
+            application/json:
+              schema: {$ref: "transaction-sample-response.schema.json"}
+        "422": {description: INVALID_SAMPLE_REQUEST}
+        "503": {description: SAMPLE_GENERATOR_UNAVAILABLE}
+  /transaction-batches:
+    post:
+      operationId: createTransactionBatch
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, minLength: 8, maxLength: 100}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "transaction-batch-request.schema.json"}
+      responses:
+        "202":
+          description: One to one hundred transactions persisted and queued for processing
+          content:
+            application/json:
+              schema: {$ref: "transaction-batch-accepted.schema.json"}
+        "409": {description: IDEMPOTENCY_KEY_CONFLICT}
+        "422": {description: INVALID_TRANSACTION_BATCH}
+        "503": {description: INGESTION_UNAVAILABLE; nothing accepted unless a durable record exists}
+  /transaction-batches/{batch_id}:
+    get:
+      operationId: getTransactionBatch
+      parameters:
+        - {name: batch_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Current records for every transaction in the batch
+          content:
+            application/json:
+              schema: {$ref: "transaction-list.schema.json"}
+        "404": {description: BATCH_NOT_FOUND}
+  /transactions:
+    get:
+      operationId: listTransactions
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: {type: string, enum: [PROCESSING, SUCCEEDED, FAILED, UNKNOWN]}
+        - {name: cursor, in: query, required: false, schema: {type: string}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        "200":
+          description: Cursor-paginated transaction log ordered newest first
+          content:
+            application/json:
+              schema: {$ref: "transaction-list.schema.json"}
+  /transactions/{transaction_id}:
+    get:
+      operationId: getTransaction
+      parameters:
+        - {name: transaction_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Input, backend-authored progress, outcome, classification and related incidents
+          content:
+            application/json:
+              schema: {$ref: "transaction-record.schema.json"}
+        "404": {description: TRANSACTION_NOT_FOUND}
   /metrics/current:
     get:
+      operationId: getCurrentMetrics
       responses:
-        "200": {description: Current and baseline metrics}
+        "200": {description: Metrics and baselines computed from persisted transaction events}
   /incidents:
     get:
+      operationId: listIncidents
+      parameters:
+        - {name: transaction_id, in: query, required: false, schema: {type: string, minLength: 1}, description: Restrict results to Incident IDs authored on the transaction classification.}
       responses:
         "200": {description: Incident list}
   /incidents/{incident_id}:
     get:
+      operationId: getIncident
       parameters:
         - {name: incident_id, in: path, required: true, schema: {type: string}}
       responses:
         "200": {description: Incident plus typed SimilarIncidentResult and ExplanationBundle}
         "404": {description: INCIDENT_NOT_FOUND}
-  /demo/scenarios/{scenario_id}/inject:
-    post:
-      parameters:
-        - {name: scenario_id, in: path, required: true, schema: {type: string}}
-      responses:
-        "202": {description: Scenario accepted in demo mode}
-        "403": {description: DEMO_MODE_REQUIRED}
-        "404": {description: SCENARIO_NOT_FOUND}
