@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.9.0
+- **Versão:** 2.9.1
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -30,6 +30,7 @@
 - **Changelog 2.7.0:** adiciona `CTR-HRV-001 v1`, a decisão humana idempotente sobre um Incident. Aprovação promove somente um precedente com causa, playbook, evidências e motivo do revisor; recusa persiste motivo auditável no DuckDB/Neo4j, mas não entra na recuperação GraphRAG.
 - **Changelog 2.8.0:** adiciona ao `CTR-INC-001 v1` o campo aditivo `recurrence_first_detected_at`, calculado por tipo causal (categoria, métrica e escopo completo) sem misturar janelas ou correlações. O `CTR-TXL-001 v1` expõe a mesma data junto de cada Incident relacionado, para que o log mostre a origem da recorrência.
 - **Changelog 2.9.0:** adiciona `CTR-ADM-001 v1`, uma operação administrativa configurável para limpar atomica e explicitamente os dados sintéticos persistidos. O frontend nunca incorpora a credencial; o operador a informa apenas no momento da confirmação. Catálogos versionados de referência permanecem intactos.
+- **Changelog 2.9.1:** atualiza os defaults internos do agente para `gpt-5.6-sol` e `reasoning.effort=medium`, sem alterar `CTR-AGT-RUN-001 v1`, Responses API, fallback determinístico, política de não retry ou autoridade `HUMAN_ONLY`.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -644,6 +645,16 @@ Sob o lock compartilhado do DuckDB, uma única transação remove os fatos sint�
 | Limpeza transacional de fatos + projeções | workspace realmente novo, sem redeploy | ação destrutiva requer chave e confirmação | escolhida |
 
 **Gate de integração:** CORS aceita somente o cabeçalho de reset além dos cabeçalhos públicos existentes; o endpoint é `POST` para manter o método permitido no cliente cross-origin. A validação cobre credencial/configuração, confirmação, contagens e novo uso da chave de idempotência após a limpeza. A prova visual local depende de instalar as dependências do `web/`.
+
+### DEC-039 — usar GPT-5.6 Sol com raciocínio médio como default do agente
+
+**Estado:** `DECIDED`. **Owner:** usuário solicitante. **Flight Log:** `FL-20260830-ROGERIO-031`.
+
+`CTR-AGT-RUN-001 v1` permanece inalterado: quando `OPENAI_API_KEY` estiver disponível, `OpenAISuggestionClient` chama a Responses API com `gpt-5.6-sol` e `reasoning.effort=medium`. Sem chave, usa `deterministic-template-v1`; timeout, indisponibilidade ou saída inválida resultam em `UNAVAILABLE`, com `max_retries=0`. Não há ferramentas, mutação de Incident, promoção causal ou ação financeira.
+
+| Contrato interno | Estado | Produtor → consumidor | Precondições e falha | Owner / prova |
+| --- | --- | --- | --- | --- |
+| `CTR-AGT-RUN-001 v1` | IMPLEMENTED | Railway Variables / `Settings` → `DiagnosticAgentService` → OpenAI Responses API | `OPENAI_API_KEY` secreto; `OPENAI_MODEL=gpt-5.6-sol`; `OPENAI_REASONING_EFFORT=medium`. Sem chave: template. Falha/timeout: `UNAVAILABLE`, sem retry. | Rogério; teste unitário dos defaults; smoke Railway sintético pendente. |
 
 ## 20. Recuperação de demo — janela de sete horas
 

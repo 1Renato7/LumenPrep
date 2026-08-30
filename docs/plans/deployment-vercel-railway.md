@@ -19,8 +19,8 @@
 | Railway | `LUMEN_DATA_DIR` | não | mount path do volume |
 | Railway | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | não | memória |
 | Railway | `OPENAI_API_KEY` | não | ativa a hipótese OpenAI do agente; segredo somente no backend |
-| Railway | `OPENAI_MODEL` | não | opcional; default `gpt-5.6-terra` |
-| Railway | `OPENAI_REASONING_EFFORT` | não | opcional; default `high` |
+| Railway | `OPENAI_MODEL` | não | opcional; default `gpt-5.6-sol` |
+| Railway | `OPENAI_REASONING_EFFORT` | não | opcional; default `medium` |
 | Railway | `OPENAI_TIMEOUT_SECONDS` | não | opcional; default `20` |
 | Railway | `DEMO_MODE` | não | habilita harness interno, nunca endpoints públicos de efeito |
 

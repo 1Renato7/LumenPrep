@@ -4911,3 +4911,70 @@ O usuário solicitou um botão que realmente limpe o histórico antes de inserir
 A limpeza ocorre em uma transação DuckDB sob o lock compartilhado e remove fatos sintéticos e todas as projeções derivadas: batches, records, eventos raw/canônicos, tentativas, links, Incidents, sugestões e notificações. O catálogo versionado de códigos de recusa permanece porque é referência da aplicação, não histórico da demo. Alternativas rejeitadas: remover só a lista (não persistente), apagar apenas records (deixa projeções inconsistentes) e substituir o arquivo inteiro (remove referência e amplia risco operacional).
 
 **Validação:** `uv run --locked pytest -q tests/test_transactions_api.py tests/test_api_routing.py` passou com **7 testes**; cobre configuração ausente, credencial inválida, confirmação inválida, limpeza, contagens, batch removido e reuso da chave de idempotência. `uv run --locked python scripts/validate_contracts.py` passou. Lint/build/testes/browser acceptance do `web/` continuam `NOT RUN`: o diretório `web/node_modules` não está instalado neste ambiente. Nenhum dado local ou remoto foi apagado durante esta implementação.
+
+### FL-20260830-ROGERIO-031 — Usar GPT-5.6 Sol com raciocínio médio no agente configurável
+
+- **Timestamp:** 2026-08-30T10:15:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Rogério
+- **Categoria:** AI/RAG | operations | payments
+- **Escopo:** `CTR-AGT-RUN-001 v1`, `Settings`, `OpenAISuggestionClient`, Railway e runbooks
+- **Links:** `DEC-030`, `DEC-039`, `CTR-AGT-001`–`003 v1`, `app/config.py`, `app/agent/llm.py`, `.env.example`, `docs/deploy-railway.md`
+- **Supersedes / superseded by:** substitui apenas o default Terra/`high` de `DEC-030` / `FL-20260830-TEAM-031`; preserva guardrails e contrato.
+
+#### Contexto e pergunta
+
+O runtime configurável usava GPT-5.6 Terra com esforço alto. O usuário pediu GPT-5.6 Sol com raciocínio médio, sem ampliar qualquer autoridade do agente no fluxo de pagamentos.
+
+#### Decisão
+
+Usar `gpt-5.6-sol` e `medium` como defaults do backend, cliente e ambiente. Manter Responses API, `store=False`, `max_retries=0`, template sem chave e `UNAVAILABLE` para falha remota ou saída rejeitada.
+
+#### Critérios e por que agora
+
+A documentação oficial da OpenAI identifica `gpt-5.6-sol` e suporta `reasoning.effort=medium`. A troca atende ao pedido sem quebrar consumidores, pois `model_version` é variável e o validador continua sendo a fronteira de autoridade.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Decisão |
+| --- | --- | --- | --- | --- |
+| Manter Terra/`high` | baseline histórico | não atende ao pedido | FACT: era o default vigente | rejeitada |
+| Sol/`high` | maior orçamento de raciocínio | não corresponde ao esforço solicitado e pode elevar custo/latência | ASSUMPTION | rejeitada |
+| Sol/`medium` | atende ao modelo/esforço pedidos sem mudar contrato | requer novo smoke externo | FACT: configuração suportada oficialmente | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o cliente continua pós-persistência, sem ferramenta e sem side effect financeiro.
+- **TEST:** `uv run --locked pytest -q tests/test_agent_suggestion.py` — **31 passed**, incluindo o request com os defaults Sol/`medium`; asserção direta de `Settings` confirmou a mesma combinação; `git diff --check` passou.
+- **ASSUMPTION:** a conta Railway possui acesso ao modelo; validar com Incident sintético e chave configurada.
+- **UNKNOWN:** custo e latência reais até o smoke externo.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** o default solicitado, mantendo a superfície de integração existente.
+- **Abrimos mão de:** comparabilidade imediata com o baseline Terra/`high` sem novo trial.
+- **Risco residual:** resposta remota inválida ou indisponível; o fallback retorna `UNAVAILABLE` sem alterar Incident, causa ou pagamentos.
+
+#### Consequências e propagação
+
+- **Produto/demo:** `model_version` pode retornar `openai:gpt-5.6-sol`; estados e UI não mudam.
+- **Arquitetura/contratos:** `CTR-AGT-RUN-001 v1` atualiza defaults; `CTR-AGT-001`–`003 v1` não mudam.
+- **Plano/Linear:** plano geral, plano de Altoé e runbooks atualizados; Linear não alterado.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** com chave, uma sugestão sintética mostra Sol/`medium`; sem chave continua `deterministic-template-v1`.
+- **Caso difícil/adverso:** timeout ou resposta inválida retorna `UNAVAILABLE`, sem retry ou ação financeira.
+- **Resultado observado:** testes focados e revisão: PASS; smoke Railway: NOT RUN, depende de segredo/acesso.
+- **Fallback:** template sem chave; `UNAVAILABLE` para falha remota.
+
+#### Gatilhos de revisão
+
+Indisponibilidade do modelo, custo/latência incompatível, falha de guardrail ou mudança em retries, ferramentas, contrato ou autoridade financeira exige nova decisão.
+
+#### Adendos
+
+- **Code Review Gate:** PASS. Foram revisados `Settings`, defaults do cliente e request Responses; não há alteração de schema, endpoint, permissão, retry ou consumidor. Fixtures Terra permanecem históricas.
+- **Browser acceptance:** NOT RUN. Não há UI/rota alterada e a materialização do novo `model_version` exige chave; a tentativa de conectar o navegador local expirou antes de abrir uma aba.
+- **Integration Contract Guardian (INTEGRATION):** READY WITH WARNINGS. O branch parte de `origin/main@10d2ec7`; a alteração é compatível, consumidores aceitam versão variável e o único checkpoint pendente é o smoke externo.
