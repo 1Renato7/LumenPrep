@@ -28,6 +28,18 @@ def test_template_suggestion_is_grounded_human_only_and_does_not_change_the_inci
     assert incident.root_cause.model_dump(mode="json") == original_root_cause
 
 
+def test_template_uses_concise_operational_portuguese():
+    suggestion = DiagnosticAgentService(client=TemplateSuggestionClient()).suggest_for_incident(
+        _incident(), decline_profile={"NO_DECLINE": 98, "PROVIDER_TIMEOUT": 96}, persist=False
+    )
+
+    assert "Prioridade:" in suggestion.summary_for_operations
+    assert "PROVIDER_TIMEOUT" in suggestion.summary_for_operations
+    assert "Ação humana prioritária:" in suggestion.executive_summary
+    assert len(suggestion.recommended_actions) <= 2
+    assert "latência do provedor" in suggestion.recommended_actions[0].action
+
+
 def test_agent_rejects_a_model_action_that_would_reroute_payment_traffic():
     class UnsafeClient:
         model_version = "unsafe-test-v1"

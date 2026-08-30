@@ -86,22 +86,20 @@ def _scope_label(pack: EvidencePack) -> str:
 
 def _rate_clause(pack: EvidencePack) -> str:
     if pack.approval_rate_observed is None or pack.approval_rate_expected is None:
-        return f"{pack.lost_approvals} approvals were lost across {pack.eligible_attempts} eligible attempts"
+        return f"{pack.lost_approvals} aprovações perdidas em {pack.eligible_attempts} tentativas elegíveis"
     return (
-        f"approval rate is {pack.approval_rate_observed:.2%} against an expected "
-        f"{pack.approval_rate_expected:.2%} across {pack.eligible_attempts} eligible attempts"
+        f"aprovação de {pack.approval_rate_observed:.1%} versus {pack.approval_rate_expected:.1%} esperada "
+        f"em {pack.eligible_attempts} tentativas"
     )
 
 
 def _operations_summary(pack: EvidencePack, category: str | None) -> str:
-    refusal_clause = ""
-    if pack.refusal_code_summaries:
-        leading = max(pack.refusal_code_summaries, key=lambda item: item.transaction_count)
-        refusal_clause = f" The leading mapped response is {leading.response_code}: {leading.reason}."
+    dominant = _dominant_decline(pack)
+    signal_clause = f" Sinal dominante: {dominant[0]} em {dominant[1]} recusas." if dominant else ""
     return (
-        f"Investigation hypothesis for {_scope_label(pack)}: {(category or 'unclassified operational degradation').replace('_', ' ').lower()} "
-        f"between {pack.window.start} and {pack.window.end}, where {_rate_clause(pack)}. "
-        "This is a hypothesis to investigate, not the engine's confirmed cause." + refusal_clause
+        f"Prioridade: investigar {_category_label(category)} em {_scope_label(pack)}, entre "
+        f"{pack.window.start} e {pack.window.end}. Observado: {_rate_clause(pack)}; "
+        f"{_impact_label(pack)}." + signal_clause
     )
 
 
@@ -110,9 +108,23 @@ def _executive_summary(pack: EvidencePack) -> str:
     # so the divisor is safe today. A zero-decimal currency would need a
     # versioned exponent table before it can be printed here.
     return (
-        f"About {pack.impact.amount_minor / 100:,.2f} {pack.impact.currency} of GMV is at risk on "
-        f"{_scope_label(pack)}; a human review is required."
+        f"Ação humana prioritária: validar {_scope_label(pack)} antes do próximo ciclo de monitoramento; "
+        f"há {_impact_label(pack)}."
     )
+
+
+def _impact_label(pack: EvidencePack) -> str:
+    return f"{pack.impact.amount_minor / 100:,.2f} {pack.impact.currency} em risco"
+
+
+def _category_label(category: str | None) -> str:
+    labels = {
+        "PROVIDER_DEGRADATION": "possível degradação do provedor",
+        "ISSUER_OUTAGE": "possível indisponibilidade do emissor",
+        "PAYMENT_METHOD_DEGRADATION": "possível degradação do método de pagamento",
+        "POSSIBLE_RISK_CONTROL_BLOCK": "possível bloqueio por controles de risco",
+    }
+    return labels.get(category or "", "degradação operacional")
 
 
 def _reasons(pack: EvidencePack, trace: AgentRetrievalTrace) -> list[SuggestionReason]:
@@ -125,7 +137,9 @@ def _reasons(pack: EvidencePack, trace: AgentRetrievalTrace) -> list[SuggestionR
         if item.kind == "DECLINE_PROFILE":
             continue
         grouped.setdefault(item.statement, []).append(item.evidence_id)
-    for statement, evidence_ids in list(grouped.items())[:3]:
+    for statement, evidence_ids in list(grouped.items())[:2]:
+        if statement.startswith("Detector candidate "):
+            statement = f"O desvio foi isolado no recorte {_scope_label(pack)} durante a janela analisada."
         reasons.append(SuggestionReason(statement=statement, evidence_ids=evidence_ids))
     dominant_decline = _dominant_decline(pack)
     for item in pack.refusal_code_summaries[:3]:
@@ -137,8 +151,7 @@ def _reasons(pack: EvidencePack, trace: AgentRetrievalTrace) -> list[SuggestionR
         reasons.append(
             SuggestionReason(
                 statement=(
-                    f"The failure signature is dominated by {code} on {count} declined attempts, "
-                    "which narrows where to look first."
+                    f"{code} concentrou {count} recusas no recorte afetado; este é o primeiro sinal a validar."
                 ),
                 evidence_ids=[item.evidence_id for item in decline_evidence],
             )
@@ -147,9 +160,9 @@ def _reasons(pack: EvidencePack, trace: AgentRetrievalTrace) -> list[SuggestionR
         if source.source == "incident_memory" and source.evidence_ids:
             reasons.append(
                 SuggestionReason(
-                    statement=(
-                        f"A human-confirmed precedent ({source.source_id}) shares part of this scope; "
-                        "it is prior context, not the current cause."
+                statement=(
+                        f"O precedente revisado por humano {source.source_id} compartilha parte do recorte; "
+                        "use-o apenas para comparar sinais e investigação."
                     ),
                     evidence_ids=list(source.evidence_ids),
                 )
@@ -175,27 +188,26 @@ def _dominant_decline(pack: EvidencePack) -> tuple[str, int] | None:
 
 
 def _actions(pack: EvidencePack, trace: AgentRetrievalTrace) -> list[SuggestedAction]:
-    """Propose investigation steps only; the playbook supplies wording, not authority."""
+    """Propose short, scope-specific investigation steps only."""
     rationale = [item.evidence_id for item in pack.detector_evidence[:2]]
-    actions = [
-        SuggestedAction(
-            action=(
-                f"Verify the current operational status reported for {_scope_label(pack)} "
-                "and compare it against the baseline window."
-            ),
-            rationale_evidence_ids=rationale,
-        ),
-        SuggestedAction(
-            action="Escalate to the payment operations owner for this scope with the evidence above.",
-            rationale_evidence_ids=rationale,
-        ),
-    ]
-    playbooks = [source for source in trace.sources if source.source == "playbook_catalog"]
-    if playbooks:
-        actions.insert(
-            0,
-            SuggestedAction(action=playbooks[0].summary, rationale_evidence_ids=rationale),
-        )
+    category = _hypothesis_category(pack)
+    target = _scope_label(pack)
+    if category == "PROVIDER_DEGRADATION":
+        primary = f"Comparar erros e latência do provedor em {target}, nesta janela, com a janela de baseline."
+    elif category == "ISSUER_OUTAGE":
+        primary = f"Verificar a concentração por emissor e os códigos de recusa em {target}, nesta janela."
+    elif category == "PAYMENT_METHOD_DEGRADATION":
+        primary = f"Conferir disponibilidade e configuração do método em {target}, nesta janela."
+    else:
+        primary = f"Validar o sinal dominante e os logs operacionais de {target}, nesta janela."
+    actions = [SuggestedAction(action=primary, rationale_evidence_ids=rationale)]
+    precedent = next((source for source in trace.sources if source.source == "incident_memory"), None)
+    if precedent is not None:
+        actions.append(SuggestedAction(
+            action=(f"Comparar os sinais atuais com o precedente {precedent.source_id} antes de reutilizar "
+                    "qualquer roteiro de investigação."),
+            rationale_evidence_ids=list(precedent.evidence_ids) or rationale,
+        ))
     return actions
 
 

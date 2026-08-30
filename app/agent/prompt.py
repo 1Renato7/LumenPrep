@@ -11,7 +11,7 @@ import json
 
 from .models import AgentRetrievalTrace, EvidencePack
 
-PROMPT_VERSION = "agent-diagnostic-v4"
+PROMPT_VERSION = "agent-diagnostic-v5"
 
 SYSTEM_PROMPT = """\
 You are a payment operations analyst supporting a human on-call team.
@@ -48,6 +48,14 @@ ACTIONS
 
 OUTPUT
 - Return ONLY a single JSON object matching the schema below. No Markdown, no prose, no code fence.
+- Write every authored text field in concise Brazilian Portuguese.
+- summary_for_operations: at most 2 sentences. State the affected scope, observed versus expected metric,
+  impact or lost approvals, and the dominant signal when available.
+- executive_summary: one sentence stating the operator priority; do not repeat the safety disclaimer.
+- reasons: state the operational fact supported by each cited evidence ID. Never write generic phrases such as
+  "inspect current evidence" or "the detector found a candidate".
+- recommended_actions: provide one or two concrete HUMAN_ONLY investigation steps tied to the current scope,
+  category, or observed refusal signal. Name what to compare or inspect and against which time window.
 
 {schema}
 """
