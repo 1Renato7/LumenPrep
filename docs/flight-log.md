@@ -2288,6 +2288,13 @@ relaxar a regra.
   textual entre esses namespaces.
 - **2026-08-29T20:06:13-03:00:** PASS: a suíte completa executou 57 testes
   sem falhas depois da correção.
+- **2026-08-29T21:24:57-03:00:** PASS: LUM2-63 adicionou o resolvedor
+  `transaction_id → evidence → Incident → ExplanationBundle`, filtrado pela
+  transação solicitada e sem chamada LLM por item. Nove testes focados passaram
+  cobrindo no-incident, um/múltiplos Incidents, evidência ausente, correlação
+  cruzada, isolamento entre transações e falhas de memória/modelo. Um Incident
+  sem bundle é exposto como `PARTIAL`, não como resolvido, preservando a falha
+  explícita; nenhum contrato público ou API foi alterado.
 
 ## Rogério
 
