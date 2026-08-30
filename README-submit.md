@@ -2,9 +2,9 @@
 
 Lumen is a **synthetic-payment monitoring and diagnosis system** for payment-operations teams. It turns a stream of attempted payments into auditable operational incidents: what changed, where it is concentrated, when it started, the estimated local-currency impact, the evidence behind the conclusion, and a recommended **human** action.
 
-It is built for the challenge in [`C2.txt`](../C2.txt): detect meaningful approval-rate degradation without alerting on ordinary noise; isolate the responsible intersection of merchant, provider, payment method, country, issuing bank, and decline code; keep simultaneous problems separate; and explain the result without pretending that uncertain evidence is a confirmed cause.
+It is built for the challenge "Control Tower": detect meaningful approval-rate degradation without alerting on ordinary noise; isolate the responsible intersection of merchant, provider, payment method, country, issuing bank, and decline code; keep simultaneous problems separate; and explain the result without pretending that uncertain evidence is a confirmed cause.
 
-> **Submission status — 30 August 2026.** The transaction-first path is implemented locally from batch input through durable lifecycle, canonical event, aggregation, detector/RCA, persisted Incident, grounded detail, notification and human review. The current backend suite has **291 passing tests**. The web **Input**, **Logs**, **Detail** and **Incidents** views consume the live API when `NEXT_PUBLIC_API_BASE_URL` is configured; fixtures remain an explicit mock/test mode only. A read-only Railway probe confirmed a primary Neo4j GraphRAG trace, but Volume/restart/CORS and Vercel browser acceptance still require their own real-environment evidence and are not claimed as completed here.
+> **Submission status — 30 August 2026.** The transaction-first path is implemented from batch input through durable lifecycle, canonical event, aggregation, detector/RCA, persisted Incident, grounded detail, notification, and human review. The current backend suite has **291 passing tests**. The Next.js operator interface is deployed on Vercel, while the FastAPI API and durable worker are deployed on Railway; the browser consumes only the configured `NEXT_PUBLIC_API_BASE_URL`. Fixtures remain an explicit mock/test mode only. The diagnostic agent now produces concise, evidence-linked Brazilian Portuguese guidance while preserving its `HUMAN_ONLY` boundary.
 
 ## What Lumen does
 
@@ -79,6 +79,14 @@ An Incident reports these operator-facing facts:
 - Impact is ranked only inside the same currency. Lumen does not silently compare BRL, MXN, and other currencies without a versioned FX decision.
 - A sparse or ambiguous slice produces `INCONCLUSIVE`; it is never “completed” by an LLM narrative.
 - All demo data is synthetic/tokenized. Real cardholder data is out of scope.
+
+## Diagnostic agent
+
+The diagnostic agent runs only after an Incident has been persisted. It never changes the engine's metrics, current root cause, or evidence, and it cannot execute a payment action.
+
+- Authored guidance is concise Brazilian Portuguese: an operations summary of up to two sentences, a one-sentence executive priority, evidence-linked reasons, and one or two scoped investigation steps.
+- The current prompt is `agent-diagnostic-v5`. Its actions remain `HUMAN_ONLY` and name the current scope, relevant signal, and comparison window rather than offering generic advice.
+- OpenAI is optional and remains server-side on Railway. When it is unavailable or not configured, the deterministic template continues to produce a safe, grounded result without changing the persisted Incident.
 
 ## Use Lumen in the demo
 
@@ -193,16 +201,18 @@ npm test
 npm run build
 ```
 
-The current local backend suite reports 291 passing tests. It covers transaction lifecycle, deterministic detection/RCA, grounded transaction detail, live-demo guards, human review/confirmation, conversion evaluation and GraphRAG probe behavior. The isolated synthetic conversion evaluation for seed `20260830` recorded 40/40 correct cases, and a read-only Railway probe confirmed a primary Neo4j GraphRAG trace without fallback. A benchmark run used 8,256 accepted synthetic events across 90 Parquet partitions; it is evidence of the ingest/materialization path, not a claim of production throughput. Volume/restart/CORS and end-to-end Vercel smoke evidence remain intentionally unreported until executed.
+The current local backend suite reports 291 passing tests. It covers transaction lifecycle, deterministic detection/RCA, grounded transaction detail, live-demo guards, human review/confirmation, conversion evaluation, GraphRAG probe behavior, and the concise-agent output contract. The isolated synthetic conversion evaluation for seed `20260830` recorded 40/40 correct cases, and a read-only Railway probe confirmed a primary Neo4j GraphRAG trace without fallback. A benchmark run used 8,256 accepted synthetic events across 90 Parquet partitions; it is evidence of the ingest/materialization path, not a claim of production throughput.
 
-## Deploy configuration
+## Deployed topology and configuration
+
+The Next.js web application is deployed on Vercel. The FastAPI API, lifecycle worker, and operational store run on Railway, with DuckDB/Parquet mounted on the Railway Volume. Vercel communicates with Railway over the public HTTPS `/v1` API only; DuckDB, Neo4j, OpenAI credentials, and the Volume are never exposed to the browser.
 
 | Environment | Required configuration |
 | --- | --- |
 | Railway | `LUMEN_DATA_DIR`, explicit `CORS_ALLOWED_ORIGINS`, and optional Neo4j/OpenAI server-side secrets |
 | Vercel | `NEXT_PUBLIC_API_BASE_URL` set to the public Railway `/v1` URL only |
 
-Deploy in this order: Railway service + Volume → API health and contract smoke → worker restart/recovery check → Vercel preview → exact CORS allowlist → production smoke. The full runbook is [`docs/plans/deployment-vercel-railway.md`](docs/plans/deployment-vercel-railway.md).
+Railway exposes `GET /v1/health` for API, worker, and store readiness. `CORS_ALLOWED_ORIGINS` must list the exact Vercel and local origins; wildcards are rejected. The full operating runbook is [`docs/plans/deployment-vercel-railway.md`](docs/plans/deployment-vercel-railway.md).
 
 ## Repository map
 
@@ -221,7 +231,7 @@ Deploy in this order: Railway service + Volume → API health and contract smoke
 
 Lumen is a challenge MVP and a decision-support tool, not a payment processor. It deliberately has one stateful Railway replica in the MVP because DuckDB/Parquet reside on the attached Railway Volume. Scaling to replicas or HA requires a persistence-adapter migration (for example, to Railway Postgres) under change control; it does not justify changing the public API.
 
-No user-facing claim should substitute for unrun evidence. In particular, browser acceptance, Railway restart persistence, production CORS, and a holdout accuracy score must be recorded only after their respective checks have been performed.
+Deployment status does not substitute for operational evidence. Railway restart persistence, production CORS, browser acceptance, and a holdout accuracy score should be recorded from their respective checks rather than inferred from a successful deploy.
 
 ## Decision record
 
