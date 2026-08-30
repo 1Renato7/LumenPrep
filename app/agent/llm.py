@@ -218,7 +218,10 @@ class OpenAISuggestionClient:
             raise RuntimeError(
                 "The OpenAI SDK is not installed; the agent stays on the deterministic client."
             ) from error
-        self._client = OpenAI(api_key=api_key, timeout=timeout)
+        # A timeout after a remote model request is an ambiguous result. The
+        # service must return its typed fallback rather than retrying and
+        # producing a duplicate, delayed or divergent suggestion.
+        self._client = OpenAI(api_key=api_key, timeout=timeout, max_retries=0)
         self._model = model
         self._reasoning_effort = reasoning_effort
         self.model_version = f"openai:{model}"

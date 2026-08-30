@@ -171,7 +171,7 @@ def test_configured_openai_client_uses_terra_high_responses_request(monkeypatch)
         index_version="local-v1",
     )
     assert client.suggest(pack, trace) == '{"status":"SUGGESTED"}'
-    assert calls["initialization"] == {"api_key": "test-key", "timeout": 9}
+    assert calls["initialization"] == {"api_key": "test-key", "timeout": 9, "max_retries": 0}
     assert calls["request"]["model"] == "gpt-5.6-terra"
     assert calls["request"]["reasoning"] == {"effort": "high"}
     assert calls["request"]["store"] is False
