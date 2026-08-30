@@ -68,6 +68,8 @@ class Neo4jIncidentRepositoryTest(unittest.TestCase):
         self.assertTrue(any("HUMAN_CONFIRMED" in query and "ORDER BY" in query for query in queries))
         upsert_parameters = next(parameters for query, parameters in driver.session_instance.calls if "MERGE (incident:Incident" in query)
         self.assertEqual(upsert_parameters["timeout"], 2.0)
+        query_parameters = next(parameters for query, parameters in driver.session_instance.calls if "MATCH (incident:Incident)" in query)
+        self.assertFalse(query_parameters["include_evaluation"])
 
     def test_upsert_reads_provider_id_into_providers_cypher_param(self) -> None:
         """scope.provider_id (contrato) -> $providers (Cypher) -> (:Provider {provider_id: ...}).

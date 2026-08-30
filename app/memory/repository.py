@@ -19,7 +19,7 @@ class IncidentMemoryRepository(Protocol):
 class InMemoryIncidentRepository:
     """Idempotent fallback used when the graph service is unavailable."""
 
-    def __init__(self, *, available: bool = True, include_evaluation: bool = True) -> None:
+    def __init__(self, *, available: bool = True, include_evaluation: bool = False) -> None:
         self.available = available
         self.include_evaluation = include_evaluation
         self._incidents: dict[str, HistoricalIncident] = {}

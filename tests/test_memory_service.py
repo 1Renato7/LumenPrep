@@ -99,6 +99,17 @@ class IncidentMemoryServiceTest(unittest.TestCase):
 
         self.assertEqual(result.memory_status, MemoryStatus.NO_PRECEDENT)
 
+    def test_evaluation_candidate_never_becomes_a_precedent_even_when_repository_returns_it(self) -> None:
+        repository = InMemoryIncidentRepository(include_evaluation=True)
+        precedent = mastercard_d2_precedent(now=datetime(2026, 8, 29, tzinfo=timezone.utc))
+        repository.upsert(replace(precedent, confirmation="EVALUATION_CONFIRMED"))
+
+        result = IncidentMemoryService(repository).retrieve(current_incident())
+
+        self.assertEqual(result.memory_status, MemoryStatus.NO_PRECEDENT)
+        self.assertEqual(result.matches, ())
+        self.assertEqual(result.retrieval_trace.candidate_count, 0)
+
     def test_old_or_scope_incompatible_candidates_are_filtered_before_scoring(self) -> None:
         repository = InMemoryIncidentRepository()
         old = replace(
@@ -145,4 +156,3 @@ class IncidentMemoryServiceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

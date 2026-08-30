@@ -47,6 +47,7 @@ class MemoryRuntimeTest(unittest.TestCase):
         self.assertEqual(("neo4j", "local-secret"), captured["auth"])
         self.assertEqual(MemoryStatus.MATCH_FOUND, result.memory_status)
         self.assertTrue(result.retrieval_trace.fallback_used)
+        self.assertFalse(Neo4jSettings(uri="bolt://graph:7687", user="neo4j", password="local-secret").include_evaluation)
         runtime.close()
         self.assertTrue(driver.closed)
 
