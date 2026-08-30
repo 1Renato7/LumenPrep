@@ -94,6 +94,7 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
             "category": "PROVIDER_DEGRADATION",
             "confidence": 0.88,
             "confidence_factors": {"fixture_fallback": 0.88},
+            "alternatives": [],
         },
         "impact": {
             "metric": "GMV_AT_RISK",
@@ -114,6 +115,7 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
             {
                 "playbook_id": no_precedent_explanation["playbook_id"],
                 "action": no_precedent_explanation["recommended_action"],
+                "recommendation_class": "INVESTIGATE",
                 "execution": "HUMAN_ONLY",
                 "rationale_evidence_ids": no_precedent_explanation["evidence_ids"],
             }

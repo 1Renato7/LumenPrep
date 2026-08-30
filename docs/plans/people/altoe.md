@@ -4,7 +4,7 @@
 
 > A `main` recebeu primeiro este replanejamento documental. O contrato transacional v3 é um draft em `codex/andre-dashboard-pitch@cc24c7a`; os contratos de Incident/memory já publicados continuam canônicos até a integração.
 
-- **Plano geral:** 2.0.0
+- **Plano geral:** 2.0.3
 - **Objetivo:** `OBJ-ALTOE-001`
 - **Papel:** Neo4j, memória recorrente, RAG e explicação grounded de incidentes.
 - **Resultado:** quando os logs agregados formarem um Incident, o detalhe da transação consegue navegar até uma explicação auditável e, quando houver, um precedente humano relevante.
@@ -18,7 +18,7 @@ O scenario generator vira harness interno; Graph RAG nunca recebe ground truth, 
 ## Ownership e contratos
 
 - **Own:** `CMP-MEM/EXP-001`, `CTR-MEM-001 v1.1`, `CTR-LLM-001 v1` e graph schema/prompts.
-- **Consome:** `CTR-INC-001` com evidence refs/transaction links.
+- **Consome:** `CTR-INC-001` com evidence refs/transaction links e alternativas causais; memória pode contextualizá-las, mas não reordená-las nem promover a causa atual.
 - **Produz:** memória e explicação para a API de Rogério e UI de André.
 - **Autoridade:** causa atual vem do detector/RCA; causa histórica só é confirmada para o incidente histórico; ação sempre `HUMAN_ONLY`.
 

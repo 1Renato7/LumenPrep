@@ -2835,6 +2835,72 @@ Benchmark de `LUM2-47` incompatível, novo provider sem perfil aceitável, ou co
 - **2026-08-29T21:00:00-03:00:** browser acceptance local passou em servidor com `DEMO_MODE=true` e `DUCKDB_PATH=:memory:`. Pelo Swagger, `POST /demo/scenarios/scenario_provider_br/inject` retornou `202 ACCEPTED` com `events_published=54`; em seguida `GET /transactions/health` retornou `published=54`, `listener_cursor=54` e `backlog=0`. Console sem erros; há somente warning pré-existente do Swagger CDN sobre deep-link whitespace.
 - **2026-08-29T21:16:00-03:00:** a validação de volume revelou que o correlation ID histórico recalculava o fingerprint completo do config para cada evento. O valor agora é calculado uma vez por gerador, sem alterar payload nem seed. PASS: 13 testes focados em 18,11s e validação de contratos aprovada.
 
+### FL-20260829-ROGERIO-006 — Estender CTR-INC-001 v1 com hipóteses ordenadas sem mudar a causa atual
+
+- **Timestamp:** 2026-08-29T21:50:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** contract | product | integration
+- **Escopo:** `LUM2-37`, `TASK-INC-003`, `CTR-INC-001 v1`, `CMP-INC-001`, `CMP-MEM/EXP-001`, `CMP-WEB-001`
+- **Links:** `docs/plans/system-plan.md` v2.0.3; `contracts/v1/incident.schema.json`; `app/incidents/__init__.py`; `tests/test_incident_serialization.py`
+- **Supersedes / superseded by:** adendo compatível a `CTR-INC-001 v1`; não substitui DEC-014 nem muda `CTR-MEM-001`.
+
+#### Contexto e pergunta
+
+`LUM2-37` exigia publicar alternativas causais ordenadas e uma classe de recomendação, mas o contrato congelado expunha apenas a causa atual e `execution=HUMAN_ONLY`. A mudança precisava informar API, memória e UI sem transformar um precedente ou uma hipótese em confirmação causal.
+
+#### Decisão
+
+Adicionar opcionalmente `root_cause.alternatives` e `recommendation_class` a `CTR-INC-001 v1`. O produtor ordena alternativas por confiança decrescente; elas são hipóteses e não modificam `root_cause.status` ou `category`. Recomendações continuam obrigatoriamente `HUMAN_ONLY` e recebem uma classe declarativa (`INVESTIGATE`, `MONITOR` ou `ESCALATE`). Payloads v1 legados sem os campos permanecem aceitos.
+
+#### Critérios e por que agora
+
+A UI precisa distinguir uma causa suportada de hipóteses concorrentes, e a integração já possui consumidores de Incident. Uma extensão aditiva entrega essa leitura sem uma migração de versão durante o hackathon e preserva a regra de que só o RCA confirma a causa atual.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Tornar alternativas obrigatórias e criar v1.1 incompatível | contrato mais rígido | força migração simultânea de fixtures, API, memória e UI | FACT: `CTR-INC-001 v1` já é consumido por componentes integrados | custo de integração desnecessário |
+| Usar memory matches como alternativas | menos campos | confunde precedente histórico com hipótese causal atual | FACT: `CTR-MEM-001` é eixo independente de `root_cause` | viola a separação causal |
+| Campos aditivos e tolerância a legado | entrega a informação com risco contido | consumidores precisam tratar ausência | TEST: schema e serialização serão cobertos localmente | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `RootCause.status` já restringe a causa atual a `SUPPORTED|INCONCLUSIVE`; `execution` já restringe ações a `HUMAN_ONLY`.
+- **TEST:** NOT RUN no momento deste registro; testes de schema, ordenação e eixos causais serão executados antes de concluir.
+- **ASSUMPTION:** consumidores ignoram campos opcionais que ainda não exibem.
+- **UNKNOWN:** quais classes além de investigação serão úteis na demo final.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** explicação explícita de hipóteses concorrentes e classificação visual da recomendação.
+- **Abrimos mão de:** obrigar todos os payloads legados a carregar alternativas imediatamente.
+- **Risco residual:** classes futuras podem pedir enum maior; isso exigirá novo change control.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** plano geral, schema, modelos, fixtures e testes mudam no mesmo commit.
+- **Pessoas/branches:** André tolera/exibe os campos quando presentes; Altoé não usa memória para promover nem ordenar alternativas.
+- **Linear:** `LUM2-37` só muda para Done após testes, review e gates reais.
+- **Testes/observabilidade:** casos SUPPORTED/INCONCLUSIVE comprovam ordenação e preservação da causa atual.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** Incident serializado contém alternativas em ordem estável e recomendação humana classificada.
+- **Caso difícil/adverso:** `INCONCLUSIVE + MATCH_FOUND` continua inconclusivo; alternativa vazia e payload legado são válidos.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** campos opcionais ausentes preservam o contrato v1 existente.
+
+#### Gatilhos de revisão
+
+Novo tipo de recomendação executável, consumidor que rejeite campo opcional, ou evidência de que memória está promovendo hipótese exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:05:00-03:00:** PASS: `python -m pytest -q` aprovou 91 testes, `python scripts/validate_contracts.py` aprovou schemas e fixtures, `python -m compileall -q app` passou e `git diff --check` não reportou erros. Browser acceptance ficou `PASS WITH LIMITATIONS`: o navegador real do Codex bloqueou `http://127.0.0.1:8091/v1/incidents` com `net::ERR_BLOCKED_BY_CLIENT`; o endpoint e os cenários de contrato foram exercitados pela suíte FastAPI, mas não houve consumidor web local para clicar nesta branch.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._

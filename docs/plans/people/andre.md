@@ -4,7 +4,7 @@
 
 > Os contratos/fixtures executáveis usados como mocks estão na branch `codex/andre-dashboard-pitch@cc24c7a` até as tasks produtoras publicarem suas versões revisadas na `main`.
 
-- **Plano geral:** 2.0.0
+- **Plano geral:** 2.0.3
 - **Objetivo:** `OBJ-ANDRE-001`
 - **Papel:** frontend Next.js, experiência transaction-first, integração Vercel → Railway e acceptance visual.
 - **Resultado:** inserir uma ou várias transações manualmente ou gerar samples por quantidade/seed, acompanhar logs vivos e abrir classificação/incidentes sem calcular nenhum fato no navegador.
@@ -19,7 +19,7 @@ A tela inicial aceita de 1 a 100 `TransactionInput`. Para acelerar a demo, `Gene
 ## Ownership e limites
 
 - **Own:** `CMP-WEB-001`, diretório `web/`, rotas `/transactions/*`, `/incidents/*`, client HTTP e configuração Vercel.
-- **Consome:** `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CTR-INC-001`, `CTR-MEM-001` e `CTR-LLM-001`.
+- **Consome:** `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CTR-INC-001` (incluindo `root_cause.alternatives` e `recommendation_class` quando presentes), `CTR-MEM-001` e `CTR-LLM-001`.
 - **Somente API:** nenhuma query a DuckDB/Neo4j e nenhum cálculo de taxa, causa, confiança ou impacto.
 - **Segurança:** campos allowlisted; não coletar PAN, CVV, nome, e-mail ou PII; não oferecer ação financeira.
 - **Hotspot:** contratos e env são coordenados por Rogério; André coordena somente `web/`.

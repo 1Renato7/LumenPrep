@@ -26,7 +26,11 @@
       "loss_coverage": 0.38,
       "temporal_consistency": 0.47,
       "data_quality": 0.88
-    }
+    },
+    "alternatives": [
+      {"category": "PROVIDER_DEGRADATION", "confidence": 0.38},
+      {"category": "ISSUER_OUTAGE", "confidence": 0.31}
+    ]
   },
   "impact": {
     "metric": "GMV_AT_RISK",
@@ -71,6 +75,7 @@
     {
       "playbook_id": "PB-PROVIDER-DEGRADATION-001",
       "action": "Usar o playbook anterior como roteiro de investigação: verificar a saúde dos providers Mastercard no Brasil e confirmar concentração antes de qualquer rerouting humano.",
+      "recommendation_class": "INVESTIGATE",
       "execution": "HUMAN_ONLY",
       "rationale_evidence_ids": ["evd_uncertain_current_rate", "evd_uncertain_low_coverage", "evd_prior_confirmed_uncertain"]
     }
