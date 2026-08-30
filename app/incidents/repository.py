@@ -61,6 +61,15 @@ class DuckDBIncidentRepository:
     """Idempotent Incident store backed by the shared DuckDB connection."""
 
     def upsert(self, incident: Incident | Mapping[str, Any]) -> Incident:
+        return self.upsert_with_status(incident)[0]
+
+    def upsert_with_status(self, incident: Incident | Mapping[str, Any]) -> tuple[Incident, bool]:
+        """Upsert one Incident and report whether this delivery created it.
+
+        The boolean is deliberately derived from the causal fingerprint inside
+        the same database transaction. Consumers can create side effects (the
+        in-app notification) without treating replay as a new Incident.
+        """
         model = incident if isinstance(incident, Incident) else Incident.model_validate(incident)
         fingerprint = causal_fingerprint(model)
         now = _now()
@@ -74,6 +83,7 @@ class DuckDBIncidentRepository:
             ).fetchone()
             if id_owner is not None and id_owner[0] != fingerprint:
                 raise IncidentIdConflictError("incident_id is already bound to another causal fingerprint")
+            created = existing is None
             if existing is not None:
                 # Re-delivery is an update of the same causal Incident, never a new row.
                 model = model.model_copy(update={"incident_id": existing[0]})
@@ -105,7 +115,37 @@ class DuckDBIncidentRepository:
                     now,
                 ],
             )
-        return model
+        return model, created
+
+    def create_notification(self, incident_id: str) -> None:
+        """Persist exactly one unread notification for an Incident."""
+        with CONNECTION_LOCK:
+            con = get_connection()
+            now = _now()
+            digest = sha256(f"notification:{incident_id}".encode("utf-8")).hexdigest()[:20]
+            con.execute(
+                """INSERT INTO incident_notifications (notification_id, incident_id, created_at, read_at)
+                   VALUES (?, ?, ?, NULL) ON CONFLICT (incident_id) DO NOTHING""",
+                [f"ntf_{digest}", incident_id, now],
+            )
+
+    def notifications(self) -> list[dict[str, Any]]:
+        with CONNECTION_LOCK:
+            rows = get_connection().execute(
+                """SELECT notification_id, incident_id, created_at, read_at
+                   FROM incident_notifications ORDER BY created_at DESC, notification_id ASC"""
+            ).fetchall()
+        return [{"notification_id": row[0], "incident_id": row[1], "created_at": row[2].replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+                 "read_at": row[3].replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if row[3] else None}
+                for row in rows]
+
+    def mark_notification_read(self, notification_id: str) -> bool:
+        with CONNECTION_LOCK:
+            row = get_connection().execute(
+                """UPDATE incident_notifications SET read_at = COALESCE(read_at, ?)
+                   WHERE notification_id = ? RETURNING notification_id""", [_now(), notification_id]
+            ).fetchone()
+        return row is not None
 
     def get(self, incident_id: str) -> Incident | None:
         with CONNECTION_LOCK:

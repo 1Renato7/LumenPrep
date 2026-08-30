@@ -44,6 +44,20 @@ def test_upsert_is_idempotent_by_window_and_full_causal_scope():
     assert [item.incident_id for item in repository.list()] == [first.incident_id]
 
 
+def test_notification_is_persistent_and_idempotent_for_one_new_incident():
+    repository = DuckDBIncidentRepository()
+    incident, created = repository.upsert_with_status(_incident("inc_notification"))
+    assert created is True
+    repository.create_notification(incident.incident_id)
+    repository.create_notification(incident.incident_id)
+    notifications = repository.notifications()
+    assert len(notifications) == 1
+    assert notifications[0]["read_at"] is None
+    assert repository.mark_notification_read(notifications[0]["notification_id"]) is True
+    assert repository.mark_notification_read(notifications[0]["notification_id"]) is True
+    assert repository.notifications()[0]["read_at"] is not None
+
+
 def test_simultaneous_distinct_causal_fingerprints_remain_separate():
     repository = DuckDBIncidentRepository()
     provider = repository.upsert(_incident("inc_provider"))

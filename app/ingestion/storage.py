@@ -105,6 +105,12 @@ CREATE TABLE IF NOT EXISTS transaction_incident_links (
     linked_at TIMESTAMP NOT NULL,
     PRIMARY KEY (transaction_id, incident_id)
 );
+CREATE TABLE IF NOT EXISTS incident_notifications (
+    notification_id VARCHAR PRIMARY KEY,
+    incident_id VARCHAR UNIQUE NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    read_at TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS refusal_code_catalog (
     mapping_id VARCHAR PRIMARY KEY,
     provider_id VARCHAR NOT NULL,

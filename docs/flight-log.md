@@ -4705,3 +4705,56 @@ O health da `main@0b6e9c8` retornou `503` com `worker=unavailable` e `FileNotFou
 - **Escopo:** `TASK-DEP-002`; lifecycle de transações recuperadas
 
 Após a correção do catálogo, o deploy passou da falha de arquivo para `502`: o processo permanecia em `Waiting for application startup` enquanto `reconcile_stuck()` processava trabalho pendente e chamava o agente OpenAI. Foi escolhido o hotfix `run_suggestions=False` exclusivamente no startup. A reconciliação ainda conclui o estado durável de transações e Incidents, mas não espera uma chamada remota antes de a API responder. O fluxo normal de batches mantém `run_suggestions=True`, portanto continua a produzir sugestões. Trade-off aceito: um Incident concluído somente durante a recuperação pode ficar sem sugestão até uma reexecução posterior; uma outbox persistida é a solução completa futura. Validação local: 52 testes focados passaram; health Railway após deploy permanece pendente.
+
+### FL-20260830-TEAM-036 — Detectar conversão por pagamento em janelas fechadas e notificar no produto
+
+- **Timestamp:** 2026-08-30T05:30:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** contract | data | UX | AI/RAG | payments
+- **Escopo:** `DEC-033`, `DEC-034`, `CTR-DET-002 v2`, `CTR-NOT-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.6.0; `CTR-DET-001 v1`; `CTR-AGT-001`–`003 v1`
+
+#### Contexto e pergunta
+
+O approval rate por tentativa oculta retries e não representa a conversão de pagamentos. O usuário pediu uma queda detectável com dez pagamentos únicos, baseline sem dados futuros, Incident/LLM idempotentes e sinal persistente na UI.
+
+#### Decisão
+
+Usar buckets fechados de cinco minutos e uma observação móvel de sessenta minutos. O candidato v2 só é emitido com dez pagamentos únicos, três observações históricas anteriores do mesmo slice e queda de pelo menos quinze pontos percentuais cujo limite superior de Wilson fique abaixo do baseline. Persistir uma notificação in-app por Incident novo; leitura é backend-authoritativa e ações do agente seguem `HUMAN_ONLY`.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Decisão |
+| --- | --- | --- | --- |
+| Reutilizar approval rate/lost approvals | patch menor | retries distorcem métrica e semântica | rejeitada |
+| Janela aberta ou baseline com futuro | resposta rápida | leakage e revisões instáveis | rejeitada |
+| Buckets fechados + observação móvel + baseline anterior | auditável, idempotente e reproduzível | alerta chega no próximo fechamento | escolhida |
+| Toast ou browser notification | menor implementação | desaparece ou depende de permissão externa | rejeitada |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `payment_conversion` já é calculada como pagamentos aprovados / pagamentos únicos no agregador.
+- **FACT:** o agente recebe somente Incident persistido e EvidencePack imutável; não possui ferramentas financeiras.
+- **TEST:** NOT RUN — validações serão registradas após a implementação.
+- **ASSUMPTION:** três observações anteriores são suficientes para o baseline de demo; revisar com dados históricos mais longos.
+- **UNKNOWN:** latência de notificação em deploy até smoke local/browser.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** métrica correta, ausência de future leakage e refresh persistente.
+- **Abrimos mão de:** alertar antes do fechamento da janela e de canais externos nesta tarefa.
+- **Risco residual:** baseline curto pode abster mais que o desejado; baixa evidência retorna estado honesto.
+
+#### Gatilhos de revisão
+
+Menos de três observações úteis na demo, taxa excessiva de abstention ou qualquer tentativa de usar hipótese/RAG para mudar pagamento exige nova decisão.
+
+#### Adendo de validação
+
+- **2026-08-30T05:45:00-03:00 — contratos e backend:** `scripts/validate_contracts.py` passou em DuckDB temporário; os testes focados de detecção, conversão, repository, pipeline e worker passaram. A revisão confirmou que o candidato v2 só é emitido após endpoint fechado, calcula `estimated_lost_conversions` por pagamento único e não autoriza a LLM a mudar Incident/pagamento.
+- **2026-08-30T05:45:00-03:00 — frontend:** `npm test` passou com 38 testes e 1 skip preexistente; `tsc --noEmit` e `npm run build` passaram. O browser local carregou `/incidents`, a região `aria-live`, botão de sino, navegação por teclado e estados vazios reais sem erro de console após CORS local.
+- **Limitação honesta:** o processo FastAPI segura o arquivo DuckDB exclusivo; uma segunda execução não conseguiu inserir um Incident sintético para demonstrar visualmente badge/card/marcar-como-lido no mesmo servidor. A persistência/idempotência de leitura é coberta no repository test, mas browser acceptance desses estados é `NOT RUN` até um seed endpoint de teste ou banco isolado.
+- **Code Review Gate:** `PASS WITH NOTES`. A revisão do diff confirmou que `payment_conversion` usa `payment_id`, a observação não inclui endpoint aberto, o baseline só lê janelas anteriores e o agente continua separado do Incident/pagamentos. Não foi encontrado achado bloqueante.
+- **Integration Contract Guardian (INTEGRATION):** `READY WITH WARNINGS`. `CTR-DET-001 v1` preserva compatibilidade aditiva; `CTR-DET-002 v2` e `CTR-NOT-001 v1` possuem schema/fixture, persistência idempotente, API e consumidor web. Warning: acceptance visual de badge/card/read em dado não vazio permanece `NOT RUN` pela limitação de seed descrita acima.

@@ -291,3 +291,17 @@ export interface TransactionIncidentDetail {
   rejected_incident_ids: string[];
   limitations: string[];
 }
+
+/** CTR-NOT-001: backend-owned read state for the in-app Incident feed. */
+export interface IncidentNotification {
+  notification_id: string;
+  incident_id: string;
+  created_at: string;
+  read_at: string | null;
+  incident: Incident;
+}
+
+export interface NotificationFeed {
+  notifications: IncidentNotification[];
+  unread_count: number;
+}

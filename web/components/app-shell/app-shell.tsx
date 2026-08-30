@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import styles from "./app-shell.module.css";
+import { NotificationCenter } from "@/components/notifications/notification-center";
 
 const destinations = [
   { href: "/transactions/new", label: "Input", description: "Create transactions", matches: (pathname: string) => pathname.startsWith("/transactions/new"), icon: InputIcon },
@@ -36,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <span className={styles.statusCopy}><strong>Synthetic workspace</strong><small>Safe demo environment</small></span>
       </div>
     </aside>
-    <div className={styles.mainColumn}><div className={styles.content} id="main-content">{children}</div></div>
+    <div className={styles.mainColumn}><NotificationCenter /><div className={styles.content} id="main-content">{children}</div></div>
   </div>;
 }
 

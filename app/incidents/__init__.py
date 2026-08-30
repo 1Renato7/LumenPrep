@@ -235,6 +235,16 @@ def to_incident(
         "approval_rate_expected": candidate.get("expected"),
         "lost_approvals": int(round(max(float(item.get("lost_approvals", 0)) for item in correlated.candidates))),
     }
+    conversion_candidates = [item for item in correlated.candidates if item.get("metric") == "PAYMENT_CONVERSION"]
+    if conversion_candidates:
+        conversion = conversion_candidates[0]
+        metrics.update({
+            "payment_conversion_observed": conversion.get("observed"),
+            "payment_conversion_expected": conversion.get("expected"),
+            "unique_payments": int(conversion.get("sample_size", 0)),
+            "estimated_lost_conversions": int(round(float(conversion.get("estimated_lost_conversions", 0)))),
+            "observation_window_minutes": 60,
+        })
     normalized_declines = sorted({str(code) for code in decline_codes if str(code)})
     if normalized_declines:
         metrics["decline_codes"] = normalized_declines

@@ -11,6 +11,7 @@ from referencing import Registry, Resource
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 SCHEMAS = ROOT / "contracts" / "v1"
+SCHEMAS_V2 = ROOT / "contracts" / "v2"
 FIXTURES = ROOT / "contracts" / "fixtures"
 
 PAIRS: dict[str, list[str]] = {
@@ -49,12 +50,13 @@ PAIRS: dict[str, list[str]] = {
     "agent-retrieval-trace.schema.json": ["agent-retrieval-trace.json"],
     "agent-diagnostic-suggestion.schema.json": ["agent-diagnostic-suggestion.json"],
     "refusal-code-resolution.schema.json": ["refusal-code-resolution.json"],
+    "../v2/payment-conversion-candidate.schema.json": ["payment-conversion-candidate.json"],
 }
 
 
 def validate_fixtures() -> list[str]:
     errors = []
-    schemas = [json.loads(path.read_text(encoding="utf-8")) for path in SCHEMAS.glob("*.schema.json")]
+    schemas = [json.loads(path.read_text(encoding="utf-8")) for directory in (SCHEMAS, SCHEMAS_V2) for path in directory.glob("*.schema.json")]
     registry = Registry().with_resources(
         (schema["$id"], Resource.from_contents(schema)) for schema in schemas if "$id" in schema
     )

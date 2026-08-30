@@ -14,14 +14,15 @@ from hashlib import sha256
 from typing import Any, TypeAlias
 
 from app.agent import DiagnosticAgentService
-from app.aggregation import WindowMetrics, compute_windows
-from app.detection import detect_candidates
+from app.aggregation import WindowMetrics, compute_payment_conversion_observations, compute_windows
+from app.detection import detect_candidates, detect_payment_conversion_candidates
 from app.incidents import DuckDBIncidentRepository, Evidence, Incident, correlate_candidates, compute_impact, to_incident
 from app.rca import explore_slices, rank_hypotheses
 
 logger = logging.getLogger(__name__)
 
 LOW_SAMPLE_ATTEMPTS = 12
+MINIMUM_UNIQUE_PAYMENTS = 10
 SuggestionJob: TypeAlias = tuple[Incident, dict[str, int], list[dict[str, Any]]]
 
 
@@ -34,18 +35,24 @@ def derive_incidents_for_correlation(
     for the just-processed correlation may create or update its Incidents.
     """
     windows = compute_windows(con)
+    conversion_windows = compute_payment_conversion_observations(con)
     candidates = [
         candidate
         for candidate in detect_candidates(windows, low_sample_attempts=LOW_SAMPLE_ATTEMPTS)
         if candidate.correlation_id == correlation_id and candidate.slice
     ]
+    candidates.extend(
+        candidate for candidate in detect_payment_conversion_candidates(
+            conversion_windows, minimum_unique_payments=MINIMUM_UNIQUE_PAYMENTS
+        ) if candidate.correlation_id == correlation_id and candidate.slice
+    )
     if not candidates:
         return []
 
     repository = DuckDBIncidentRepository()
     incident_ids: list[str] = []
     for group in correlate_candidates(_most_specific_candidates(candidates)):
-        window = _window_for_group(windows, group.correlation_id, group.candidates[0])
+        window = _window_for_group(windows + conversion_windows, group.correlation_id, group.candidates[0])
         if window is None:
             continue
         ranking = rank_hypotheses(explore_slices(group.candidates, min_support=LOW_SAMPLE_ATTEMPTS))
@@ -66,7 +73,9 @@ def derive_incidents_for_correlation(
             ),
             decline_codes=_memory_decline_codes(window.decline_profile),
         )
-        persisted = repository.upsert(incident)
+        persisted, created = repository.upsert_with_status(incident)
+        if created:
+            repository.create_notification(persisted.incident_id)
         _link_matching_transactions(con, repository, persisted.model_dump(mode="json"))
         summaries = _refusal_code_summaries(con, persisted.model_dump(mode="json"))
         if suggestion_jobs is None:
@@ -163,6 +172,13 @@ def _evidence(candidates: tuple[dict[str, Any], ...], decline_profile: dict[str,
                     source_ref=source,
                 )
             )
+        if candidate.get("metric") == "PAYMENT_CONVERSION":
+            values.append(Evidence(
+                evidence_id=f"evd_conversion_{candidate['candidate_id']}", kind="PAYMENT_CONVERSION",
+                statement=(f"Payment conversion was {candidate['observed']:.1%} against a historical {candidate['expected']:.1%} "
+                           f"baseline across {candidate['sample_size']} unique payments in the closed 60-minute observation."),
+                source_ref=f"conversion://{candidate['window']['start']}/{candidate['window']['end']}",
+            ))
     if decline_profile:
         dominant, count = max(decline_profile.items(), key=lambda item: item[1])
         values.append(

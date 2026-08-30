@@ -118,6 +118,11 @@ export function createMockLumenApiClient(): MockLumenApiClient {
       if (incidentId !== incident.incident_id) throw new LumenApiError("NOT_FOUND", 404, { correlation_id: "corr_demo_mock_not_found" }, "Agent suggestion fixture was not found.");
       return structuredClone(diagnosticSuggestion);
     },
+    async listNotifications(options) {
+      checkCancelled(options);
+      return { unread_count: 1, notifications: [{ notification_id: "ntf_fixture_001", incident_id: incident.incident_id, created_at: incident.detected_at, read_at: null, incident: structuredClone(incident) }] };
+    },
+    async markNotificationRead(_notificationId, options) { checkCancelled(options); },
   };
 }
 

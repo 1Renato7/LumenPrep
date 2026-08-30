@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.5.0
+- **Versão:** 2.6.0
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -26,6 +26,7 @@
 - **Changelog 2.4.4:** por decisão explícita do usuário solicitante, ativa o cliente OpenAI no Railway quando `OPENAI_API_KEY` estiver configurada. O runtime usa `gpt-5.6-terra` com `reasoning.effort=high`; a ausência de chave mantém o template determinístico e indisponibilidade do provedor produz `UNAVAILABLE`, sem alterar Incident, causa ou pagamentos.
 - **Changelog 2.5.0:** adiciona uma classificação determinística de códigos de resposta por PSP, emissor e bandeira. O fato por transação é persistido antes da agregação; apenas uma anomalia já detectada produz o resumo estruturado que chega ao agente. O lookup não usa GraphRAG e não cria ação de pagamento.
 - **Changelog 2.5.1:** após o trial by fire local, restringe a categoria publicada pelo agente às categorias que já pertencem ao RCA atual. Precedentes recuperados continuam sendo contexto citável, mas não podem introduzir uma nova categoria causal.
+- **Changelog 2.6.0:** adiciona detecção de queda de `payment_conversion` e notificações in-app persistentes. `CTR-DET-001 v1` permanece legível; `CTR-DET-002 v2` produz o candidato de conversão com `estimated_lost_conversions`. A observação usa os últimos 12 buckets fechados de 5 minutos (60 minutos), mínimo de 10 pagamentos únicos, baseline somente de observações anteriores do mesmo slice e deduplicação por janela/slice. `CTR-NOT-001 v1` cria uma notificação por Incident persistido, lida no backend e apresentada por badge/card acessível no web.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -115,6 +116,8 @@ O MVP vence quando uma pessoa:
 | DEC-017 | DECIDED | Progresso é persistido pelo backend; preservar DuckDB/Volume e gerador como harness interno | polling honesto, uma réplica no MVP e mínimo retrabalho; adapter permite Postgres/SSE posterior | `FL-20260829-TEAM-017` |
 | DEC-020 | DECIDED | Navegação usa três destinos e `UNKNOWN` entra na atenção técnica sem virar Incident por inferência da UI | preserva `CTR-TXL-001` e `CTR-INC-001` | `FL-20260829-TEAM-020` |
 | DEC-021 | DECIDED | Publicar `web/` na main como superfície compartilhada de integração | elimina duplicação sem alegar readiness live | `FL-20260829-TEAM-021` |
+| DEC-033 | DECIDED | Detectar `PAYMENT_CONVERSION` em observação móvel de 60 min formada por 12 buckets fechados de 5 min; exigir ao menos 10 `unique_payments`, três observações históricas anteriores do mesmo slice e queda de pelo menos 15 p.p. cuja bound superior de Wilson fique abaixo do baseline | evita trocar retries por pagamentos, olhar dado futuro ou alertar ruído de baixo volume; recupera somente na próxima janela fechada | `FL-20260830-TEAM-036` |
+| DEC-034 | DECIDED | Notificação in-app é criada após o upsert idempotente do Incident e é marcada lida no backend; não há canais externos neste incremento | refresh preserva estado e redelivery não duplica badge/card; não há entrega fora do produto | `FL-20260830-TEAM-036` |
 
 ## 5. Arquitetura 2.0
 
@@ -192,6 +195,8 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | CTR-EVT-001 v1 | FROZEN | DATA/TXN → ING | canonical payment attempt event | quarantine/dedupe/watermark | schema existente |
 | CTR-AGG-001 v1 | FROZEN | AGG → DET/RCA | métricas calculadas | `INSUFFICIENT_VOLUME` | schema existente |
 | CTR-DET-001 v1 | FROZEN | DET → INC | candidatos numéricos | `NO_ANOMALY`, data quality | schema existente |
+| CTR-DET-002 v2 | FROZEN / PROPOSED | DET → INC/AGENT/API/WEB | candidato `PAYMENT_CONVERSION`, com janela observada, baseline anterior, `unique_payments` e `estimated_lost_conversions` | baixa amostra, baseline insuficiente ou janela aberta não produzem candidato; redelivery preserva ID | `contracts/v2/payment-conversion-candidate.schema.json`, fixture e testes de janela/revisão |
+| CTR-NOT-001 v1 | FROZEN / PROPOSED | INC repository → API → WEB | notificação in-app persistente por Incident criado, com leitura backend-authoritativa | sem canais externos; leitura repetida é no-op; mesma chave de Incident não duplica | `notification_records`, OpenAPI, fixture, API/web tests |
 | CTR-INC-001 v1 | FROZEN, adendo 2.1.1 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação e impacto local priorizável | `INCONCLUSIVE` válido; moedas não recebem conversão implícita | fixtures existentes + testes de serialização/prioridade/correlação |
 | CTR-MEM-001 v1.1 | FROZEN / RUNTIME READY FOR REVIEW | MEM → EXP/API | precedente tipado via adapter Neo4j opcional | `NO_PRECEDENT`, `MEMORY_UNAVAILABLE`; fallback local explícito | Compose, bootstrap, runtime e testes de fallback na branch `codex/neo4j-docker-runtime` |
 | CTR-LLM-001 v1 | FROZEN | EXP → API/WEB | explicação grounded | template determinístico | schema existente |

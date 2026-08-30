@@ -3,6 +3,7 @@ import {
   parseDiagnosticSuggestion,
   parseIncidentDetail,
   parseIncidentList,
+  parseNotificationFeed,
   parseTransactionIncidentDetail,
   parseTransactionBatchAccepted,
   parseTransactionCatalog,
@@ -12,6 +13,7 @@ import {
 } from "./parse";
 import type {
   Incident,
+  NotificationFeed,
   IncidentDetail,
   DiagnosticSuggestion,
   TransactionBatchAccepted,
@@ -49,6 +51,8 @@ export interface LumenApiClient {
   getIncident(incidentId: string, options?: RequestOptions): Promise<IncidentDetail>;
   /** Additive CTR-AGT-003 read: never changes the engine-owned Incident. */
   getDiagnosticSuggestion(incidentId: string, options?: RequestOptions): Promise<DiagnosticSuggestion>;
+  listNotifications(options?: RequestOptions): Promise<NotificationFeed>;
+  markNotificationRead(notificationId: string, options?: RequestOptions): Promise<void>;
 }
 
 export type LumenApiErrorCode =
@@ -208,6 +212,10 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
     },
     getIncident: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}`, { method: "GET" }, parseIncidentDetail, requestOptions),
     getDiagnosticSuggestion: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}/suggestion`, { method: "GET" }, parseDiagnosticSuggestion, requestOptions),
+    listNotifications: (requestOptions) => request("/notifications", { method: "GET" }, parseNotificationFeed, requestOptions),
+    markNotificationRead: async (notificationId, requestOptions) => {
+      await request(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: "POST" }, () => undefined, requestOptions);
+    },
   };
 }
 

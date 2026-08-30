@@ -274,6 +274,27 @@ def get_incident_suggestion(incident_id: str) -> dict[str, Any]:
     return suggestion.model_dump(mode="json")
 
 
+@router.get("/notifications")
+def list_notifications() -> dict[str, Any]:
+    """Return persistent in-app notifications; the browser never derives unread state."""
+    repository = DuckDBIncidentRepository()
+    notifications = repository.notifications()
+    records = _incident_records()
+    values = [
+        {**notification, "incident": records.get(notification["incident_id"])}
+        for notification in notifications
+        if notification["incident_id"] in records
+    ]
+    return {"notifications": values, "unread_count": sum(item["read_at"] is None for item in values)}
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: str) -> dict[str, Any]:
+    if not DuckDBIncidentRepository().mark_notification_read(notification_id):
+        raise HTTPException(status_code=404, detail="NOTIFICATION_NOT_FOUND")
+    return {"notification_id": notification_id, "read": True}
+
+
 @router.get("/incidents/{incident_id}")
 def get_incident(incident_id: str) -> dict[str, Any]:
     incident = _incident_records().get(incident_id)

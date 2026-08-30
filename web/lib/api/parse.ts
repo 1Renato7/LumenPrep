@@ -13,6 +13,7 @@ import type {
   TransactionSampleResponse,
   TransactionStatus,
   TransactionIncidentDetail,
+  NotificationFeed,
 } from "./types";
 
 export class ApiPayloadError extends Error {
@@ -296,6 +297,24 @@ export function parseIncident(value: unknown): Incident {
 export function parseIncidentList(value: unknown): Incident[] {
   if (!Array.isArray(value)) fail("Incident list must be an array.", value);
   return value.map(parseIncident);
+}
+
+export function parseNotificationFeed(value: unknown): NotificationFeed {
+  const feed = exactObject(value, ["notifications", "unread_count"], [], "NotificationFeed");
+  if (!Array.isArray(feed.notifications)) fail("NotificationFeed.notifications must be an array.", value);
+  return {
+    unread_count: integer(feed.unread_count, "NotificationFeed.unread_count", 0),
+    notifications: feed.notifications.map((item, index) => {
+      const notification = exactObject(item, ["notification_id", "incident_id", "created_at", "read_at", "incident"], [], `NotificationFeed.notifications[${index}]`);
+      return {
+        notification_id: string(notification.notification_id, "notification_id"),
+        incident_id: string(notification.incident_id, "incident_id"),
+        created_at: string(notification.created_at, "created_at"),
+        read_at: nullableString(notification.read_at, "read_at"),
+        incident: parseIncident(notification.incident),
+      };
+    }),
+  };
 }
 
 export function parseIncidentDetailList(value: unknown): IncidentDetail[] {

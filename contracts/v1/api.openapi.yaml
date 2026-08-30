@@ -141,6 +141,20 @@ paths:
         - {name: transaction_id, in: query, required: false, schema: {type: string, minLength: 1}, description: "Restrict the homogeneous Incident list to evidence-authorized IDs from the transaction classification. Use /transactions/{transaction_id}/incidents for memory and explanation detail."}
       responses:
         "200": {description: Incident list}
+  /notifications:
+    get:
+      operationId: listNotifications
+      description: Persistent CTR-NOT-001 in-app notification feed. The backend owns unread state.
+      responses:
+        "200": {description: Notification feed with unread count and Incident summaries}
+  /notifications/{notification_id}/read:
+    post:
+      operationId: markNotificationRead
+      parameters:
+        - {name: notification_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: Idempotently marked read}
+        "404": {description: NOTIFICATION_NOT_FOUND}
   /incidents/{incident_id}:
     get:
       operationId: getIncident
