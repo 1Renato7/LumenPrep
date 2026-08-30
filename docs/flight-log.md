@@ -5750,3 +5750,70 @@ Os dois trials anteriores eram brasileiros e geravam `ISSUER_OUTAGE`, reduzindo 
 - **Ganhamos:** duas causas atuais e dois países visíveis, mantendo a separação entre motor determinístico e contexto histórico.
 - **Limitação:** o precedente do Graph reforça investigação, não prova nem substitui sua causa brasileira atual.
 - **Validação:** testes focados comprovam 5 sucessos, 20 falhas, Incident único, `MX`/`PROVIDER_DEGRADATION` no trial determinístico, `BR`/`ISSUER_OUTAGE` no Graph e recuperação do precedente.
+
+### FL-20260830-TEAM-051 — Contrastar certeza causal e diagnósticos no palco
+
+- **Timestamp:** 2026-08-30T10:34:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** demo | data | RCA | UX
+- **Escopo:** `CTR-DEMO-002 v1`, classificação por transação e estado/causa do Incident
+- **Links:** `docs/plans/system-plan.md` v2.10.6; `tests/test_live_demo_trials.py`; `FL-20260830-TEAM-046`; `FL-20260830-TEAM-050`
+- **Supersedes / superseded by:** complementa `FL-20260830-TEAM-046` e `FL-20260830-TEAM-050`
+
+#### Contexto e pergunta
+
+O Log dos trials tornava as vinte recusas visualmente idênticas (`ISSUER_DECLINE`), e os dois Incidents pareciam conclusivos. O usuário pediu diagnóstico alternado e uma comparação explícita entre um incidente confirmado e outro inconclusivo. Após pedir inicialmente 82% para ambos, corrigiu que não quer as duas confianças iguais.
+
+#### Decisão
+
+Manter cinco aprovações por trial e dividir as vinte recusas entre doze sintomas predominantes e oito secundários. O trial determinístico mexicano conserva `PROVIDER_DEGRADATION` `SUPPORTED` com confiança de 82%; o trial brasileiro com contexto de grafo fica `INCONCLUSIVE`, sem categoria atual e com `ISSUER_OUTAGE` como hipótese alternativa, a 58%. O perfil fixo é aplicado ao Incident persistido antes de montar a sugestão do agente, para que uma memória recuperada não promova a conclusão.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Vinte recusas do mesmo diagnóstico | Simplicidade e pico causal máximo | Demo parece falha uniforme e não mostra classificação | FACT: relato do usuário sobre `ISSUER_DECLINE` em todas as linhas | Rejeitada |
+| Duas causas suportadas com 82% | Comparação mais direta | Apaga a fronteira entre hipótese e causa confirmada | FACT: usuário solicitou uma inconclusiva e recusou confianças iguais | Rejeitada |
+| Perfil fixo 82%/58% antes da sugestão | Cena repetível, contraste causal e coerência do agente | Confiança é parametrizada para a demo, não uma nova calibração do detector | ASSUMPTION: 58% comunica incerteza suficiente à banca | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `PROVIDER_TIMEOUT` mapeia para `TIMEOUT`; `DO_NOT_HONOR` e `insufficient_funds` permanecem `ISSUER_DECLINE`.
+- **TEST:** testes de trial, resposta de rota e recuperação de precedente pendentes de execução completa após a implementação.
+- **ASSUMPTION:** 82% no resultado suportado e 58% no inconclusivo são os valores de palco desejados; revisar se o usuário indicar outros números.
+- **UNKNOWN:** a latência do ambiente Railway ainda precisa da validação de deploy.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** Logs legíveis com resultados positivos, `TIMEOUT` e `ISSUER_DECLINE`, além de duas posturas causais distinguíveis.
+- **Abrimos mão de:** a confiança exibida refletir apenas o cálculo cru do detector neste caminho explicitamente sintético.
+- **Dívida/limitação:** o hook de perfil é interno ao trial e não pode ser exposto à API pública.
+- **Risco residual:** se a banca interpretar 58% como certeza, a tela de detalhe precisa ser usada para mostrar categoria ausente e hipótese alternativa.
+
+#### Consequências e propagação
+
+- **Produto/demo:** um botão culmina em `SUPPORTED`/82%; o outro em `INCONCLUSIVE`/58% sem Current Cause.
+- **Arquitetura/contratos:** `CTR-DEMO-002 v1` preserva schema público; a ordem interna passa a ser detector → perfil limitado → sugestão.
+- **Pessoas/branches:** Team é owner de `live_demo_trials.py`, worker, rota e testes.
+- **Plano/Linear:** plano geral 2.10.6 atualizado; Linear não alterado sem autorização.
+- **Testes/observabilidade:** provar mistura 5/12/8, estado/confiança de cada Incident e trace de memória do Graph.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** cada trial cria um único Incident, com diagnósticos alternados no Log, sem o grafo elevar uma hipótese a Current Cause.
+- **Caminho feliz:** clicar ambos, abrir Logs e detalhes; comparar 82% `SUPPORTED` no México com 58% `INCONCLUSIVE` no Brasil.
+- **Caso difícil/adverso:** repetir a mesma chave idempotente não altera confiança/estado e a sugestão do Graph continua respeitando a categoria ausente.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** desligar `DEMO_LIVE_TRIALS_ENABLED` ou reverter somente `CTR-DEMO-002`; não afeta o endpoint público de transações.
+
+#### Gatilhos de revisão
+
+Qualquer pedido para editar os valores no navegador, atribuir categoria ao Incidente inconclusivo ou usar o perfil fora do trial exige nova decisão e contrato.
+
+#### Adendos
+
+- **2026-08-30T10:34:00-03:00 — validação:** `pytest tests/test_live_demo_trials.py tests/test_refusal_code_flow.py tests/test_transaction_flow_evaluation.py -q` passou com 18 testes. No navegador local, ambos os botões retornaram 25 transações; a lista exibiu México `SUPPORTED`/82% e Brasil `INCONCLUSIVE`/58%. O detalhe brasileiro mostrou `Category: Not isolated`, `ISSUER_OUTAGE · 58%` como hipótese, precedente `MATCH_FOUND` e a limitação de que ele não confirma a causa atual. Console sem erros. PASS.
+- **2026-08-30T10:40:00-03:00 — pós-integração:** após rebase em `origin/main@87e6b73`, a suíte combinada de demo, código de recusa, fluxo de transação e agente passou com 55 testes. O smoke do navegador repetiu o Graph trial e exibiu `INCONCLUSIVE`/58%, ao lado do cenário determinístico `SUPPORTED`/82%, sem erros no console. PASS.
+- **2026-08-30T10:45:00-03:00 — integração final:** após uma segunda atualização de `main` (`d35c9f6`), 62 testes Python passaram. A suíte web passou com 50 testes e 1 skip, e `npm run lint` passou depois de corrigir a asserção que isolava indevidamente a validação de provider da validação de conexão Adyen. PASS.

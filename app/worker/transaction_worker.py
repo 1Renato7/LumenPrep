@@ -13,12 +13,14 @@ the worker remains responsible only for durable lifecycle and event persistence.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
 from app.ingestion import ingest_event
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
+from app.incidents import DuckDBIncidentRepository, Incident
 from app.refusal_codes import RefusalCodeLookup, resolve_refusal_code
 from app.simulation.transaction_outcomes import AdaptedTransaction, adapt_transaction
 from app.worker.incident_pipeline import SuggestionJob, _suggest_for_persisted_incident, derive_incidents_for_correlation
@@ -26,11 +28,13 @@ from app.worker.incident_pipeline import SuggestionJob, _suggest_for_persisted_i
 STAGE_ORDER = ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING", "COMPLETE"]
 _PROGRESS_BY_STAGE = {stage: index * 20 for index, stage in enumerate(STAGE_ORDER)}
 DEFAULT_LEASE_SECONDS = 30
+IncidentTransform = Callable[[Incident], Incident]
 
 _FAILED_CLASSIFICATIONS_BY_NORMALIZED_CODE = {
     "ACQUIRER_ERROR": "PROVIDER_ERROR",
     "EXCESSIVE_RETRY_BLOCKED": "PROVIDER_ERROR",
     "ISSUER_UNAVAILABLE": "TIMEOUT",
+    "PROVIDER_TIMEOUT": "TIMEOUT",
 }
 _EVENT_DECLINE_CATEGORIES = {
     "ISSUER_DECLINE": "ISSUER",
@@ -279,14 +283,20 @@ def run_to_completion(
 
 
 def run_batch_to_completion(
-    batch_id: str, *, derive_incidents_once_after_batch: bool = False
+    batch_id: str,
+    *,
+    derive_incidents_once_after_batch: bool = False,
+    incident_transform: IncidentTransform | None = None,
 ) -> None:
     """Complete a batch, optionally deriving its Incident once at the end.
 
     The deferred mode is for a fixed synthetic demo batch. It still persists and
     normalizes every event with the durable worker, but avoids recomputing the
-    full aggregate/detector cube after each of its 25 rows. Normal public batch
-    processing preserves the existing immediate-analysis default.
+    full aggregate/detector cube after each of its 25 rows. ``incident_transform``
+    is an internal post-derivation hook: when supplied, it must preserve the
+    Incident identity and is applied before the diagnostic suggestion is built.
+    Normal public batch processing preserves the existing immediate-analysis
+    default and never supplies this hook.
     """
     with CONNECTION_LOCK:
         rows = get_connection().execute(
@@ -307,6 +317,21 @@ def run_batch_to_completion(
         derive_incidents_for_correlation(
             get_connection(), next(iter(correlation_ids)), suggestion_jobs=suggestion_jobs
         )
+    if incident_transform is not None:
+        repository = DuckDBIncidentRepository()
+        transformed_jobs: list[SuggestionJob] = []
+        for job in suggestion_jobs:
+            incident, decline_profile = job[0], job[1]
+            transformed = incident_transform(incident)
+            if transformed.incident_id != incident.incident_id:
+                raise ValueError("incident_transform must preserve incident_id")
+            persisted = repository.upsert(transformed)
+            transformed_jobs.append((
+                persisted,
+                decline_profile,
+                job[2] if len(job) > 2 else [],
+            ))
+        suggestion_jobs = transformed_jobs
     for job in suggestion_jobs:
         incident, decline_profile = job[0], job[1]
         refusal_code_summaries = job[2] if len(job) > 2 else []

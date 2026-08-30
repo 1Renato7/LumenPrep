@@ -69,16 +69,12 @@ def start_live_demo_trial(
         detail = "LIVE_INCIDENTS_REQUIRE_DEMO_MODE_FALSE" if settings.demo_mode else "LIVE_DEMO_TRIALS_DISABLED"
         raise HTTPException(status_code=403, detail=detail)
     try:
-        from app.simulation.live_demo_trials import launch_trial
+        from app.simulation.live_demo_trials import complete_trial_batch, launch_trial
 
         response = launch_trial(trial_id, idempotency_key=idempotency_key)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    background_tasks.add_task(
-        run_batch_to_completion,
-        str(response["batch_id"]),
-        derive_incidents_once_after_batch=True,
-    )
+    background_tasks.add_task(complete_trial_batch, trial_id, str(response["batch_id"]))
     return response
 
 

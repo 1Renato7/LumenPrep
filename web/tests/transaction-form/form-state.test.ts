@@ -166,7 +166,8 @@ test("provider response code and connection must use the matching Adyen table pa
   const state = replaceRowsWithSamples(createInitialFormState(), samples);
   const withResponseCode = updateTransactionField(state, state.rows[0].id, "provider_response_code", "0");
   const mismatchedConnection = updateTransactionField(withResponseCode, state.rows[0].id, "provider_connection_id", "Refused");
-  const nonAdyenProvider = updateTransactionField(withResponseCode, state.rows[0].id, "provider_id", "provider_alpha");
+  const matchingConnection = updateTransactionField(withResponseCode, state.rows[0].id, "provider_connection_id", "(none)");
+  const nonAdyenProvider = updateTransactionField(matchingConnection, state.rows[0].id, "provider_id", "provider_alpha");
 
   assert.deepEqual(validateTransactionRows(mismatchedConnection.rows, catalog), [
     { rowIndex: 0, field: "provider_connection_id", message: "Provider connection must match the selected provider response code." },
