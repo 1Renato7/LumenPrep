@@ -83,7 +83,7 @@
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .55rem; margin: 0; }
 .metrics div { padding: .6rem; border: 1px solid rgba(126, 151, 255, .2); border-radius: .6rem; background: rgba(17, 24, 62, .46); }
 .metrics dt { color: #8f9bbb; font-size: .68rem; }
-.metrics dd { margin: .25rem 0 0; color: #eef2ff; font-weight: 800; }
+.metrics dd { margin: .25rem 0 0; color: #eef2ff; font-weight: 800; overflow-wrap: anywhere; }
 .evidenceGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .7rem; }
 .evidenceItem { padding: .8rem; border: 1px solid rgba(126, 151, 255, .24); border-radius: .7rem; background: rgba(14, 21, 53, .48); }
 .evidenceItem > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
