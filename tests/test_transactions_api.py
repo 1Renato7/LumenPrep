@@ -4,7 +4,7 @@ from copy import deepcopy
 from fastapi.testclient import TestClient
 
 from app.config import settings
-from app.simulation.transaction_outcomes import adapt_transaction
+from app.worker import transaction_worker
 from main import app
 
 client = TestClient(app)
@@ -43,54 +43,42 @@ def test_catalog_and_seeded_samples_are_public_facts_only():
     assert {"code": "0", "reason": "(none)"} in catalog.json()["provider_response_options"]
     assert len(catalog.json()["provider_response_options"]) == 42
 
-    first = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 3, "seed": 42})
-    second = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 3, "seed": 42})
+    first = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 60, "seed": 42})
+    second = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 60, "seed": 42})
     assert first.status_code == second.status_code == 200
     assert first.json()["transactions"] == second.json()["transactions"]
     assert "outcome" not in first.json()["transactions"][0]
     assert "status" not in first.json()["transactions"][0]
 
 
-def test_samples_leave_provider_response_blank_for_normal_simulation():
+def test_samples_build_a_detectable_incident_dataset(monkeypatch):
     catalog = client.get("/v1/transaction-catalog").json()
-    response = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 50, "seed": 20260830})
+    response = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 60, "seed": 20260830})
 
     assert response.status_code == 200
     transactions = response.json()["transactions"]
-    assert len(transactions) == 50
-    catalog_fields = {
-        "merchant_id": "merchants",
-        "issuer_bank": "issuer_banks",
-        "country": "countries",
-        "currency": "currencies",
-        "payment_method_category": "payment_method_categories",
-        "card_brand": "card_brands",
-        "card_type": "card_types",
-    }
+    assert len(transactions) == 60
     for transaction in transactions:
         assert transaction["client_reference"]
         assert transaction["occurred_at"]
         assert transaction["amount_minor"] >= 1
-        assert transaction["provider_connection_id"] is None
-        assert transaction["provider_response_code"] is None
-        assert transaction["provider_id"] in catalog["providers"]
-        for transaction_field, catalog_field in catalog_fields.items():
-            assert transaction[transaction_field] in catalog[catalog_field]
+        assert transaction["provider_id"] == "adyen"
+        assert transaction["merchant_id"] in catalog["merchants"]
+        assert transaction["country"] in catalog["countries"]
+        assert transaction["currency"] in catalog["currencies"]
 
-    for transaction_field in catalog_fields:
-        assert len({transaction[transaction_field] for transaction in transactions}) > 1
     assert len({transaction["amount_minor"] for transaction in transactions}) > 1
-    assert len({transaction["provider_id"] for transaction in transactions}) > 1
+    assert [transaction["provider_response_code"] for transaction in transactions].count("0") == 48
+    assert [transaction["provider_response_code"] for transaction in transactions].count("9") == 12
 
-    simulated_results = [
-        adapt_transaction(
-            transaction,
-            transaction_id=f"sample-{index}",
-            correlation_id="sample-correlation",
-        ).result
-        for index, transaction in enumerate(transactions)
-    ]
-    assert simulated_results.count("SUCCEEDED") > simulated_results.count("FAILED")
+    monkeypatch.setattr(transaction_worker, "_suggest_for_persisted_incident", lambda *args, **kwargs: None)
+    payload = {"schema_version": "1.0", "idempotency_key": "incident-sample-batch", "transactions": transactions}
+    accepted = _submit(payload)
+    assert accepted.status_code == 202
+    incident_detail = client.get(f"/v1/transactions/{accepted.json()['transaction_ids'][-1]}/incidents")
+    assert incident_detail.status_code == 200
+    assert incident_detail.json()["status"] == "RESOLVED"
+    assert len(incident_detail.json()["incidents"]) == 1
 
 
 def test_batch_persists_before_202_and_can_be_read_back():

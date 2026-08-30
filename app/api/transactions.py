@@ -26,6 +26,9 @@ from app.worker.transaction_worker import run_batch_to_completion
 router = APIRouter(prefix="/v1", tags=["transactions"])
 
 MAX_BATCH_SIZE = 100
+MIN_INCIDENT_SAMPLE_SIZE = 60
+_BASELINE_WINDOWS = 4
+_BASELINE_ATTEMPTS_PER_WINDOW = 12
 RESET_CONFIRMATION = "DELETE_SYNTHETIC_TRANSACTION_DATA"
 _SYSTEM_RANDOM = SystemRandom()
 _CATALOG = {
@@ -76,7 +79,7 @@ class SampleDefaults(_StrictModel):
 
 class SampleRequest(_StrictModel):
     schema_version: Literal["1.0"]
-    count: int = Field(ge=1, le=MAX_BATCH_SIZE)
+    count: int = Field(ge=MIN_INCIDENT_SAMPLE_SIZE, le=MAX_BATCH_SIZE)
     seed: int | None = Field(default=None, ge=0)
     defaults: SampleDefaults | None = None
 
@@ -140,30 +143,42 @@ def _validate_sample_defaults(defaults: SampleDefaults | None) -> SampleDefaults
 
 
 def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, Any]]]:
+    """Build a deterministic baseline plus degradation that can be detected.
+
+    Samples are intentionally a demo dataset, not a random traffic generator:
+    the first four windows establish healthy historical approval, and the last
+    window supplies a mapped issuer-unavailable burst in the same scope.
+    """
     defaults = _validate_sample_defaults(request.defaults)
     seed = request.seed if request.seed is not None else _SYSTEM_RANDOM.randrange(0, 2**31)
     random = Random(seed)
     transactions: list[dict[str, Any]] = []
+    merchant_id = defaults.merchant_id or "merchant_br_01"
+    country = defaults.country or "BR"
+    currency = defaults.currency or "BRL"
+    baseline_count = _BASELINE_WINDOWS * _BASELINE_ATTEMPTS_PER_WINDOW
+    start = datetime(2026, 7, 6, 10, 0, tzinfo=timezone.utc)
     for index in range(request.count):
+        baseline = index < baseline_count
+        window_index = index // _BASELINE_ATTEMPTS_PER_WINDOW if baseline else _BASELINE_WINDOWS
+        offset = index % _BASELINE_ATTEMPTS_PER_WINDOW if baseline else index - baseline_count
+        response_code = "0" if baseline else "9"
         transactions.append(
             {
                 "client_reference": f"sample-{index + 1}-{random.randrange(1_000_000, 10_000_000)}",
-                "occurred_at": _iso(datetime(2026, 1, 1) + timedelta(seconds=random.randrange(31_536_000))),
-                "merchant_id": defaults.merchant_id or random.choice(_CATALOG["merchants"]),
-                "provider_id": random.choice(_CATALOG["providers"]),
-                "issuer_bank": random.choice(_CATALOG["issuer_banks"]),
-                "country": defaults.country or random.choice(_CATALOG["countries"]),
-                "currency": defaults.currency or random.choice(_CATALOG["currencies"]),
+                "occurred_at": _iso(start + timedelta(weeks=window_index, seconds=offset)),
+                "merchant_id": merchant_id,
+                "provider_id": "adyen",
+                "issuer_bank": "bank_br_a",
+                "country": country,
+                "currency": currency,
                 "amount_minor": random.randint(1, 500_000),
-                "payment_method_category": random.choice(_CATALOG["payment_method_categories"]),
-                "card_brand": random.choice(_CATALOG["card_brands"]),
-                "card_type": random.choice(_CATALOG["card_types"]),
-                # A response code is an observed provider fact. Supplying a
-                # refusal code in an ordinary sample overrides the outcome
-                # simulator and makes every generated transaction fail.
-                "provider_connection_id": None,
-                "provider_response_code": None,
-                "channel": random.choice(("WEB", "MOBILE", "POS", "API")),
+                "payment_method_category": "CARD",
+                "card_brand": "MASTERCARD",
+                "card_type": "CREDIT",
+                "provider_connection_id": "(none)" if baseline else "Issuer Unavailable",
+                "provider_response_code": response_code,
+                "channel": "WEB",
             }
         )
     return seed, transactions
