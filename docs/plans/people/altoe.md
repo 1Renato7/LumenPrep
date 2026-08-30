@@ -88,6 +88,13 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 - falha de memória/modelo vira estado explícito e template, nunca explicação fabricada;
 - sem ferramenta de pagamento ou mutação operacional.
 
+## Adendo 2.4.4 — runtime OpenAI do agente
+
+- **Plano geral:** 2.4.4; **contrato interno:** `CTR-AGT-RUN-001 v1`; **decisão:** `DEC-030` / `FL-20260830-TEAM-031`.
+- O cliente configurado é `gpt-5.6-terra` com `reasoning.effort=high`, selecionado apenas no backend quando `OPENAI_API_KEY` estiver presente. O input continua restrito ao `EvidencePack` e ao `RetrievalTrace`; o contrato publicado `CTR-AGT-003 v1` não muda.
+- Sem chave, o template determinístico permanece o fallback de demo. Com chave, falha do SDK, timeout ou resposta rejeitada persiste `UNAVAILABLE`; não há retry automático, ferramenta de pagamento, promoção de causa ou mutação de Incident.
+- **Handoff para Rogério:** dependency lock, Railway Variables e smoke. **Prova:** teste do request Responses e dos guardrails existentes; validação online depende de credencial configurada fora do repositório.
+
 ## Definition of Done
 
 Evals de grounding/no-answer/injection/leakage passam; review gate sem bloqueantes; integration guardian valida Incident/API/UI; browser acceptance conjunto comprova links e estados.

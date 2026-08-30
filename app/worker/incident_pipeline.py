@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from hashlib import sha256
-from typing import Any
+from typing import Any, TypeAlias
 
 from app.agent import DiagnosticAgentService
 from app.aggregation import WindowMetrics, compute_windows
@@ -22,9 +22,12 @@ from app.rca import explore_slices, rank_hypotheses
 logger = logging.getLogger(__name__)
 
 LOW_SAMPLE_ATTEMPTS = 12
+SuggestionJob: TypeAlias = tuple[Incident, dict[str, int]]
 
 
-def derive_incidents_for_correlation(con, correlation_id: str) -> list[str]:
+def derive_incidents_for_correlation(
+    con, correlation_id: str, *, suggestion_jobs: list[SuggestionJob] | None = None
+) -> list[str]:
     """Persist newly observed Incident groups and return their stable IDs.
 
     Detector history may contain other correlations, but only candidates produced
@@ -64,7 +67,10 @@ def derive_incidents_for_correlation(con, correlation_id: str) -> list[str]:
         )
         persisted = repository.upsert(incident)
         _link_matching_transactions(con, repository, persisted.model_dump(mode="json"))
-        _suggest_for_persisted_incident(persisted, window.decline_profile)
+        if suggestion_jobs is None:
+            _suggest_for_persisted_incident(persisted, window.decline_profile)
+        else:
+            suggestion_jobs.append((persisted, dict(window.decline_profile)))
         incident_ids.append(persisted.incident_id)
     return incident_ids
 
@@ -72,11 +78,11 @@ def derive_incidents_for_correlation(con, correlation_id: str) -> list[str]:
 def _suggest_for_persisted_incident(incident: Incident, decline_profile: dict[str, int]) -> None:
     """Run the proactive agent on an Incident that is already durable.
 
-    This call is deliberately last and deliberately swallowed.  It runs inside
-    the worker's DuckDB transaction, so an agent error escaping here would roll
-    back the transaction lifecycle it has nothing to do with.  Detection, the
-    Incident and the deterministic explanation must survive a model that is
-    slow, unavailable or wrong.
+    This call is deliberately last and deliberately swallowed. The transaction
+    worker schedules it only after committing and releasing its DuckDB lock, so
+    a slow or unavailable model never holds the transaction lifecycle open.
+    Detection, the Incident and the deterministic explanation survive a model
+    that is slow, unavailable or wrong.
     """
     try:
         DiagnosticAgentService().suggest_for_incident(incident, decline_profile=decline_profile)

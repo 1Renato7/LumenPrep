@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.agent import DiagnosticAgentService, DiagnosticSuggestionRepository
+from app.agent import DiagnosticAgentService, DiagnosticSuggestionRepository, TemplateSuggestionClient
 from app.incidents import DuckDBIncidentRepository, Incident
 from app.worker import incident_pipeline
 from main import create_app
@@ -74,7 +74,9 @@ def _persisted_incident() -> Incident:
 
 def test_suggestion_endpoint_returns_the_persisted_hypothesis():
     incident = _persisted_incident()
-    DiagnosticAgentService().suggest_for_incident(incident, decline_profile={"PROVIDER_TIMEOUT": 96})
+    DiagnosticAgentService(client=TemplateSuggestionClient()).suggest_for_incident(
+        incident, decline_profile={"PROVIDER_TIMEOUT": 96}
+    )
 
     with TestClient(create_app()) as client:
         response = client.get(f"/v1/incidents/{incident.incident_id}/suggestion")
@@ -108,7 +110,9 @@ def test_suggestion_endpoint_404s_for_an_unknown_incident():
 def test_incident_payload_is_unchanged_by_the_agent():
     """CTR-INC-001 v1 stays frozen: no suggestion field leaks into the Incident."""
     incident = _persisted_incident()
-    DiagnosticAgentService().suggest_for_incident(incident, decline_profile={"PROVIDER_TIMEOUT": 96})
+    DiagnosticAgentService(client=TemplateSuggestionClient()).suggest_for_incident(
+        incident, decline_profile={"PROVIDER_TIMEOUT": 96}
+    )
 
     with TestClient(create_app()) as client:
         response = client.get(f"/v1/incidents/{incident.incident_id}")
@@ -122,7 +126,7 @@ def test_incident_payload_is_unchanged_by_the_agent():
 
 
 def test_agent_failure_does_not_break_incident_persistence(monkeypatch):
-    """The hook runs inside the worker's DuckDB transaction; it must never raise."""
+    """The post-commit hook must never raise into persisted Incident handling."""
 
     class Exploding:
         def suggest_for_incident(self, *args, **kwargs):

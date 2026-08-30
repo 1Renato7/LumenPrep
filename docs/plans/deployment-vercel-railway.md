@@ -18,7 +18,10 @@
 | Railway | `CORS_ALLOWED_ORIGINS` | não | lista exata de URLs Vercel/local |
 | Railway | `LUMEN_DATA_DIR` | não | mount path do volume |
 | Railway | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | não | memória |
-| Railway | `OPENAI_API_KEY` | não | explanation |
+| Railway | `OPENAI_API_KEY` | não | ativa a hipótese OpenAI do agente; segredo somente no backend |
+| Railway | `OPENAI_MODEL` | não | opcional; default `gpt-5.6-terra` |
+| Railway | `OPENAI_REASONING_EFFORT` | não | opcional; default `high` |
+| Railway | `OPENAI_TIMEOUT_SECONDS` | não | opcional; default `20` |
 | Railway | `DEMO_MODE` | não | habilita harness interno, nunca endpoints públicos de efeito |
 
 ## Regras
@@ -26,6 +29,7 @@
 - Vercel production e previews autorizados são listados explicitamente; sem `*` quando houver credentials.
 - Configure, por exemplo, `NEXT_PUBLIC_API_BASE_URL=https://<servico>.up.railway.app/v1`; o client acrescenta somente os paths de cada endpoint.
 - O serviço Railway responde `/v1/health`; worker/store degraded aparecem separadamente.
+- Com `OPENAI_API_KEY`, a sugestão usa a Responses API somente após o commit do lifecycle; falha do provedor retorna `UNAVAILABLE` sem alterar o Incident. Sem chave, mantém o template determinístico.
 - `202` só é emitido após persistência inicial durável.
 - O volume contém dados, não secrets; nenhum domínio público é criado para banco/store.
 - O harness chama a API comum, não escreve direto no DuckDB.

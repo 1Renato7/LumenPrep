@@ -3,12 +3,12 @@
 Two implementations share one interface so the orchestration, the guardrails and
 the tests are identical regardless of who writes the JSON:
 
-* ``TemplateSuggestionClient`` is the default.  It is deterministic, offline and
-  composes its answer strictly from the EvidencePack and the RetrievalTrace, so
-  the demo never depends on an API key and the worker never waits on a network
-  call inside its DuckDB transaction.
-* ``OpenAISuggestionClient`` is opt-in.  It is constructed only when a caller
-  explicitly asks for it and a key is configured.
+* ``TemplateSuggestionClient`` is the offline fallback.  It composes its answer
+  strictly from the EvidencePack and RetrievalTrace, so local development and
+  deployments without an API key remain reproducible.
+* ``OpenAISuggestionClient`` is selected when the backend has an API key.  It
+  is still strictly bounded by the same EvidencePack, RetrievalTrace and
+  validator as the template.
 
 Both return raw text.  Neither is trusted: ``validation.parse_and_validate``
 runs over the output either way.
@@ -17,12 +17,17 @@ runs over the output either way.
 from __future__ import annotations
 
 import json
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from .models import AgentRetrievalTrace, DiagnosticSuggestion, EvidencePack, SuggestedAction, SuggestionReason
 from .prompt import system_prompt, user_payload
 
 TEMPLATE_MODEL_VERSION = "deterministic-template-v1"
+DEFAULT_OPENAI_MODEL = "gpt-5.6-terra"
+DEFAULT_REASONING_EFFORT = "high"
+
+if TYPE_CHECKING:
+    from app.config import Settings
 
 
 class SuggestionClient(Protocol):
@@ -187,14 +192,16 @@ def _actions(pack: EvidencePack, trace: AgentRetrievalTrace) -> list[SuggestedAc
 
 
 class OpenAISuggestionClient:
-    """Opt-in OpenAI client. Never constructed implicitly and never used in tests.
+    """OpenAI Responses client for a grounded, read-only hypothesis."""
 
-    ``openai`` is deliberately not a declared dependency: the Docker image
-    installs a frozen lock without it, so this path is only reachable where an
-    operator installed the SDK on purpose.
-    """
-
-    def __init__(self, *, api_key: str, model: str = "gpt-4o-mini", timeout: float = 20.0) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str = DEFAULT_OPENAI_MODEL,
+        reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+        timeout: float = 20.0,
+    ) -> None:
         if not api_key:
             raise ValueError("OpenAISuggestionClient requires an API key")
         try:
@@ -205,19 +212,35 @@ class OpenAISuggestionClient:
             ) from error
         self._client = OpenAI(api_key=api_key, timeout=timeout)
         self._model = model
+        self._reasoning_effort = reasoning_effort
         self.model_version = f"openai:{model}"
 
     def suggest(self, pack: EvidencePack, trace: AgentRetrievalTrace) -> str:  # pragma: no cover - network path
-        response = self._client.chat.completions.create(
+        response = self._client.responses.create(
             model=self._model,
-            response_format={"type": "json_object"},
-            temperature=0,
-            messages=[
-                {"role": "system", "content": system_prompt()},
-                {"role": "user", "content": user_payload(pack, trace)},
-            ],
+            instructions=system_prompt(),
+            input=user_payload(pack, trace),
+            reasoning={"effort": self._reasoning_effort},
+            text={"format": {"type": "json_object"}},
+            store=False,
         )
-        content = response.choices[0].message.content
+        content = response.output_text
         # An empty completion is a technical failure, not a hypothesis. Returning
         # "{}" keeps the single rejection path in the validator.
         return content if isinstance(content, str) and content.strip() else json.dumps({})
+
+
+def configured_suggestion_client(config: "Settings | None" = None) -> SuggestionClient:
+    """Select OpenAI only for a configured backend; otherwise stay offline."""
+    if config is None:
+        from app.config import settings
+
+        config = settings
+    if not config.openai_api_key:
+        return TemplateSuggestionClient()
+    return OpenAISuggestionClient(
+        api_key=config.openai_api_key,
+        model=config.openai_model,
+        reasoning_effort=config.openai_reasoning_effort,
+        timeout=config.openai_timeout_seconds,
+    )

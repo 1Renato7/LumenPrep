@@ -26,7 +26,7 @@ from app.incidents import Incident
 from app.memory import IncidentMemoryService
 
 from .evidence import build_evidence_pack
-from .llm import SuggestionClient, TemplateSuggestionClient
+from .llm import SuggestionClient, configured_suggestion_client
 from .models import (
     AgentRetrievalTrace,
     DiagnosticSuggestion,
@@ -57,7 +57,7 @@ class DiagnosticAgentService:
         repository: DiagnosticSuggestionRepository | None = None,
         minimum_independent_evidence: int = MINIMUM_INDEPENDENT_EVIDENCE,
     ) -> None:
-        self.client = client if client is not None else TemplateSuggestionClient()
+        self.client = client if client is not None else configured_suggestion_client()
         self.memory_service = memory_service
         self.repository = repository if repository is not None else DiagnosticSuggestionRepository()
         self.minimum_independent_evidence = minimum_independent_evidence

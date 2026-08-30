@@ -2,10 +2,10 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.4.3
+- **Versão:** 2.4.4
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
-- **Change class:** `INTEGRATION`; preserva contratos públicos e consolida pipeline, persistência, frontend live e runtime de deploy sem alterar `CTR-API-001 v3`.
+- **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
 - **Fonte de verdade:** este arquivo; planos em `docs/plans/people/` são projeções.
 - **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
 - **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
@@ -23,6 +23,7 @@
 - **Changelog 2.4.1:** diante de sete horas restantes de hackathon, congela o escopo de demo em uma fatia vertical: stream sintético contínuo, duas degradações simultâneas, diagnóstico causal/evidência, recomendação humana e trial by fire. Integração real Yuno e RAG/agente amplo saem do caminho crítico.
 - **Changelog 2.4.2:** torna a primeira etapa da demo reproduzível por `CTR-DEMO-001 v1`: um endpoint restrito a `DEMO_MODE` semeia janelas temporais de baseline pelo stream interno. Não recebe payload Yuno nem altera a entrada pública de transações.
 - **Changelog 2.4.3:** congela a fatia implementada do agente proativo em `CTR-AGT-001`–`003 v1`: EvidencePack imutável, recuperação somente da memória/playbooks já autorizados, sugestão `HUMAN_ONLY` separada de `CTR-INC-001` e cliente determinístico padrão. O caminho OpenAI é opt-in e não integra a demo crítica.
+- **Changelog 2.4.4:** por decisão explícita do usuário solicitante, ativa o cliente OpenAI no Railway quando `OPENAI_API_KEY` estiver configurada. O runtime usa `gpt-5.6-terra` com `reasoning.effort=high`; a ausência de chave mantém o template determinístico e indisponibilidade do provedor produz `UNAVAILABLE`, sem alterar Incident, causa ou pagamentos.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -549,7 +550,21 @@ Incident persistido → CTR-AGT-001 EvidencePack → agente read-only
 
 `CTR-AGT-001` EvidencePack, `CTR-AGT-002` RetrievalTrace e `CTR-AGT-003` DiagnosticSuggestion são contratos v1 implementados. O agente roda após o Incident ser produzido pelo motor, escreve sua saída separadamente e nunca altera `root_cause`, estado do Incident ou qualquer pagamento. A recuperação usa somente `IncidentMemoryService` e playbooks versionados já presentes; o cliente padrão é determinístico/offline. `SUGGESTED` exige ao menos duas evidências atuais de fontes distintas; caso contrário retorna `INSUFFICIENT_EVIDENCE`, e falha técnica retorna `UNAVAILABLE`.
 
-O endpoint aditivo `GET /v1/incidents/{incident_id}/suggestion` expõe apenas a hipótese já persistida. Integração de corpus externo, embeddings, vector store, taxonomia de fraude mais ampla ou cliente OpenAI na imagem Railway continua fora desta revisão e exige novo change control.
+O endpoint aditivo `GET /v1/incidents/{incident_id}/suggestion` expõe apenas a hipótese já persistida. Esta decisão congelou a fatia 2.4.3; sua restrição operacional sobre o cliente OpenAI no Railway foi substituída por `DEC-030`. Corpus externo, embeddings, vector store e taxonomia de fraude mais ampla continuam fora desta revisão e exigem novo change control.
+
+### DEC-030 — ativar geração OpenAI configurável para a hipótese do agente
+
+**Estado:** `DECIDED`. **Owner:** usuário solicitante. **Flight Log:** `FL-20260830-TEAM-031`.
+
+`CTR-AGT-001`–`003 v1` permanecem congelados e não recebem campos, estados nem permissões novos. A configuração interna `CTR-AGT-RUN-001 v1` seleciona `OpenAISuggestionClient` somente quando `OPENAI_API_KEY` existe; ele chama `gpt-5.6-terra` com `reasoning.effort=high` pela Responses API. Sem chave, o agente mantém `deterministic-template-v1`; se o SDK ou a OpenAI falhar após a seleção, persiste a sugestão tipada `UNAVAILABLE` já prevista no `CTR-AGT-003`.
+
+| Contrato interno | Estado | Produtor → consumidor | Precondições e falha | Owner / prova |
+| --- | --- | --- | --- | --- |
+| `CTR-AGT-RUN-001 v1` | IMPLEMENTED | Railway Variables / `Settings` → `DiagnosticAgentService` → OpenAI Responses API | `OPENAI_API_KEY` secreto; `OPENAI_MODEL=gpt-5.6-terra`; `OPENAI_REASONING_EFFORT=high`. Sem chave: template. Falha/timeout: `UNAVAILABLE`, sem retry e sem rollback do Incident. | Rogério; testes unitários de seleção e request + smoke Railway com Incident sintético. |
+
+**Compatibilidade e integração:** é uma mudança comportamentalmente arriscada, mas compatível com os consumidores: API e UI já aceitam `model_version` variável e os mesmos três estados. Hotspots coordenados por Rogério são `app/config.py`, `app/agent/`, `app/worker/transaction_worker.py`, `pyproject.toml`, `uv.lock`, `Dockerfile`, `.env.example` e `docs/deploy-railway.md`. A ordem segura é dependência/configuração → seleção do cliente → commit do lifecycle e liberação do lock → geração/validação da sugestão → testes de segurança/contrato → build da imagem → variável secreta no Railway → smoke de um Incident sintético. Nenhuma retry de chamada do modelo é permitida e o modelo continua sem ferramentas, sem escrita de Incident e sem ação financeira.
+
+**Parecer do Integration Contract Guardian — CHANGE CONTROL: `PLAN READY`.** A mudança é compatível: `CTR-AGT-003 v1` já transporta `model_version` e `UNAVAILABLE`; API e UI não exigem versão de modelo fixa. `CTR-AGT-RUN-001 v1` fixa produtor, consumidor, segredo, timeout, fallback, owner, hotspot e prova. A chamada externa é pós-persistência, sem retry e sem side effect financeiro; o único checkpoint ainda externo é o smoke no Railway com a chave configurada.
 
 ## 18. Recuperação de demo — janela de sete horas
 

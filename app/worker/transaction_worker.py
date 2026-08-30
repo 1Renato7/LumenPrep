@@ -20,7 +20,7 @@ from uuid import uuid4
 from app.ingestion import ingest_event
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
 from app.simulation.transaction_outcomes import AdaptedTransaction, adapt_transaction
-from app.worker.incident_pipeline import derive_incidents_for_correlation
+from app.worker.incident_pipeline import SuggestionJob, _suggest_for_persisted_incident, derive_incidents_for_correlation
 
 STAGE_ORDER = ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING", "COMPLETE"]
 _PROGRESS_BY_STAGE = {stage: index * 20 for index, stage in enumerate(STAGE_ORDER)}
@@ -61,13 +61,13 @@ def _acquire_lease(con, transaction_id: str, worker_id: str, lease_seconds: int)
     return acquired is not None
 
 
-def _advance_locked(con, transaction_id: str) -> None:
+def _advance_locked(con, transaction_id: str) -> list[SuggestionJob]:
     row = con.execute(
         "SELECT status, processing_json, input_json, correlation_id FROM transaction_records WHERE transaction_id = ?",
         [transaction_id],
     ).fetchone()
     if row is None or row[0] != "PROCESSING":
-        return
+        return []
 
     processing = json.loads(row[1])
     stage_index = STAGE_ORDER.index(processing["stage"])
@@ -85,9 +85,10 @@ def _advance_locked(con, transaction_id: str) -> None:
                 transaction_id,
             ],
         )
-        return
+        return []
 
     transaction_started = False
+    suggestion_jobs: list[SuggestionJob] = []
     try:
         adapted = _generate_outcome(transaction_id, json.loads(row[2]), row[3])
         con.execute("BEGIN TRANSACTION")
@@ -102,7 +103,7 @@ def _advance_locked(con, transaction_id: str) -> None:
         ingestion = ingest_event(adapted.event)
         if ingestion.status not in {"ACCEPTED", "DUPLICATE"}:
             raise RuntimeError(f"canonical event was {ingestion.status}")
-        derive_incidents_for_correlation(con, row[3])
+        derive_incidents_for_correlation(con, row[3], suggestion_jobs=suggestion_jobs)
         authored_classification = con.execute(
             "SELECT classification_json FROM transaction_records WHERE transaction_id = ?",
             [transaction_id],
@@ -137,7 +138,8 @@ def _advance_locked(con, transaction_id: str) -> None:
                 transaction_id,
             ],
         )
-        return
+        return []
+    return suggestion_jobs
 
 
 def advance_transaction(transaction_id: str, *, worker_id: str | None = None, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> bool:
@@ -154,7 +156,9 @@ def advance_transaction(transaction_id: str, *, worker_id: str | None = None, le
     with CONNECTION_LOCK:
         if not _acquire_lease(con, transaction_id, worker_id, lease_seconds):
             return False
-        _advance_locked(con, transaction_id)
+        suggestion_jobs = _advance_locked(con, transaction_id)
+    for incident, decline_profile in suggestion_jobs:
+        _suggest_for_persisted_incident(incident, decline_profile)
     return True
 
 

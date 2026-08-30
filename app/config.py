@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import model_validator
@@ -21,6 +22,9 @@ class Settings(BaseSettings):
     graphrag_evaluation_mode: bool = False
 
     openai_api_key: str | None = None
+    openai_model: str = "gpt-5.6-terra"
+    openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "high"
+    openai_timeout_seconds: float = 20.0
 
     @model_validator(mode="after")
     def default_duckdb_path_to_data_dir(self) -> "Settings":

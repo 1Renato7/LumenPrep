@@ -103,6 +103,33 @@ def test_lease_prevents_a_second_worker_from_advancing_the_same_transaction():
     assert _record(transaction_id) == before
 
 
+def test_agent_suggestion_job_runs_after_the_duckdb_lock_is_released(monkeypatch):
+    events: list[str] = []
+
+    class RecordingLock:
+        def __enter__(self):
+            events.append("lock-enter")
+
+        def __exit__(self, exc_type, exc, traceback):
+            events.append("lock-exit")
+
+    monkeypatch.setattr(worker, "CONNECTION_LOCK", RecordingLock())
+    monkeypatch.setattr(worker, "_acquire_lease", lambda *args: True)
+    monkeypatch.setattr(
+        worker,
+        "_advance_locked",
+        lambda *args: (events.append("advance"), [("persisted-incident", {"PROVIDER_TIMEOUT": 1})])[1],
+    )
+    monkeypatch.setattr(
+        worker,
+        "_suggest_for_persisted_incident",
+        lambda *args: events.append("suggest"),
+    )
+
+    assert worker.advance_transaction("txn_post_commit") is True
+    assert events == ["lock-enter", "advance", "lock-exit", "suggest"]
+
+
 def test_expired_lease_is_reclaimable_by_reconciliation():
     transaction_id = _new_transaction_id(key="worker-key-0005")
     con = get_connection()

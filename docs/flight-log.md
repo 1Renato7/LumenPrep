@@ -4522,3 +4522,80 @@ Falha de contrato, teste crítico, conflito semântico sem composição ou neces
 
 - **Timestamp:** 2026-08-30T03:53:00-03:00
 - Foram adicionados e executados testes de contrato/API/pipeline do agente e teste de não vazamento de controles internos. `python -m pytest -q tests/test_agent_suggestion.py tests/test_agent_api.py tests/test_agent_pipeline_e2e.py tests/test_transaction_flow_evaluation.py tests/test_transaction_worker.py` — **45 passed**.
+
+### FL-20260830-TEAM-031 — Ativar GPT-5.6 Terra configurável para a hipótese do agente
+
+- **Timestamp:** 2026-08-30T03:25:55-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** AI/RAG | payments | operations
+- **Escopo:** `CTR-AGT-RUN-001 v1`, `CTR-AGT-001`–`003 v1`, configuração Railway e imagem Docker
+- **Links:** `DEC-029`, `DEC-030`, `docs/plans/system-plan.md` v2.4.4, `app/agent/llm.py`, `docs/deploy-railway.md`
+- **Supersedes / superseded by:** substitui apenas a restrição operacional de `DEC-029` que mantinha OpenAI fora do Railway; preserva seus contratos e guardrails.
+
+#### Contexto e pergunta
+
+O agente proativo já possui adaptador OpenAI, mas o pipeline construía somente o template determinístico, `OPENAI_API_KEY` não estava configurada localmente e `openai` não constava no lockfile usado pelo Docker. O usuário solicitou que o agente passe a usar GPT-5.6 Terra em esforço alto e perguntou o que deve mudar no Railway.
+
+#### Decisão
+
+Usar `gpt-5.6-terra` com `reasoning.effort=high` via Responses API somente quando `OPENAI_API_KEY` existir. A ausência de chave preserva `deterministic-template-v1`; falha de OpenAI/SDK/validação produz `UNAVAILABLE` no contrato já publicado. Não adicionar ferramentas, retries, autoridade financeira, escrita de Incident ou mudança de causa.
+
+#### Critérios e por que agora
+
+O modelo pedido existe na API oficial e suporta esforço `high`. Ativá-lo por variável permite a demonstração generativa solicitada sem transformar segredo, disponibilidade externa ou custo em pré-requisito do fluxo de Incident e sem mudar os consumidores existentes.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter somente template | demo reprodutível e sem custo externo | não atende ao pedido de ativar o LLM | FACT: runtime atual sempre seleciona o template | não atende ao objetivo autorizado |
+| Chamar OpenAI sempre | implementação aparentemente simples | boot/teste dependem de segredo; sem fallback offline | FACT: o agente precisa sobreviver sem chave | rejeitada |
+| OpenAI por chave + template sem chave | ativa o modelo pedido e mantém demo recuperável | adiciona dependência, latência e custo quando habilitado | FACT: `CTR-AGT-003` já tem `UNAVAILABLE` e a UI aceita `model_version` | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** a documentação oficial lista o ID `gpt-5.6-terra`, suporte a `reasoning.effort=high` e a Responses API.
+- **FACT:** o modelo somente recebe `EvidencePack` e `RetrievalTrace`; as ações continuam validadas como `HUMAN_ONLY`.
+- **TEST:** NOT RUN — chamada real depende de `OPENAI_API_KEY` configurada no Railway.
+- **ASSUMPTION:** a conta do projeto possui acesso e orçamento para GPT-5.6 Terra; validar no primeiro smoke do Railway.
+- **UNKNOWN:** latência e custo reais por Incident até executar o smoke com tráfego sintético.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** hipótese narrada por LLM real, preservando citações e validação determinística.
+- **Abrimos mão de:** latência, custo e independência total de provedor quando a chave estiver habilitada.
+- **Dívida/limitação:** validação online requer segredo externo e não será fingida pelos testes locais.
+- **Risco residual:** modelo pode responder fora do contrato; o validador converte a saída em `UNAVAILABLE` e mantém Incident/cause intactos.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a UI pode passar a mostrar `model_version=openai:gpt-5.6-terra`; estados e copy existentes não mudam.
+- **Arquitetura/contratos:** `CTR-AGT-001`–`003 v1` permanecem compatíveis; cria `CTR-AGT-RUN-001 v1` interno.
+- **Pessoas/branches:** Rogério coordena runtime, lockfile, Railway e smoke; Altoé mantém prompt/grounding e guardrails.
+- **Plano/Linear:** plano geral 2.4.4 e projeção de Altoé atualizados; nenhuma issue Linear é alterada.
+- **Testes/observabilidade:** testar seleção sem/com chave, parâmetros da Responses API, guardrails e fallback; health continua expõe apenas `configured`, não a chave.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** com chave válida, um Incident sintético gera `SUGGESTED` com `model_version=openai:gpt-5.6-terra`; sem chave continua `deterministic-template-v1`.
+- **Caminho feliz:** Incident persistido → cliente OpenAI → validação → `GET /v1/incidents/{id}/suggestion`.
+- **Caso difícil/adverso:** timeout, resposta não-JSON ou ação financeira proposta não muda o Incident e entrega `UNAVAILABLE`.
+- **Resultado observado:** PENDING — implementação e testes locais em andamento; smoke Railway depende de segredo.
+- **Fallback:** template sem chave; `UNAVAILABLE` quando o cliente selecionado falhar.
+
+#### Gatilhos de revisão
+
+Falha no smoke, custo/latência incompatível com a demo, acesso negado ao modelo ou qualquer tentativa de ampliar autoridade do agente exige nova decisão.
+
+#### Adendos
+
+- Pendente: versão do SDK/lockfile, resultados de testes e smoke Railway.
+- **2026-08-30T03:25:55-03:00 — revisão de implementação:** a revisão identificou que a chamada remota ocorreria dentro da transação e do `CONNECTION_LOCK` do DuckDB. A implementação foi ajustada para montar jobs durante a transação e chamar o agente somente após `COMMIT` e liberação do lock. Isso preserva o lifecycle do pagamento diante de latência/timeout do modelo; testes focados serão repetidos.
+- **2026-08-30T03:25:55-03:00 — validação:** `uv lock` resolveu `openai==2.54.0`; `uv run --locked pytest -q tests/test_agent_suggestion.py tests/test_diagnostic_agent.py tests/test_agent_api.py tests/test_agent_pipeline_e2e.py tests/test_incident_pipeline.py tests/test_transaction_worker.py` passou com **49 tests**; `python -m compileall -q app` e `scripts/validate_contracts.py` passaram; `web/` passou em lint e build. O teste completo começou, mas não concluiu antes do limite do executor; não é registrado como PASS.
+- **2026-08-30T03:25:55-03:00 — browser acceptance:** PASS WITH LIMITATIONS para o consumidor local: lista de Incidents e detalhe carregaram via API live, a área `Agent hypothesis` ficou separada da causa e exibiu `NOT PUBLISHED` sem chave, sem erros de console. A chamada OpenAI real é NOT RUN porque a chave não foi fornecida. O smoke de injeção `demo/scenario-provider-br/inject-worker` falhou em corrida preexistente do listener DuckDB (`cannot start a transaction within a transaction`), fora do diff; não foi usado como evidência da integração OpenAI.
+- **2026-08-30T03:25:55-03:00 — Integration Contract Guardian (INTEGRATION): READY WITH WARNINGS. `CTR-AGT-001`–`003 v1`, API e UI permanecem compatíveis; `CTR-AGT-RUN-001 v1` documenta segredo, defaults, timeout, fallback, owner e smoke. Warning: a validação real depende de `OPENAI_API_KEY` e acesso/budget da conta no Railway; o cenário demo concorrente exige correção própria antes de ser usado como trial by fire.
+- **2026-08-30T03:58:09-03:00 — correção de compatibilidade da Responses API:** o primeiro smoke local com incidente sintético chegou à OpenAI e recebeu `400 BadRequestError`: `text.format=json_object` exige a palavra `json` em `input`. Mantemos a saída estruturada — removê-la enfraqueceria o contrato — e incluímos em `user_payload` a instrução explícita para retornar um objeto JSON; `PROMPT_VERSION` passa a `agent-diagnostic-v2` para não reutilizar uma sugestão produzida sob o prompt anterior. A instrução não concede autoridade, não adiciona fato ao `EvidencePack` e as ações continuam `HUMAN_ONLY`. TEST PENDING: testes focados e novo smoke local.
+- **2026-08-30T03:58:09-03:00 — reforço de grounding após trial local:** o segundo smoke local recebeu JSON do modelo, mas o validador recusou corretamente o texto por repetir `SUPPORTED`, vocabulário reservado ao motor. Mantemos a rejeição (aceitar a repetição promoveria uma hipótese) e instruímos o modelo a não reutilizar `SUPPORTED`, `INCONCLUSIVE` ou `HUMAN_CONFIRMED` em campos autorais; `PROMPT_VERSION` passa a `agent-diagnostic-v3`. TEST PENDING: testes focados e terceiro smoke local; risco residual: o modelo ainda pode infringir outro guardrail e então continuará retornando `UNAVAILABLE` sem alterar Incident ou ação de pagamento.
+- **2026-08-30T04:03:40-03:00 — validação final do smoke local:** `uv run --locked pytest -q tests/test_agent_suggestion.py tests/test_diagnostic_agent.py tests/test_agent_api.py` passou com **32 tests**; o terceiro `uv run --locked python scripts/smoke_openai_agent.py` retornou `status=SUGGESTED`, `model_version=openai:gpt-5.6-terra`, `configured_reasoning_effort=high`, quatro razões e três ações. As ações permaneceram `HUMAN_ONLY`; o script usou somente fixture sintética e `persist=False`. Não houve exposição de `OPENAI_API_KEY` nem escrita no banco.

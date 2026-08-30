@@ -7,16 +7,23 @@ no test requires an API key: the agent's safety must be provable offline.
 from __future__ import annotations
 
 import json
+import sys
+import types
 
 import pytest
 
 from app.agent import (
+    AgentRetrievalTrace,
     DiagnosticAgentService,
     DiagnosticSuggestionRepository,
+    OpenAISuggestionClient,
     TemplateSuggestionClient,
     build_evidence_pack,
+    configured_suggestion_client,
 )
+from app.agent.prompt import system_prompt
 from app.agent.service import MINIMUM_INDEPENDENT_EVIDENCE
+from app.config import Settings
 from app.incidents import Incident
 from app.memory import InMemoryIncidentRepository, IncidentMemoryService
 from app.memory.seed import seed_mastercard_d2
@@ -122,6 +129,55 @@ def _valid_body(**overrides) -> str:
 
 def _service(client, **kwargs) -> DiagnosticAgentService:
     return DiagnosticAgentService(client=client, **kwargs)
+
+
+def test_configured_client_uses_template_without_an_api_key():
+    client = configured_suggestion_client(Settings(_env_file=None, openai_api_key=None))
+
+    assert isinstance(client, TemplateSuggestionClient)
+
+
+def test_configured_openai_client_uses_terra_high_responses_request(monkeypatch):
+    calls = {}
+
+    class FakeResponses:
+        def create(self, **kwargs):
+            calls["request"] = kwargs
+            return types.SimpleNamespace(output_text='{"status":"SUGGESTED"}')
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            calls["initialization"] = kwargs
+            self.responses = FakeResponses()
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    client = configured_suggestion_client(
+        Settings(
+            _env_file=None,
+            openai_api_key="test-key",
+            openai_model="gpt-5.6-terra",
+            openai_reasoning_effort="high",
+            openai_timeout_seconds=9,
+        )
+    )
+    assert isinstance(client, OpenAISuggestionClient)
+
+    pack = build_evidence_pack(_incident(), decline_profile=DECLINE_PROFILE)
+    trace = AgentRetrievalTrace(
+        incident_id=pack.incident_id,
+        status="NO_PRECEDENT",
+        filter_criteria="same scope",
+        candidate_count=0,
+        index_version="local-v1",
+    )
+    assert client.suggest(pack, trace) == '{"status":"SUGGESTED"}'
+    assert calls["initialization"] == {"api_key": "test-key", "timeout": 9}
+    assert calls["request"]["model"] == "gpt-5.6-terra"
+    assert calls["request"]["reasoning"] == {"effort": "high"}
+    assert calls["request"]["store"] is False
+    assert calls["request"]["text"] == {"format": {"type": "json_object"}}
+    assert "JSON" in calls["request"]["input"]
+    assert "Do not mention, quote or reuse engine status labels" in system_prompt()
 
 
 def test_new_incident_without_precedent_is_suggested_from_current_evidence():
@@ -321,8 +377,8 @@ def test_changed_evidence_produces_a_new_suggestion_record():
     assert DiagnosticSuggestionRepository().count_for_incident("inc_agent_test_001") == 2
 
 
-def test_template_client_is_the_default_and_needs_no_api_key():
-    suggestion = DiagnosticAgentService().suggest_for_incident(
+def test_template_client_needs_no_api_key():
+    suggestion = DiagnosticAgentService(client=TemplateSuggestionClient()).suggest_for_incident(
         _incident(), decline_profile=DECLINE_PROFILE, persist=False
     )
 

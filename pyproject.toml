@@ -11,6 +11,7 @@ dependencies = [
     "duckdb>=1.0",
     "jsonschema>=4.23",
     "numpy>=2.0",
+    "openai>=2.38,<3",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
 ]
