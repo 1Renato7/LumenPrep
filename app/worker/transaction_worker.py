@@ -6,22 +6,20 @@ process restart or a duplicate delivery of the same transaction_id all resume/no
 correctly instead of skipping or repeating work: whatever last got committed to the row
 *is* the state, and every call re-reads it before acting.
 
-``_generate_outcome`` is a deterministic placeholder seeded by transaction_id, standing
-in for Renato's real TransactionInput -> outcome adapter (the actual blocker for this
-task per docs/plans/people/rogerio.md). It can be swapped without touching the
-persistence/lease/reconciliation logic below.
+``_generate_outcome`` delegates to Renato's deterministic TransactionInput adapter;
+the worker remains responsible only for durable lifecycle and event persistence.
 """
 
 from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
-from random import Random
 from typing import Any
 from uuid import uuid4
 
+from app.ingestion import ingest_event
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
+from app.simulation.transaction_outcomes import AdaptedTransaction, adapt_transaction
 
 STAGE_ORDER = ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING", "COMPLETE"]
 _PROGRESS_BY_STAGE = {stage: index * 20 for index, stage in enumerate(STAGE_ORDER)}
@@ -32,71 +30,15 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _generate_outcome(transaction_id: str) -> tuple[str, dict[str, Any], dict[str, Any]]:
-    """Deterministic outcome+classification for ``transaction_id`` (placeholder, see module docstring).
-
-    Same transaction_id always yields the same result, so re-running a stuck or
-    re-delivered job never flips a prior decision.
-    """
-    seed = int.from_bytes(sha256(transaction_id.encode("utf-8")).digest()[:8], "big")
-    rng = Random(seed)
-    roll = rng.random()
-    latency_ms = rng.randint(80, 2500)
-    evidence_ids = [f"evd_{transaction_id}"]
-
-    if roll < 0.72:
-        outcome = {
-            "result": "SUCCEEDED",
-            "provider_response_code": "00",
-            "normalized_decline_code": None,
-            "latency_ms": latency_ms,
-        }
-        classification = {
-            "category": "APPROVED",
-            "reason": "Provider approved the attempt.",
-            "confidence": round(rng.uniform(0.9, 0.99), 2),
-            "evidence_ids": evidence_ids,
-            "related_incident_ids": [],
-        }
-        return "SUCCEEDED", outcome, classification
-
-    if roll < 0.94:
-        category, reason, decline_code = rng.choice(
-            [
-                ("ISSUER_DECLINE", "Issuer declined the attempt.", "GENERIC_DECLINE"),
-                ("PROVIDER_ERROR", "Provider returned an error response.", "PROVIDER_ERROR"),
-                ("TIMEOUT", "Provider did not respond before timeout.", "TIMEOUT"),
-            ]
-        )
-        outcome = {
-            "result": "FAILED",
-            "provider_response_code": "05",
-            "normalized_decline_code": decline_code,
-            "latency_ms": latency_ms,
-        }
-        classification = {
-            "category": category,
-            "reason": reason,
-            "confidence": round(rng.uniform(0.6, 0.95), 2),
-            "evidence_ids": evidence_ids,
-            "related_incident_ids": [],
-        }
-        return "FAILED", outcome, classification
-
-    outcome = {
-        "result": "UNKNOWN",
-        "provider_response_code": None,
-        "normalized_decline_code": None,
-        "latency_ms": latency_ms,
-    }
-    classification = {
-        "category": "UNKNOWN",
-        "reason": "Provider response was inconclusive.",
-        "confidence": round(rng.uniform(0.3, 0.6), 2),
-        "evidence_ids": evidence_ids,
-        "related_incident_ids": [],
-    }
-    return "UNKNOWN", outcome, classification
+def _generate_outcome(
+    transaction_id: str, transaction_input: dict[str, Any], correlation_id: str
+) -> AdaptedTransaction:
+    """Adapt a persisted public input without consulting ground truth or storage."""
+    return adapt_transaction(
+        transaction_input,
+        transaction_id=transaction_id,
+        correlation_id=correlation_id,
+    )
 
 
 def _acquire_lease(con, transaction_id: str, worker_id: str, lease_seconds: int) -> bool:
@@ -120,7 +62,7 @@ def _acquire_lease(con, transaction_id: str, worker_id: str, lease_seconds: int)
 
 def _advance_locked(con, transaction_id: str) -> None:
     row = con.execute(
-        "SELECT status, processing_json FROM transaction_records WHERE transaction_id = ?",
+        "SELECT status, processing_json, input_json, correlation_id FROM transaction_records WHERE transaction_id = ?",
         [transaction_id],
     ).fetchone()
     if row is None or row[0] != "PROCESSING":
@@ -145,7 +87,10 @@ def _advance_locked(con, transaction_id: str) -> None:
         return
 
     try:
-        result, outcome, classification = _generate_outcome(transaction_id)
+        adapted = _generate_outcome(transaction_id, json.loads(row[2]), row[3])
+        ingestion = ingest_event(adapted.event)
+        if ingestion.status not in {"ACCEPTED", "DUPLICATE"}:
+            raise RuntimeError(f"canonical event was {ingestion.status}")
     except Exception as exc:  # a technical worker failure must never read as a business decline
         con.execute(
             """UPDATE transaction_records
@@ -166,10 +111,10 @@ def _advance_locked(con, transaction_id: str) -> None:
                updated_at = ?, lease_owner = NULL, lease_expires_at = NULL
            WHERE transaction_id = ?""",
         [
-            result,
+            adapted.result,
             json.dumps({"stage": "COMPLETE", "progress_percent": 100, "failure_code": None}),
-            json.dumps(outcome),
-            json.dumps(classification),
+            json.dumps(adapted.outcome),
+            json.dumps(adapted.classification),
             now,
             transaction_id,
         ],

@@ -1455,6 +1455,75 @@ Falha de contratos/testes, consumidor que rejeite campo opcional, ou adapter liv
 
 - **2026-08-29T22:45:47-03:00:** a primeira validação do frontend falhou porque o parser estrito rejeitou `root_cause.alternatives`. A integração adicionou tipos, parser, fixtures e apresentação das extensões opcionais. Também separou `listIncidents()` de `listTransactionIncidents(transactionId)`, pois a rota filtrada devolve `IncidentDetail[]`, não `Incident[]`. PASS após correção: `python -m pytest -q` (105), `python scripts/validate_contracts.py`, `python -m compileall -q app`, `npm run lint`, `npm test` (27) e `npm run build`. O browser local do Codex não conectou durante a validação anterior; este gate fica `PASS WITH LIMITATIONS`, sem alegar interação visual.
 
+### FL-20260829-TEAM-023 — Integrar primeiro o adapter determinístico antes de concluir o tráfego de fundo
+
+- **Timestamp:** 2026-08-29T22:56:44-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team
+- **Participantes:** solicitante; Codex como executor
+- **Categoria:** Git/integration | contract | operations
+- **Escopo:** `LUM2-61` / `TASK-DATA-008`, `LUM2-62` / `TASK-DATA-009`, `CMP-DATA-001`, `CMP-TXN-001`, `CTR-TXN-001 v1`, `CTR-EVT-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.0.0, branch `RENATO_CONTINUCAO_ROGERIO`, `app/worker/transaction_worker.py`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A branch `RENATO_CONTINUCAO_ROGERIO` foi atualizada por fast-forward até `origin/main` em worktree isolado para preservar alterações locais de outras frentes. No Linear, `LUM2-62` ainda está Todo, mas já possui uma implementação de submissão batch na main e é bloqueada por `LUM2-61`. O worker revela que seu outcome atual é um placeholder; a pergunta era qual item assumir sem conflitar com `LUM2-47`, que foi explicitamente excluída pelo solicitante.
+
+#### Decisão
+
+Executar apenas `LUM2-61`: substituir o placeholder por um adapter puro e determinístico de `TransactionInput` para outcome e evento `CTR-EVT-001`, preservando os contratos v1. Revalidar `LUM2-62` depois, sem marcá-la como concluída antes de seus critérios dependerem do adapter.
+
+#### Critérios e por que agora
+
+`LUM2-61` é urgente, é pré-requisito explícito de `LUM2-62`, e fornece a fronteira mínima para que worker, tráfego interno e analytics usem o mesmo dado derivado. `LUM2-47` não será tocada por instrução do solicitante.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Marcar `LUM2-62` Done só porque o commit já está na main | Atualiza o board rapidamente | Mantém outcome placeholder e não satisfaz a dependência | FACT: `LUM2-62` é bloqueada por `LUM2-61` no Linear | Critérios ainda não estão completos |
+| Trabalhar em `LUM2-47` | Benchmark isolado | Contraria exclusão explícita e a issue aparece já concluída/reatribuída | FACT: instrução do solicitante e estado Linear | Rejeitada |
+| Implementar `LUM2-61` primeiro | Desbloqueia o caminho crítico | Atravessa adapter e worker e requer testes de contrato | FACT: docstring do worker declara o placeholder | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `RENATO_CONTINUCAO_ROGERIO` foi atualizada de `789f5f1` para `f5f6e0c` e publicada sem tocar o worktree principal sujo.
+- **FACT:** `LUM2-61` está Todo, prioridade Urgent, e bloqueia `LUM2-62`.
+- **TEST:** NOT RUN — testes do adapter e integração serão executados antes de atualizar o Linear.
+- **UNKNOWN:** a abrangência dos evals downstream de `LUM2-56/57`; permanece fora desta microtarefa.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** ordem de integração explícita e outcome reproduzível para cada input persistido.
+- **Abrimos mão de:** fechar imediatamente uma issue cuja primeira metade já foi integrada.
+- **Dívida/limitação:** o adapter usa os perfis sintéticos versionados; calibração com dados de produção continua fora do MVP.
+- **Risco residual:** uma falha de ingestão de evento deve ser tratada como falha técnica do pipeline, nunca como decline.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** não há mudança de schema; `CTR-TXN-001 v1` passa a alimentar `CTR-EVT-001 v1` no worker.
+- **Pessoas/branches:** Renato recebe o handoff de adapter implementado; Rogério pode consumir a mesma interface no lifecycle.
+- **Plano/Linear:** atualizar somente `LUM2-61` após review, testes e integração; reavaliar `LUM2-62` depois.
+- **Testes/observabilidade:** provar determinismo, três estados terminais, contrato de evento e reentrega idempotente.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o mesmo input/seed/contexto produz payload idêntico e o worker persiste um evento válido uma única vez.
+- **Caminho feliz:** transaction batch chega a terminal com outcome, classificação e evento canônico derivado.
+- **Caso difícil/adverso:** input inválido continua bloqueado na borda; reentrega não duplica evento; erro técnico não se torna decline.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** preservar a classificação `PIPELINE_FAILED`/`UNKNOWN` do worker para falhas técnicas.
+
+#### Gatilhos de revisão
+
+Mudança em `CTR-TXN-001`/`CTR-EVT-001`, requisito de retry público, ou falha de idempotência exige change control e nova decisão.
+
+#### Adendos
+
+- **2026-08-29T23:05:00-03:00:** PASS — `python -m pytest -q` aprovou 100 testes; `python scripts/validate_contracts.py`, `python -m compileall -q app` e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes.
+- **2026-08-29T23:05:00-03:00:** Browser acceptance PASS — Swagger local submeteu batch sintético (`202`) e consultou o registro (`200`) em `COMPLETE`, com `FAILED`, `PROVIDER_INTERNAL_ERROR` e classificação `PROVIDER_ERROR`; console sem erros. Servidor local encerrado após o smoke.
+
 ## André
 
 <!-- ANDRE: faça append de novas entradas imediatamente antes da próxima seção. -->

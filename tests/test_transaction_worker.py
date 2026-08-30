@@ -121,7 +121,7 @@ def test_expired_lease_is_reclaimable_by_reconciliation():
 def test_pipeline_failure_never_becomes_a_business_decline(monkeypatch):
     transaction_id = _new_transaction_id(key="worker-key-0006")
 
-    def _boom(_transaction_id: str):
+    def _boom(_transaction_id: str, _input: dict, _correlation_id: str):
         raise RuntimeError("simulated provider adapter crash")
 
     monkeypatch.setattr(worker, "_generate_outcome", _boom)
@@ -137,7 +137,34 @@ def test_pipeline_failure_never_becomes_a_business_decline(monkeypatch):
 
 
 def test_outcome_generation_is_deterministic_for_the_same_transaction_id():
-    assert worker._generate_outcome("txn_fixed_id_for_determinism") == worker._generate_outcome("txn_fixed_id_for_determinism")
+    transaction = {
+        "merchant_id": "merchant_br_01",
+        "provider_id": "provider_alpha",
+        "issuer_bank": "bank_br_a",
+        "country": "BR",
+        "currency": "BRL",
+        "amount_minor": 12990,
+        "payment_method_category": "CARD",
+        "card_brand": "VISA",
+        "card_type": "CREDIT",
+    }
+    assert worker._generate_outcome("txn_fixed_id_for_determinism", transaction, "corr_fixed") == worker._generate_outcome(
+        "txn_fixed_id_for_determinism", transaction, "corr_fixed"
+    )
+
+
+def test_worker_persists_one_canonical_event_derived_from_the_public_input():
+    transaction_id = _new_transaction_id(key="worker-key-adapter-event")
+    worker.run_to_completion(transaction_id)
+    worker.run_to_completion(transaction_id)
+
+    rows = get_connection().execute(
+        "SELECT canonical_json FROM canonical_events WHERE event_id = ?", [f"evt_{transaction_id}"]
+    ).fetchall()
+    assert len(rows) == 1
+    event = json.loads(rows[0][0])
+    assert event["merchant_id"] == "merchant_br_01"
+    assert event["amount_minor"] == 12990
 
 
 def _record_schema_validator() -> Draft202012Validator:
