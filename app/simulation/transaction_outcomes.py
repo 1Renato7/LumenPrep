@@ -25,6 +25,11 @@ _EVENT_METHOD = {
     "CARD": "CARD",
     "BANK_TRANSFER": "REAL_TIME_PAYMENT",
     "DIGITAL_WALLET": "WALLET",
+    "PIX": "REAL_TIME_PAYMENT",
+    "SPEI": "REAL_TIME_PAYMENT",
+    "PSE": "REAL_TIME_PAYMENT",
+    "BOLETO": "CASH",
+    "CASH_IN_STORE": "CASH",
     # CTR-EVT-001 has no generic OTHER value. Map it to a neutral rail while
     # retaining the honest UNKNOWN outcome below.
     "OTHER": "REAL_TIME_PAYMENT",

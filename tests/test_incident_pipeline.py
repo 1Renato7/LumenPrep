@@ -42,7 +42,7 @@ def _ingest_window(base: dict, *, start: datetime, correlation_id: str, status: 
         assert result.status == "ACCEPTED"
 
 
-def test_pipeline_persists_one_inconclusive_incident_and_is_idempotent(valid_attempt):
+def test_pipeline_persists_one_specific_supported_incident_and_is_idempotent(valid_attempt):
     monday = datetime(2026, 7, 6, 10, tzinfo=timezone.utc)
     for week in range(4):
         _ingest_window(valid_attempt, start=monday + timedelta(weeks=week), correlation_id=f"corr_history_{week}", status="SUCCEEDED")
@@ -57,8 +57,14 @@ def test_pipeline_persists_one_inconclusive_incident_and_is_idempotent(valid_att
     assert second == first
     persisted = DuckDBIncidentRepository().get(first[0])
     assert persisted is not None
-    assert persisted.state == "INCONCLUSIVE"
-    assert persisted.root_cause.status == "INCONCLUSIVE"
+    assert persisted.state == "SUPPORTED"
+    assert persisted.root_cause.status == "SUPPORTED"
+    assert persisted.root_cause.category == "PROVIDER_DEGRADATION"
+    assert persisted.scope["merchant_id"] == [valid_attempt["merchant_id"]]
+    assert persisted.scope["provider_id"] == ["stripe"]
+    assert persisted.scope["payment_method_category"] == [valid_attempt["payment_method_category"]]
+    assert persisted.scope["country"] == ["BR"]
+    assert persisted.scope["issuer_bank_id"] == [valid_attempt["card"]["issuer_bank_id"]]
     assert persisted.root_cause.alternatives
     assert persisted.correlation_id == anomaly_correlation
 

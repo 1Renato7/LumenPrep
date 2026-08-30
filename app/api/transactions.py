@@ -25,20 +25,34 @@ router = APIRouter(prefix="/v1", tags=["transactions"])
 MAX_BATCH_SIZE = 100
 _SYSTEM_RANDOM = SystemRandom()
 _CATALOG = {
-    "merchants": ("merchant_br_01", "merchant_mx_01"),
-    "providers": ("provider_alpha", "provider_beta"),
-    "issuer_banks": ("bank_br_a", "bank_br_b", "bank_br_c", "bank_mx_a"),
-    "countries": ("BR", "MX"),
-    "currencies": ("BRL", "MXN"),
-    "payment_method_categories": ("CARD", "DIGITAL_WALLET", "BANK_TRANSFER"),
+    "merchants": (
+        "merchant_br_01", "merchant_br_aurora", "merchant_br_nova", "merchant_br_atlas",
+        "merchant_mx_01", "merchant_mx_aurora", "merchant_mx_nova", "merchant_mx_atlas",
+        "merchant_co_aurora", "merchant_co_nova", "merchant_co_atlas",
+    ),
+    "providers": ("provider_alpha", "provider_beta", "stripe", "adyen", "dlocal", "mercadopago"),
+    "issuer_banks": (
+        "bank_br_a", "bank_br_b", "bank_br_c", "itau_br", "nubank_br", "bb_br",
+        "bank_mx_a", "bbva_mx", "banorte_mx", "nu_mx",
+        "bancolombia_co", "davivienda_co", "banco_bogota_co", "NOT_APPLICABLE",
+    ),
+    "countries": ("BR", "MX", "CO"),
+    "currencies": ("BRL", "MXN", "COP"),
+    "payment_method_categories": ("CARD", "PIX", "BOLETO", "SPEI", "PSE", "DIGITAL_WALLET", "CASH_IN_STORE", "BANK_TRANSFER", "OTHER"),
     "card_brands": ("MASTERCARD", "VISA"),
     "card_types": ("CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE"),
 }
 _ISSUERS_BY_COUNTRY = {
-    "BR": ("bank_br_a", "bank_br_b", "bank_br_c"),
-    "MX": ("bank_mx_a",),
+    "BR": ("bank_br_a", "bank_br_b", "bank_br_c", "itau_br", "nubank_br", "bb_br"),
+    "MX": ("bank_mx_a", "bbva_mx", "banorte_mx", "nu_mx"),
+    "CO": ("bancolombia_co", "davivienda_co", "banco_bogota_co"),
 }
-_CURRENCY_BY_COUNTRY = {"BR": "BRL", "MX": "MXN"}
+_CURRENCY_BY_COUNTRY = {"BR": "BRL", "MX": "MXN", "CO": "COP"}
+_METHODS_BY_COUNTRY = {
+    "BR": ("CARD", "PIX", "DIGITAL_WALLET", "BOLETO"),
+    "MX": ("CARD", "SPEI", "DIGITAL_WALLET", "CASH_IN_STORE"),
+    "CO": ("CARD", "PSE", "DIGITAL_WALLET", "CASH_IN_STORE"),
+}
 
 
 class _StrictModel(BaseModel):
@@ -54,7 +68,7 @@ class TransactionInput(_StrictModel):
     country: Annotated[str, Field(pattern=r"^[A-Z]{2}$")]
     currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
     amount_minor: int = Field(ge=1)
-    payment_method_category: Literal["CARD", "BANK_TRANSFER", "DIGITAL_WALLET", "OTHER"]
+    payment_method_category: Literal["CARD", "PIX", "BOLETO", "SPEI", "PSE", "DIGITAL_WALLET", "CASH_IN_STORE", "BANK_TRANSFER", "OTHER"]
     card_brand: str | None = Field(default=None, max_length=50)
     card_type: Literal["CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE"] | None = None
     provider_connection_id: str | None = Field(default=None, max_length=100)
@@ -126,15 +140,15 @@ def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, An
     for index in range(request.count):
         country = defaults.country or random.choice(_CATALOG["countries"])
         currency = defaults.currency or _CURRENCY_BY_COUNTRY[country]
-        method = random.choice(_CATALOG["payment_method_categories"])
+        method = random.choice(_METHODS_BY_COUNTRY[country])
         is_card = method == "CARD"
         transactions.append(
             {
                 "client_reference": f"sample-{seed}-{index + 1}",
                 "occurred_at": None,
-                "merchant_id": defaults.merchant_id or random.choice(_CATALOG["merchants"]),
+                "merchant_id": defaults.merchant_id or random.choice(tuple(item for item in _CATALOG["merchants"] if f"_{country.lower()}_" in item)),
                 "provider_id": random.choice(_CATALOG["providers"]),
-                "issuer_bank": random.choice(_ISSUERS_BY_COUNTRY[country]),
+                "issuer_bank": random.choice(_ISSUERS_BY_COUNTRY[country]) if is_card else "NOT_APPLICABLE",
                 "country": country,
                 "currency": currency,
                 "amount_minor": random.choice((1990, 7990, 12990, 21990, 25990)),

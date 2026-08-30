@@ -70,3 +70,11 @@ Reprodutibilidade, contract tests, evals, review gate e integração ponta a pon
 Parent: [LUM2-7](https://linear.app/lumenhack/issue/LUM2-7/entregar-dados-sinteticos-deteccao-e-rca). Novas issues: `TASK-DATA-008`→`LUM2-61` e `TASK-DATA-009`→`LUM2-62`. `LUM2-49/56/57` foram atualizadas sem mudar seus estados.
 
 Mapeamento corrigido já publicado: `LUM2-44` = Gerar 90 dias com sazonalidade (`TASK-DATA-004` no texto legado), `LUM2-45` = outcomes condicionais/retries (`TASK-DATA-002`) e `LUM2-46` = latências/declines (`TASK-DATA-003`). Não reescrever esses IDs concluídos; o preview 2.0 só adiciona tarefas novas e atualiza descrições ainda abertas.
+
+## Missão 2.3 — dados e RCA nas seis dimensões
+
+- **Plano geral:** 2.3.0; **objetivo:** `OBJ-RCA6-RENATO-001`.
+- **Own:** `TASK-RCA6-001`, `003`, `004` e `008` em `app/simulation`, `app/detection`, `app/rca` e evals. Não altera API, schema público, UI ou explicação.
+- **Primeiro bloco:** fixtures e catálogo com BR/MX/CO, nove merchants, quatro providers, métodos compatíveis, três emissores/país e decline codes gerados pelo outcome. Provar os sentinelas `NOT_APPLICABLE`, `NO_DECLINE` e `UNMAPPED_DECLINE` antes do cube.
+- **Handoff:** para Rogério, eventos/candidatos/RCA v2 e cenários provider-BR, issuer-MX-merchant, método-país, ruído, empate e trial-by-fire; ground truth fica isolado.
+- **Stop condition:** não calibrar nem publicar `SUPPORTED` sem holdout; devolver `INCONCLUSIVE` quando `OPEN-001` impedir confiança suficiente.

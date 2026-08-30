@@ -1579,6 +1579,75 @@ Isolar `WindowMetrics` por `correlation_id`; executar canonical → analytics �
 
 Mais de uma réplica, migração para queue externa/Postgres, mudança de chave de correlação, falha de build com Python 3.14.4 ou divergência remota exige nova decisão e revalidação dos contratos.
 
+### FL-20260830-TEAM-025 — Preservar as seis dimensões até o diagnóstico e usar decline code como evidência, não atalho causal
+
+- **Timestamp:** 2026-08-30T01:40:25-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team
+- **Participantes:** André, Altoé, Rogério, Renato; Codex como recorder
+- **Categoria:** architecture | contract | data | demo
+- **Escopo:** `DEC-025`; `CTR-EVT-001 v2`, `CTR-AGG-001 v2`, `CTR-DET-001 v2`, `CTR-RCA-001 v1`, `CTR-INC-001 v2`
+- **Links:** `docs/plans/system-plan.md` §16; `TASK-RCA6-001`–`009`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O enunciado exige merchant, provider, método, país, banco emissor e decline code. A auditoria da `main` encontrou agregação só por provider, país e moeda e RCA incapaz de publicar causa específica. Era preciso decidir como usar os seis dados sem vazar o resultado da recusa para explicar a própria recusa.
+
+#### Decisão
+
+Preservar cinco dimensões pré-resultado em rollups esparsos e produzir `normalized_decline_code` como perfil de evidência do slice anômalo. O RCA usa contribuição e resíduo para separar incidentes, e só promove causa específica quando as evidências qualificadas vencerem; o fallback é `INCONCLUSIVE`.
+
+#### Critérios e por que agora
+
+A perda atual acontece antes do detector, logo UI ou narrativa não podem recuperá-la. A escolha congela nomes, versões e mocks antes de trabalho paralelo e atende o trial by fire com combinações não ensaiadas.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Cube esparso + decline profile | usa todos os dados sem leakage e evita combinações vazias | exige migração e testes de conservação | FACT: eventos carregam os campos | escolhida |
+| Agrupar seis chaves como iguais | curto de implementar | decline é outcome e produz circularidade; alta sparsity | FACT: código vem após falha | rejeitada |
+| Manter provider/país | preserva código atual | não diagnostica merchant, método ou emissor | FACT: enunciado exige seis | rejeitada |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o desafio requer causa específica na interseção das seis dimensões.
+- **TEST:** 20 testes focados da `main` passaram na auditoria, mas não provam a cadeia real das seis dimensões.
+- **ASSUMPTION:** `min_support=12` e rollups observados são viáveis; Renato valida em `TASK-RCA6-008`.
+- **UNKNOWN:** limiares finais de `SUPPORTED`; até holdout, a saída segura é inconclusiva.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** diagnóstico auditável e defendível para o júri.
+- **Abrimos mão de:** afirmar causa em slices raros ou ambíguos.
+- **Dívida/limitação:** v2 e adaptador v1 temporário aumentam a integração.
+- **Risco residual:** catálogo sintético pode não cobrir todos os padrões reais; trial by fire e holdout expõem isso.
+
+#### Consequências e propagação
+
+- **Produto/demo:** catálogo com BR/MX/CO, 9 merchants, 4 providers, métodos compatíveis e emissores por país; decline code não é input do usuário.
+- **Arquitetura/contratos:** migração planejada no plano §16.
+- **Pessoas/branches:** Renato/dados-RCA, Rogério/cube-API, Altoé/grounding e André/UI têm owner único.
+- **Plano/Linear:** plano geral e projeções foram atualizados; Linear não foi alterado.
+- **Testes/observabilidade:** conservação, não-leakage, resíduo, holdout, E2E e browser são gates.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** interseção inédita gera causa específica com evidência ou abstention honesta.
+- **Caminho feliz:** provider-BR e emissor-MX em merchant único são separados por contribuição incremental.
+- **Caso difícil/adverso:** método/código desconhecido ou baixa amostra.
+- **Resultado observado:** NOT RUN — planejamento concluído, implementação pendente.
+- **Fallback:** preservar eventos/evidências e exibir `INCONCLUSIVE` com alternativas.
+
+#### Gatilhos de revisão
+
+Benchmark inviável, falha de conservação, leakage por decline code ou holdout com confiança inflada exigem change control.
+
+#### Adendos
+
+- 2026-08-30T01:40:25-03:00 — plano 2.3.0 criado; nenhuma issue Linear foi escrita.
+
 ## André
 
 <!-- ANDRE: faça append de novas entradas imediatamente antes da próxima seção. -->
@@ -4043,3 +4112,29 @@ Rejeição do push, divergência remota, falha de gate ou descoberta de contrato
 #### Adendos
 
 - **2026-08-30T00:39:43-03:00:** PASS — commit `2cf5091` (`feat: persist grounded incident pipeline`) foi criado diretamente na `main` e `git push origin main` atualizou `origin/main` de `613df52` para `2cf5091`. Não houve force push, merge ou rebase.
+
+### FL-20260830-TEAM-026 — Integrar o diagnóstico de seis dimensões na main atual
+
+- **Timestamp:** 2026-08-30T05:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Categoria:** Git/integration | product | contracts
+- **Escopo:** cubo de diagnóstico, catálogo sintético e `origin/main`
+
+#### Decisão
+
+Rebasear a entrega local de diagnóstico sobre a `origin/main` atual, resolver somente conflitos textuais preservando tanto a evolução remota quanto os novos contratos aditivos, validar os gates e fazer push direto para `main`, sem force push.
+
+#### Alternativas e trade-offs
+
+| Alternativa | Decisão |
+| --- | --- |
+| Sobrescrever a main remota | rejeitada: poderia apagar a atualização de timezone já publicada. |
+| Abrir outra branch/PR | rejeitada: o solicitante autorizou explicitamente integração e push na main. |
+| Rebase, revisar conflitos e publicar | escolhida: preserva a história remota e deixa a entrega rastreável. |
+
+#### Evidência e validação exigida
+
+- **FACT:** `origin/main` avançou de `404c23b` para `82bea0d`; a entrega local é descendente do commit anterior.
+- **TEST:** antes da publicação, executar `pytest`, validação de contratos, testes/build web e `git diff --check`.
+- **Regra:** qualquer conflito sem resolução preservadora ou falha de gate interrompe o push; force push é proibido.

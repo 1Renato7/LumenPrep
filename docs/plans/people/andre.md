@@ -137,3 +137,10 @@ Parent: [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-frontend-tra
 - **Início independente:** factory única com live quando `NEXT_PUBLIC_API_BASE_URL` existe e mock somente explícito. Corrigir CTR-TDI para `/transactions/{id}/incidents`; preservar a lista homogênea de `Incident[]` em `/incidents?transaction_id=`.
 - **Handoff recebido de Rogério:** OpenAPI, comando/API local e pipeline persistido estão integrados; `NO_INCIDENT/PARTIAL/RESOLVED` e erros continuam explícitos. Rotas live não fazem fallback automático a fixture.
 - **Evidência:** localmente, suite live 35/35, build e browser desktop/mobile passam; sample → submit → log/detail → Incidents usa FastAPI real, e memória Neo4j retorna `MATCH_FOUND` sem fallback. Railway production também passou health 200 e live 35/35. Vercel reportou deploy concluído, mas domínio exato/browser deployed e CORS real continuam `NOT RUN`; persistência/restart Railway e Neo4j online sem fallback também permanecem pendentes.
+
+## Missão 2.3 — operação visível nas seis dimensões
+
+- **Plano geral:** 2.3.0; **objetivo:** `OBJ-RCA6-ANDRE-001`; **own:** `TASK-RCA6-007` e acceptance do navegador em `TASK-RCA6-009`.
+- Consome mock/API `CTR-INC-001 v2`. O detalhe deve mostrar merchant, provider, método, país, emissor, perfil de decline, início, impacto e evidências.
+- Para `INCONCLUSIVE`, alternativas e limitações não podem ter linguagem ou cor que pareça confirmação. Não calcula métricas, causa ou score no browser.
+- Handoff: browser evidence em desktop/mobile para causa suportada, dois simultâneos, baixa evidência e API indisponível; divergência de contrato volta a Rogério.

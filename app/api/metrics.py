@@ -9,5 +9,9 @@ router = APIRouter()
 
 @router.get("/metrics/current")
 def metrics_current() -> list[dict[str, object]]:
-    """Return CTR-AGG-001 records unchanged from the aggregation boundary."""
-    return [metric.model_dump() for metric in get_current_metrics()]
+    """Return only root rollups; detailed cube slices stay internal to RCA."""
+    return [
+        metric.model_dump()
+        for metric in get_current_metrics()
+        if set(metric.dimensions) == {"currency"}
+    ]

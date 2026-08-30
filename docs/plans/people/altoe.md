@@ -15,6 +15,13 @@ Não será criado um agente/RAG por transação. Outcome e classificação trans
 
 O scenario generator vira harness interno; Graph RAG nunca recebe ground truth, configuração de efeitos, PAN/PII nem raw payload completo.
 
+## Missão 2.3 — explicação grounded da interseção causal
+
+- **Plano geral:** 2.3.0; **objetivo:** `OBJ-RCA6-ALTOE-001`; **own:** `TASK-RCA6-006` em memória e explicação.
+- Consome `CTR-INC-001 v2` no CP2: a explicação apresenta interseção, início, impacto, perfil de decline, evidências e limitações. Decline profile é evidência, nunca a fonte da causa.
+- Precedente histórico pode orientar playbook, mas não altera `SUPPORTED|INCONCLUSIVE`, categoria, valores ou ranking atuais.
+- Handoff: fixture v2 com IDs rastreáveis para André e testes que provam preservação de autoridade causal para Rogério.
+
 ## Ownership e contratos
 
 - **Own:** `CMP-MEM/EXP-001`, `CTR-MEM-001 v1.1`, `CTR-LLM-001 v1` e graph schema/prompts.

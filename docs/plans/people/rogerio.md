@@ -98,6 +98,14 @@ Parent: [LUM2-6](https://linear.app/lumenhack/issue/LUM2-6/entregar-ingestao-con
 ### Handoffs e condições de parada
 
 - **Para André:** após `TASK-PIPE-003/004`, entregar comando para API local, OpenAPI validado, URL/base `/v1`, mapa `404/409/422/503`, exemplos reais de `NO_INCIDENT`, `PARTIAL` e `RESOLVED` e indicação explícita de `BACKEND_UNAVAILABLE`.
+
+## Missão 2.3 — cube, contratos e Incident causal
+
+- **Plano geral:** 2.3.0; **objetivo:** `OBJ-RCA6-ROGERIO-001`.
+- **Own:** `TASK-RCA6-002`, `005` e `009`; coordena `CTR-EVT/AGG/DET/INC` v2, migrations, API e adaptador v1 temporário.
+- **Primeiro bloco:** congelar schemas/mocks v2 e conservation tests com Renato; cube é esparso por rollups observados, nunca produto cartesiano materializado.
+- **Handoff:** publicar Incident v2 e exemplos para Altoé/André após E2E de stream até API. Mudança de endpoint/schema exige change control.
+- **Limite:** somente o RCA decide `SUPPORTED`; persistência, memória e UI preservam, mas nunca promovem a conclusão.
 - **Parar e sincronizar:** se `CTR-*`, estado, erro, timeout, CORS público ou modelo de persistência precisar mudar; atualizar primeiro o plano geral e `FL-20260830-ROGERIO-010`/adendo.
 - **Pronto para handoff:** E2E cria Incident sem inserir Incident/link diretamente; duplicado/restart/simultâneos/memory down/leakage passam; fixtures não são fonte live.
 - **Pronto para integração futura:** testes afetados, `code-review-gate`, guardian `INTEGRATION`, e browser gate conjunto com André para qualquer fluxo observável.

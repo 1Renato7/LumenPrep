@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.2.1
+- **Versão:** 2.3.0
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `INTEGRATION`; preserva contratos públicos e consolida pipeline, persistência, frontend live e runtime de deploy sem alterar `CTR-API-001 v3`.
@@ -18,6 +18,7 @@
 - **Changelog 2.1.1:** integra `feat/OBJ-ROGERIO-001-platform-core` sobre o frontend 2.1.0, preservando `web/` e adicionando a `CTR-INC-001 v1` hipóteses causais ordenadas, classe de recomendação humana, priorização local por moeda e correlação por fingerprint causal exato. Não adiciona adapter live ao frontend nem altera `CTR-API-001 v3`.
 - **Changelog 2.2.0:** replaneja a recuperação de integração a partir de `main@613df52`, depois de confirmar que os incrementos de Neo4j, RCA, grounding e Parquet já estão na base. A execução restante é concentrada em duas lanes: Rogério integra core/dados/backend; André integra produto/deploy web. Nenhum contrato público recebe nova versão nesta revisão; o objetivo é tornar real a cadeia já contratada.
 - **Changelog 2.2.1:** integra as duas lanes sobre `main@23b9061`: o frontend deixa de usar fixtures no runtime live e consome batch/log/detail/Incidents reais; o pipeline terminal passa a ser atômico no DuckDB, inclui a transação gatilho no vínculo de Incident e isola janelas por correlação/moeda; o Docker usa `uv.lock` congelado com o extra Neo4j e inclui a configuração do simulator. Contratos públicos permanecem congelados. Deploy e acceptance online continuam condicionados à evidência real.
+- **Changelog 2.3.0:** corrige a lacuna descoberta em `main@404c23b`: a análise atual só preserva provider, país e moeda. Esta revisão planeja a migração para diagnóstico real nas seis dimensões do enunciado, com catálogo maior de entradas sintéticas e mudança de contrato coordenada. Linear não foi alterado.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -404,3 +405,96 @@ André: mock explícito → client live → Logs/Detail → Incidents → browse
 ### Parecer do Integration Contract Guardian — INTEGRATION 2.2.1
 
 **Estado: `READY WITH WARNINGS`.** Não há mudança de schema, endpoint ou semântica pública. Produtores e consumidores usam as mesmas fixtures/OpenAPI; janelas preservam correlação/moeda e a conclusão terminal é atômica entre canonical, Incident, link e record. A imagem de deploy instala o lock congelado, extra Neo4j e configuração do simulator. Suites, imagem, browser local e Railway live passaram; `main@e50863d` está publicada. Vercel browser/CORS, restart do Volume e Neo4j online sem fallback continuam warnings explícitos.
+
+## 16. Replanejamento 2.3 — diagnóstico causal nas seis dimensões
+
+### Resultado e menor fatia vertical
+
+O objetivo é permitir que operações leia uma causa no formato `merchant=A × provider=X × method=CARD × country=BR × issuer=itau_br`, com início, perda, evidências e perfil de recusa, ou receba `INCONCLUSIVE` com alternativas claras. A menor fatia é: eventos com todas as dimensões → cube analítico → queda detectada → causa específica persistida → detalhe operacional.
+
+**Fatos:** o enunciado exige `merchant × provider × method × country × issuing bank × decline code`; os eventos já coletam esses dados em campos top-level ou aninhados; a agregação atual retém só provider, country e currency; e o RCA atual sempre serializa `INCONCLUSIVE`.
+
+**Não objetivos:** PAN/PII, roteamento automático, LLM calculando causa, materializar combinações vazias ou comparar moedas sem FX.
+
+### DEC-025 — cubo esparso com decline como evidência pós-resultado
+
+**Estado:** `DECIDED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-025`.
+
+Usaremos cinco dimensões existentes antes do resultado — `merchant_id`, `provider_id`, `payment_method_category`, `country`, `issuer_bank_id` — para formar rollups esparsos observados de profundidade 1..5. `normalized_decline_code` é a sexta dimensão obrigatória e será uma distribuição de evidência dentro do slice anômalo, com os sentinelas `NO_DECLINE`, `NOT_APPLICABLE` e `UNMAPPED_DECLINE` onde necessários. Assim ele explica a assinatura da falha sem produzir a circularidade de usar uma recusa já ocorrida como causa da própria baixa aprovação.
+
+A promoção para `SUPPORTED` requer: amostra mínima, desvio estatisticamente significativo contra baseline sazonal, contribuição dominante sobre a segunda hipótese, cobertura de perda e perfil de decline/latência coerente. Sem isso, o RCA mantém `INCONCLUSIVE`; memória, explicação e UI não podem promovê-lo.
+
+Para dois incidentes, o RCA seleciona o maior slice, calcula a perda residual não explicada e reexecuta a contribuição no resíduo. Só cria um segundo Incident se explicar perda incremental; sobreposições viram alternativas do mesmo Incident.
+
+### Catálogo de entrada e regras de consistência
+
+O catálogo público precisa ter variação suficiente para teste realista, mas impedir combinações impossíveis. A UI seleciona somente fatos de entrada. Status, latência e decline code são gerados/persistidos pelo backend e jamais vêm do formulário.
+
+| Dimensão | Opções iniciais propostas | Regra de validação |
+| --- | --- | --- |
+| País | `BR`, `MX`, `CO` | obrigatório; define moeda, emissores e métodos disponíveis |
+| Merchant | 9: `aurora`, `nova`, `atlas` em cada país | merchant habilitado no país; cada país mantém ao menos 3 merchants |
+| Provider | `stripe`, `adyen`, `dlocal`, `mercadopago` | provider habilitado para o país/método; conexão é opcional e compatível |
+| Método | BR: `CARD`, `PIX`, `DIGITAL_WALLET`, `BOLETO`; MX: `CARD`, `SPEI`, `DIGITAL_WALLET`, `CASH_IN_STORE`; CO: `CARD`, `PSE`, `DIGITAL_WALLET`, `CASH_IN_STORE` | emissor/bandeira/tipo só são exigidos para `CARD`; método não permitido retorna `422` |
+| Banco emissor | BR: `itau_br`, `nubank_br`, `bb_br`; MX: `bbva_mx`, `banorte_mx`, `nu_mx`; CO: `bancolombia_co`, `davivienda_co`, `banco_bogota_co` | obrigatório para `CARD`; `NOT_APPLICABLE` para os demais métodos |
+| Decline code | `DO_NOT_HONOR`, `INSUFFICIENT_FUNDS`, `ISSUER_UNAVAILABLE`, `TRANSACTION_NOT_PERMITTED`, `PROVIDER_TIMEOUT`, `PROVIDER_INTERNAL_ERROR`, `NETWORK_ERROR`, `SUSPECTED_FRAUD`, `CASH_IN_STORE_UNAVAILABLE`, `METHOD_UNAVAILABLE` | não selecionável no input; escolhido pelo simulador/outcome compatível com provider, método e status |
+
+Card brand/type, provider connection, currency, amount, retries, status e latências continuam coletados. São usados como filtros/evidência, denominadores, impacto ou sinais de qualidade; não substituem as seis dimensões causais.
+
+### Componentes e contratos congelados para a implementação
+
+```text
+CTR-EVT-001 v2 → CMP-CUBE-001 → CTR-AGG-001 v2 → CTR-DET-001 v2
+                                             → CTR-RCA-001 v1 → CTR-INC-001 v2
+                                                                  ├→ CTR-LLM-001 v1.1
+                                                                  └→ web
+```
+
+| Contrato | Produtor → consumidores | Estado e conteúdo | Mock/teste/owner |
+| --- | --- | --- | --- |
+| `CTR-EVT-001 v2` | outcome/normalização → cube | Projeção explícita de emissor e código normalizado, incluindo sentinelas. | Fixtures card/não-card/decline nulo; Renato. |
+| `CTR-AGG-001 v2` | cube → detector/RCA/API | `slice`, profundidade, denominadores, métricas, perfil de decline, moeda e correlation ID. | Teste de conservação por evento/rollup; Rogério. |
+| `CTR-DET-001 v2` | detector → RCA | Slice pré-resultado, baseline, sinais e refs; nunca uma causa. | Ruído + provider/issuer/método; Renato. |
+| `CTR-RCA-001 v1` | RCA → Incident | Contribuição, dominância, resíduo, decline profile e decisão suportada/inconclusiva. | Dois incidentes + baixa amostra; Renato. |
+| `CTR-INC-001 v2` | API → memória/explicação/web | Diagnóstico específico estruturado, evidências e alternativas; adaptador v1 temporário. | Schema/API fixtures; Rogério. |
+| `CTR-LLM-001 v1.1` | explicação → web | Narra somente números e IDs v2; não altera conclusão causal. | Grounding/no-answer; Altoé. |
+
+A mudança é incompatível semanticamente, portanto novas versões são obrigatórias. Durante CP1–CP3, o adaptador de leitura v1 preserva consumidores existentes. Não há mudança de autenticação; retry/timeout são não aplicáveis a contratos in-process, e reprocessamento continua idempotente por evento, janela e fingerprint.
+
+### Objetivos, ownership e tarefas
+
+| Objetivo | Owner | Resultado |
+| --- | --- | --- |
+| `OBJ-RCA6-RENATO-001` | Renato | Dados, detector, contribuição e avaliação realmente usam as seis dimensões. |
+| `OBJ-RCA6-ROGERIO-001` | Rogério | Cube, persistência, contratos e API preservam o diagnóstico até o consumidor. |
+| `OBJ-RCA6-ALTOE-001` | Altoé | Memória/explicação grounded não promovem nem inventam causa. |
+| `OBJ-RCA6-ANDRE-001` | André | O detalhe de operações mostra interseção, prova, incerteza e prioridade. |
+
+| Task | Owner | Dependência | Critério binário |
+| --- | --- | --- | --- |
+| `TASK-RCA6-001` — normalizar dimensões e ampliar catálogo | Renato | nenhuma | Catálogo entrega 3 países, 9 merchants, 4 providers, métodos compatíveis e 3 emissores/país; campos ausentes recebem sentinela válida. |
+| `TASK-RCA6-002` — cube esparso | Rogério | 001 | Contagens/valor se conservam do rollup raiz aos slices; retries não duplicam pagamentos. |
+| `TASK-RCA6-003` — detector e contribuição | Renato | 002 | Provider-BR, issuer-MX-merchant e método-país isolam o slice correto; ruído não alerta. |
+| `TASK-RCA6-004` — explain-away simultâneo | Renato | 003 | Dois problemas explicam perdas incrementais distintas, sem duplicar GMV. |
+| `TASK-RCA6-005` — Incident/API v2 | Rogério | 003–004 | Causa qualificada é `SUPPORTED` específica; empate/baixa amostra é `INCONCLUSIVE`; adaptador v1 passa contract test. |
+| `TASK-RCA6-006` — grounding/playbook | Altoé | 005 | Texto cita evidências reais e não confunde precedente com causa atual. |
+| `TASK-RCA6-007` — detalhe de operações | André | mock v2, 005 | Mostra what/where/since when/who/cost/evidence e não usa copy confirmatória para inconclusão. |
+| `TASK-RCA6-008` — holdout e trial by fire | Renato | 004 | Combinação inédita das seis dimensões gera diagnóstico correto ou abstention honesta, sem ground truth no runtime. |
+| `TASK-RCA6-009` — E2E + navegador | Rogério | 005–007 | Stream → Incident → UI, dois simultâneos, refresh e API indisponível têm provas executadas. |
+
+### Ordem de integração, riscos e quality gate
+
+```text
+001 → 002 → 003 → 004 → 005 → 006 → 007 → 009
+                        └──────────────→ 008 ───────┘
+```
+
+- **CP0:** freeze de schemas, mocks e catálogo; nenhum paralelo toca contratos antes desse checkpoint.
+- **CP1:** evento preserva as seis dimensões e o cube conserva contagens.
+- **CP2:** três causas, ruído, duas simultâneas e baixa amostra passam no backend.
+- **CP3:** API, explicação e browser exibem exatamente o mesmo diagnóstico/evidência.
+- **CP4:** holdout e trial by fire; se o suporte não for suficiente, o fallback é `INCONCLUSIVE`, nunca uma causa inventada.
+
+`RSK-RCA6-001`: sparsity/custo do cube — usar rollups observados e benchmark. `RSK-RCA6-002`: leakage por decline — perfil somente pós-detecção e teste negativo. `RSK-RCA6-003`: confiança excessiva — default inconclusivo e holdout antes de calibrar. `RSK-RCA6-004`: divergência UI/API — mock congelado e adaptador v1 até CP3.
+
+**Parecer do Integration Contract Guardian — PLANNING: `PLAN READY`.** Owners, mocks, versões, testes, migração e grafo acíclico estão definidos. A calibração exata dos limiares de `SUPPORTED` é `OPEN-001`, sob Renato, mas não bloqueia desenvolvimento: antes do holdout a promoção é desativada e o comportamento seguro é inconclusivo. Antes de cada merge aplicam-se `code-review-gate`; toda UI passa por `browser-acceptance-gate`; contratos/merges passam por guardian em modo INTEGRATION. Nenhuma tarefa foi criada no Linear sem autorização.

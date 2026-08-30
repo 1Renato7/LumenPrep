@@ -20,6 +20,7 @@ class WindowMetrics(BaseModel):
     latency_p95_ms: float
     timeout_rate: float
     decline_counts: dict[str, int]
+    decline_profile: dict[str, int] = {}
     data_quality: float
     window_revision: int
     correlation_id: str
@@ -33,5 +34,10 @@ def get_current_metrics(dimensions: dict[str, str] | None = None) -> list[Window
 
     windows = compute_windows(get_connection())
     if dimensions:
-        windows = [w for w in windows if all(w.dimensions.get(k) == v for k, v in dimensions.items())]
+        # Public callers asking for a slice expect one aggregation level, not
+        # every descendant in the internal causal cube.
+        windows = [
+            w for w in windows
+            if {key: value for key, value in w.dimensions.items() if key != "currency"} == dimensions
+        ]
     return windows

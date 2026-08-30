@@ -10,8 +10,13 @@ export type MemorySchemaVersion = "1.1";
 
 export type PaymentMethodCategory =
   | "CARD"
+  | "PIX"
+  | "BOLETO"
+  | "SPEI"
+  | "PSE"
   | "BANK_TRANSFER"
   | "DIGITAL_WALLET"
+  | "CASH_IN_STORE"
   | "OTHER";
 export type CardType = "CREDIT" | "DEBIT" | "PREPAID" | "NOT_APPLICABLE" | null;
 export type TransactionChannel = "WEB" | "MOBILE" | "POS" | "API" | null;

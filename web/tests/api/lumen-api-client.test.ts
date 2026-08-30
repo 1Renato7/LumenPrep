@@ -23,6 +23,7 @@ import {
   type LumenApiClient,
 } from "../../lib/api/client-interface";
 import { createMockLumenApiClient } from "../../lib/mocks/transaction-api-client";
+import { parseTransactionInput } from "../../lib/api/parse";
 import type { TransactionBatchRequest, TransactionList } from "../../lib/api/types";
 
 const batchRequest: TransactionBatchRequest = {
@@ -30,6 +31,21 @@ const batchRequest: TransactionBatchRequest = {
   idempotency_key: "idem-key-123",
   transactions: [{ merchant_id: "merchant_br_01", provider_id: "provider_alpha", issuer_bank: "bank_br_a", country: "BR", currency: "BRL", amount_minor: 100, payment_method_category: "CARD" }],
 };
+
+test("accepts every payment method exposed by the expanded transaction catalog", () => {
+  for (const paymentMethod of ["PIX", "BOLETO", "SPEI", "PSE", "CASH_IN_STORE"] as const) {
+    const transaction = parseTransactionInput({
+      merchant_id: "merchant_br_aurora",
+      provider_id: "stripe",
+      issuer_bank: "NOT_APPLICABLE",
+      country: "BR",
+      currency: "BRL",
+      amount_minor: 100,
+      payment_method_category: paymentMethod,
+    });
+    assert.equal(transaction.payment_method_category, paymentMethod);
+  }
+});
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });

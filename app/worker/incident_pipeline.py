@@ -30,34 +30,53 @@ def derive_incidents_for_correlation(con, correlation_id: str) -> list[str]:
     candidates = [
         candidate
         for candidate in detect_candidates(windows, low_sample_attempts=LOW_SAMPLE_ATTEMPTS)
-        if candidate.correlation_id == correlation_id
+        if candidate.correlation_id == correlation_id and candidate.slice
     ]
     if not candidates:
         return []
 
     repository = DuckDBIncidentRepository()
     incident_ids: list[str] = []
-    for group in correlate_candidates(candidates):
+    for group in correlate_candidates(_most_specific_candidates(candidates)):
         window = _window_for_group(windows, group.correlation_id, group.candidates[0])
         if window is None:
             continue
         ranking = rank_hypotheses(explore_slices(group.candidates, min_support=LOW_SAMPLE_ATTEMPTS))
+        root_cause = ranking.to_root_cause(allow_supported=True)
+        if root_cause.status == "SUPPORTED":
+            root_cause = root_cause.model_copy(update={"category": _category_from_decline_profile(window.decline_profile, root_cause.category)})
         incident = to_incident(
             group,
             compute_impact(group, window),
-            ranking.to_root_cause(),
+            root_cause,
             incident_id=_incident_id(group.correlation_id, window, group.scope),
             title=_title(group.scope),
-            evidence=_evidence(group.candidates),
+            evidence=_evidence(group.candidates, window.decline_profile),
             recommendations=[],
             limitations=(
-                "RCA hypotheses are ranked for investigation; current causal status remains INCONCLUSIVE.",
+                () if root_cause.status == "SUPPORTED" else
+                ("Evidence is insufficient to name a specific cause; investigate the ranked alternatives.",)
             ),
         )
         persisted = repository.upsert(incident)
         _link_matching_transactions(con, repository, persisted.model_dump(mode="json"))
         incident_ids.append(persisted.incident_id)
     return incident_ids
+
+
+def _most_specific_candidates(candidates: list[Any]) -> list[Any]:
+    """Create incidents from the deepest observed slices only.
+
+    The cube also emits parent rollups so RCA can compare contributions. Turning
+    every parent into an Incident would duplicate a single degradation dozens of
+    times. Leaves preserve genuinely separate intersections for the next pass.
+    """
+    def depth(candidate: Any) -> int:
+        slice_values = candidate.slice if hasattr(candidate, "slice") else candidate["slice"]
+        return len([key for key in slice_values if key != "currency"])
+
+    max_depth = max((depth(candidate) for candidate in candidates), default=0)
+    return [candidate for candidate in candidates if depth(candidate) == max_depth]
 
 
 def _window_for_group(windows: list[WindowMetrics], correlation_id: str, candidate: dict[str, Any]) -> WindowMetrics | None:
@@ -89,10 +108,10 @@ def _incident_id(correlation_id: str, window: WindowMetrics, scope: dict[str, li
 
 def _title(scope: dict[str, list[str]]) -> str:
     label = ", ".join(f"{key}={','.join(values)}" for key, values in sorted(scope.items()))
-    return f"Inconclusive payment degradation for {label}"
+    return f"Payment degradation for {label}"
 
 
-def _evidence(candidates: tuple[dict[str, Any], ...]) -> list[Evidence]:
+def _evidence(candidates: tuple[dict[str, Any], ...], decline_profile: dict[str, int]) -> list[Evidence]:
     values: list[Evidence] = []
     for candidate in candidates:
         for source_ref in candidate.get("evidence_refs", []):
@@ -106,7 +125,30 @@ def _evidence(candidates: tuple[dict[str, Any], ...]) -> list[Evidence]:
                     source_ref=source,
                 )
             )
+    if decline_profile:
+        dominant, count = max(decline_profile.items(), key=lambda item: item[1])
+        values.append(
+            Evidence(
+                evidence_id=f"evd_decline_{sha256(dominant.encode('utf-8')).hexdigest()[:16]}",
+                kind="DECLINE_PROFILE",
+                statement=f"Dominant decline profile is {dominant} across {count} eligible attempts in this slice.",
+                source_ref="window://decline-profile",
+            )
+        )
     return list({item.evidence_id: item for item in values}.values())
+
+
+def _category_from_decline_profile(profile: dict[str, int], fallback: str | None) -> str:
+    if not profile:
+        return fallback or "UNCLASSIFIED_DEGRADATION"
+    code = max(profile.items(), key=lambda item: item[1])[0]
+    if code.startswith("PROVIDER_"):
+        return "PROVIDER_DEGRADATION"
+    if code.startswith("ISSUER_") or code in {"DO_NOT_HONOR", "INSUFFICIENT_FUNDS", "TRANSACTION_NOT_PERMITTED"}:
+        return "ISSUER_OUTAGE"
+    if code in {"METHOD_UNAVAILABLE", "CASH_IN_STORE_UNAVAILABLE"}:
+        return "PAYMENT_METHOD_DEGRADATION"
+    return fallback or "UNCLASSIFIED_DEGRADATION"
 
 
 def _link_matching_transactions(con, repository: DuckDBIncidentRepository, incident: dict[str, Any]) -> None:
@@ -144,8 +186,11 @@ def _link_matching_transactions(con, repository: DuckDBIncidentRepository, incid
 
 def _input_matches_scope(transaction_input: dict[str, Any], scope: dict[str, list[str]]) -> bool:
     input_fields = {
+        "merchant_id": "merchant_id",
         "issuer_bank": "issuer_bank",
+        "issuer_bank_id": "issuer_bank",
         "provider_id": "provider_id",
+        "payment_method_category": "payment_method_category",
         "country": "country",
         "currency": "currency",
     }

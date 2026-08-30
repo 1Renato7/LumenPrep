@@ -38,7 +38,17 @@ const processingStages = new Set([
   "COMPLETE",
   "PIPELINE_FAILED",
 ]);
-const paymentMethods = new Set(["CARD", "BANK_TRANSFER", "DIGITAL_WALLET", "OTHER"]);
+const paymentMethods = new Set([
+  "CARD",
+  "PIX",
+  "BOLETO",
+  "SPEI",
+  "PSE",
+  "BANK_TRANSFER",
+  "DIGITAL_WALLET",
+  "CASH_IN_STORE",
+  "OTHER",
+]);
 const cardTypes = new Set(["CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE"]);
 const channels = new Set(["WEB", "MOBILE", "POS", "API"]);
 const outcomeResults = new Set(["SUCCEEDED", "FAILED", "UNKNOWN"]);

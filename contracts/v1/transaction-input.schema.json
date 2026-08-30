@@ -22,7 +22,7 @@
     "country": {"type": "string", "pattern": "^[A-Z]{2}$"},
     "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
     "amount_minor": {"type": "integer", "minimum": 1},
-    "payment_method_category": {"enum": ["CARD", "BANK_TRANSFER", "DIGITAL_WALLET", "OTHER"]},
+    "payment_method_category": {"enum": ["CARD", "PIX", "BOLETO", "SPEI", "PSE", "BANK_TRANSFER", "DIGITAL_WALLET", "CASH_IN_STORE", "OTHER"]},
     "card_brand": {"type": ["string", "null"], "maxLength": 50},
     "card_type": {"enum": ["CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE", null]},
     "provider_connection_id": {"type": ["string", "null"], "maxLength": 100},

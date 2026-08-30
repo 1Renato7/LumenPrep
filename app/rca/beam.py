@@ -17,11 +17,11 @@ from pydantic import BaseModel
 from app.detection.models import AnomalyCandidate
 
 DEFAULT_DIMENSION_ORDER = (
+    "merchant_id",
     "provider_id",
-    "country",
     "payment_method_category",
-    "issuer_bank",
-    "decline_code",
+    "country",
+    "issuer_bank_id",
 )
 
 
@@ -90,7 +90,10 @@ def explore_slices(
                 if hypothesis is not None:
                     expanded.append(hypothesis)
         if not expanded:
-            break
+            # Older candidates and broad slices may omit a dimension. Keep
+            # traversing instead of treating that omission as a terminal
+            # failure for later dimensions.
+            continue
         expanded.sort(key=_sort_key)
         last_hypotheses = expanded[:beam_width]
         beam = [hypothesis.slice for hypothesis in last_hypotheses]

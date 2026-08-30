@@ -22,6 +22,7 @@
     "latency_p95_ms": {"type": "number", "minimum": 0},
     "timeout_rate": {"type": "number", "minimum": 0, "maximum": 1},
     "decline_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "decline_profile": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
     "data_quality": {"type": "number", "minimum": 0, "maximum": 1},
     "window_revision": {"type": "integer", "minimum": 1},
     "correlation_id": {"type": "string", "minLength": 1}

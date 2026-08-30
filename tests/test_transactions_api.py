@@ -35,6 +35,9 @@ def test_catalog_and_seeded_samples_are_public_facts_only():
     catalog = client.get("/v1/transaction-catalog")
     assert catalog.status_code == 200
     assert catalog.json()["max_batch_size"] == 100
+    assert {"BR", "MX", "CO"}.issubset(catalog.json()["countries"])
+    assert {"stripe", "adyen", "dlocal", "mercadopago"}.issubset(catalog.json()["providers"])
+    assert {"PIX", "SPEI", "PSE", "CASH_IN_STORE"}.issubset(catalog.json()["payment_method_categories"])
 
     first = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 3, "seed": 42})
     second = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 3, "seed": 42})

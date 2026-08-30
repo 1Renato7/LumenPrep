@@ -37,8 +37,12 @@ class RcaRanking:
     winner: RankedHypothesis | None
     ambiguous: bool
 
-    def to_root_cause(self) -> RootCause:
-        """Return the existing CTR-INC-001 representation without claiming cause."""
+    def to_root_cause(self, *, allow_supported: bool = False, minimum_confidence: float = 0.75) -> RootCause:
+        """Serialize a conclusion only when the caller enables the evidence gate.
+
+        The default remains conservative for existing consumers and tests. The
+        live incident pipeline opts in after it has statistical candidates.
+        """
         top = self.ranked[0] if self.ranked else None
         confidence_factors = (
             {
@@ -61,9 +65,10 @@ class RcaRanking:
                 item.category,
                 RootCauseAlternative(category=item.category, confidence=item.confidence),
             )
+        supported = bool(allow_supported and self.winner is not None and self.winner.confidence >= minimum_confidence)
         return RootCause(
-            status="INCONCLUSIVE",
-            category=None,
+            status="SUPPORTED" if supported else "INCONCLUSIVE",
+            category=self.winner.category if supported and self.winner is not None else None,
             confidence=top.confidence if top is not None else 0.0,
             confidence_factors=confidence_factors,
             alternatives=list(alternatives_by_category.values()),
@@ -132,9 +137,7 @@ def _rank(path: RcaHypothesis, *, max_support: int, max_depth: int) -> RankedHyp
 
 def _category_for(path: RcaHypothesis) -> str:
     dimensions = path.slice
-    if "decline_code" in dimensions:
-        return "DECLINE_CODE_CONCENTRATION"
-    if "issuer_bank" in dimensions:
+    if "issuer_bank_id" in dimensions or "issuer_bank" in dimensions:
         return "ISSUER_OUTAGE"
     if "provider_id" in dimensions:
         return "PROVIDER_DEGRADATION"
@@ -142,6 +145,8 @@ def _category_for(path: RcaHypothesis) -> str:
         return "PAYMENT_METHOD_DEGRADATION"
     if "country" in dimensions:
         return "COUNTRY_LOCALIZED_DEGRADATION"
+    if "merchant_id" in dimensions:
+        return "MERCHANT_LOCALIZED_DEGRADATION"
     return "UNCLASSIFIED_DEGRADATION"
 
 

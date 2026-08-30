@@ -3,12 +3,22 @@
 import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from itertools import combinations
 
 from . import WindowMetrics
 
 WINDOW_SECONDS = 300
 TERMINAL_STATUSES = {"SUCCEEDED", "DECLINED", "ERROR", "TIMEOUT", "CANCELLED"}
-DIMENSION_KEYS = ("provider_id", "country", "currency")
+# The causal cube is intentionally built from attributes known before the
+# payment outcome. A decline code describes an outcome, so it is retained as
+# evidence inside each slice rather than becoming a circular approval-rate key.
+DIAGNOSIS_DIMENSIONS = (
+    "merchant_id",
+    "provider_id",
+    "payment_method_category",
+    "country",
+    "issuer_bank_id",
+)
 
 
 def _window_bucket(event_time: datetime) -> datetime:
@@ -45,12 +55,19 @@ def compute_windows(con) -> list[WindowMetrics]:
         c = json.loads(canonical_json)
         event_time = datetime.fromisoformat(c["event_time"].replace("Z", "+00:00"))
         bucket = _window_bucket(event_time)
-        dims = tuple(c.get(k) or "unknown" for k in DIMENSION_KEYS)
         correlation_id = c.get("correlation_id") or "corr_unknown"
-        groups[(bucket, dims, correlation_id)].append(c)
+        currency = c.get("currency") or "USD"
+        values = _diagnosis_values(c)
+        # Every observed prefix/subset is a legitimate comparison target. This
+        # avoids pre-materialising an empty Cartesian product while allowing an
+        # incident to isolate merchant, provider, method, country or issuer.
+        for size in range(0, len(DIAGNOSIS_DIMENSIONS) + 1):
+            for names in combinations(DIAGNOSIS_DIMENSIONS, size):
+                dims = tuple((name, values[name]) for name in names)
+                groups[(bucket, dims, correlation_id, currency)].append(c)
 
     windows: list[WindowMetrics] = []
-    for (bucket, dims, correlation_id), attempts in groups.items():
+    for (bucket, dims, correlation_id, currency), attempts in groups.items():
         eligible = [a for a in attempts if a["status"] in TERMINAL_STATUSES]
         approved = [a for a in eligible if a["status"] == "SUCCEEDED"]
         payments = {a["payment_id"] for a in eligible}
@@ -58,19 +75,19 @@ def compute_windows(con) -> list[WindowMetrics]:
         latencies = [a["timing"]["total_latency_ms"] for a in eligible]
 
         decline_counts: dict[str, int] = defaultdict(int)
+        decline_profile: dict[str, int] = defaultdict(int)
         for a in eligible:
             if a["status"] == "DECLINED" and a.get("decline"):
                 key = a["decline"].get("category") or "UNKNOWN"
                 decline_counts[key] += 1
+            decline_profile[_decline_code(a)] += 1
 
         revision = 1 + sum(late_counts.get(a["attempt_id"], 0) for a in attempts)
-        currency = dict(zip(DIMENSION_KEYS, dims))["currency"]
-
         windows.append(
             WindowMetrics(
                 window_start=_iso_z(bucket),
                 window_end=_iso_z(bucket + timedelta(seconds=WINDOW_SECONDS)),
-                dimensions=dict(zip(DIMENSION_KEYS, dims)),
+                dimensions={**dict(dims), "currency": currency},
                 eligible_attempts=len(eligible),
                 approved_attempts=len(approved),
                 unique_payments=len(payments),
@@ -85,9 +102,29 @@ def compute_windows(con) -> list[WindowMetrics]:
                 if eligible
                 else 0.0,
                 decline_counts=dict(decline_counts),
+                decline_profile=dict(decline_profile),
                 data_quality=1.0,
                 window_revision=revision,
                 correlation_id=correlation_id,
             )
         )
     return windows
+
+
+def _diagnosis_values(attempt: dict) -> dict[str, str]:
+    card = attempt.get("card") or {}
+    issuer = card.get("issuer_bank_id") or "NOT_APPLICABLE"
+    return {
+        "merchant_id": str(attempt.get("merchant_id") or "UNKNOWN_MERCHANT"),
+        "provider_id": str(attempt.get("provider_id") or "UNKNOWN_PROVIDER"),
+        "payment_method_category": str(attempt.get("payment_method_category") or "UNKNOWN_METHOD"),
+        "country": str(attempt.get("country") or "UNKNOWN_COUNTRY"),
+        "issuer_bank_id": str(issuer),
+    }
+
+
+def _decline_code(attempt: dict) -> str:
+    decline = attempt.get("decline") or {}
+    if attempt.get("status") == "SUCCEEDED":
+        return "NO_DECLINE"
+    return str(decline.get("normalized_code") or "UNMAPPED_DECLINE")
