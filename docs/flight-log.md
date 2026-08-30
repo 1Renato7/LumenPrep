@@ -5542,3 +5542,25 @@ Logs dependiam da ordem recebida e Incidents não mostravam ordem temporal. Orde
 - **Code Review Gate:** **PASS** após corrigir o fallback de timestamp inválido.
 - **Browser Acceptance:** **PASS** em API sintética local: Logs exibiu três registros em ordem decrescente de `updated_at`; Incidents exibiu `15:06Z`, `14:06Z`, `14:06Z` por `detected_at`, com horário de Brasília e console sem erros.
 - **Risco residual:** a ordenação global entre páginas ainda depende do cursor do backend; revisar se houver controle ascendente pelo usuário.
+
+### FL-20260830-TEAM-045 — Dois trials live isolados, sem alegar paralelismo inexistente
+
+- **Timestamp:** 2026-08-30T12:10:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** demo | architecture | UX | contracts
+- **Escopo:** `CTR-DEMO-002 v1`, worker, API e formulário de transações
+- **Links:** `docs/plans/system-plan.md` v2.9.3; `app/simulation/live_demo_trials.py`
+
+#### Contexto e decisão
+
+Foram solicitados dois botões com 25 transações predeterminadas e `provider_response_code`, cada um com baseline próprio: um para o motor determinístico e outro para recuperação de precedente. O runtime usa DuckDB com lock global, portanto chamar isso de paralelismo de processamento seria incorreto. A decisão foi expor dois trials com correlações e chaves idempotentes independentes, ativados somente por `DEMO_LIVE_TRIALS_ENABLED=true` fora de `DEMO_MODE`, e rotular o modo como `QUEUED_SAFE`.
+
+#### Alternativas, trade-offs e validação
+
+- **Reusar `DEMO_MODE`:** rejeitado, pois ele mostra fixtures de Incident e não prova o pipeline persistido.
+- **Remover o lock para executar em paralelo:** rejeitado, pois arriscaria a atomicidade da conexão DuckDB fora do escopo da demo.
+- **Derivar Incident por linha:** rejeitado para o trial, pois repetia o cubo de análise 25 vezes; o worker persiste cada transação normalmente e deriva ao fechar o batch.
+- **Validação:** testes focados confirmaram baseline idempotente, 25 códigos e um Incident por trial; no navegador os dois botões retornaram batches distintos, o log mostrou as 25 falhas e o fluxo de grafo recuperou o precedente histórico. Console sem erros de aplicação.
+- **Risco residual:** há concorrência de início, mas não paralelismo de banco/CPU; multi-réplica exige uma fila e persistência próprias.

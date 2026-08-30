@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.9.2
+- **Versão:** 2.9.3
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -32,6 +32,7 @@
 - **Changelog 2.9.0:** adiciona `CTR-ADM-001 v1`, uma operação administrativa configurável para limpar atomica e explicitamente os dados sintéticos persistidos. O frontend nunca incorpora a credencial; o operador a informa apenas no momento da confirmação. Catálogos versionados de referência permanecem intactos.
 - **Changelog 2.9.1:** atualiza os defaults internos do agente para `gpt-5.6-sol` e `reasoning.effort=medium`, sem alterar `CTR-AGT-RUN-001 v1`, Responses API, fallback determinístico, política de não retry ou autoridade `HUMAN_ONLY`.
 - **Changelog 2.9.2:** Logs e Incidents ordenam defensivamente data/hora de forma decrescente na interface (`updated_at` e `detected_at`, respectivamente), com o horário de Brasília visível nos cards de Incident. Nenhum contrato de API muda.
+- **Changelog 2.9.3:** adiciona `CTR-DEMO-002 v1`, dois trials live e reversíveis, cada um com baseline próprio e 25 transações sintéticas fixas com `provider_response_code`. A recuperação de precedente do segundo trial acontece somente após a persistência do Incident; os dois disparos são independentes, mas o worker DuckDB continua serializado com segurança.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -692,5 +693,7 @@ O escopo para as sete horas restantes é demonstrar o núcleo do desafio usando 
 **Estado:** `DECIDED`. **Owner:** Rogério. **Flight Log:** `FL-20260830-ROGERIO-029`.
 
 `CTR-DEMO-001 v1` adiciona apenas `POST /demo/baseline-traffic`, protegido por `DEMO_MODE`, para publicar um número limitado de janelas anteriores e pagamentos por janela no `CTR-STR-001`. Cada janela recebe timestamps coerentes e uma correlação de baseline própria; o listener e a ingestão existentes continuam sendo os únicos consumidores. A resposta informa o intervalo temporal, quantidade de janelas, pagamentos solicitados e eventos aceitos para a fila.
+
+`CTR-DEMO-002 v1` adiciona `GET /v1/demo/live-trials` e `POST /v1/demo/live-trials/{trial_id}` quando `DEMO_LIVE_TRIALS_ENABLED=true` e `DEMO_MODE=false`. Os únicos IDs são `deterministic` e `graph_enriched`; cada um exige `Idempotency-Key`, prepara um baseline saudável exclusivo de 12 transações e retorna um batch rastreável de 25 falhas com `provider_response_code` explícito. O modo declarado é `QUEUED_SAFE`: as requests podem iniciar independentemente, mas o worker com DuckDB processa a seção crítica em fila. O fluxo de grafo é contexto histórico pós-Incident e não altera a causa atual.
 
 O endpoint não aceita dados de provider, não consulta Yuno, não persiste uma nova fonte externa e não muda `CTR-API-001`. A injeção de cenário continua a usar o mesmo relógio do controller, logo ocorre depois do baseline e pode ser comparada pelo detector sem fixture manual.
