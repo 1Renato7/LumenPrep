@@ -25,6 +25,7 @@
 - **Changelog 2.4.3:** congela a fatia implementada do agente proativo em `CTR-AGT-001`–`003 v1`: EvidencePack imutável, recuperação somente da memória/playbooks já autorizados, sugestão `HUMAN_ONLY` separada de `CTR-INC-001` e cliente determinístico padrão. O caminho OpenAI é opt-in e não integra a demo crítica.
 - **Changelog 2.4.4:** por decisão explícita do usuário solicitante, ativa o cliente OpenAI no Railway quando `OPENAI_API_KEY` estiver configurada. O runtime usa `gpt-5.6-terra` com `reasoning.effort=high`; a ausência de chave mantém o template determinístico e indisponibilidade do provedor produz `UNAVAILABLE`, sem alterar Incident, causa ou pagamentos.
 - **Changelog 2.5.0:** adiciona uma classificação determinística de códigos de resposta por PSP, emissor e bandeira. O fato por transação é persistido antes da agregação; apenas uma anomalia já detectada produz o resumo estruturado que chega ao agente. O lookup não usa GraphRAG e não cria ação de pagamento.
+- **Changelog 2.5.1:** após o trial by fire local, restringe a categoria publicada pelo agente às categorias que já pertencem ao RCA atual. Precedentes recuperados continuam sendo contexto citável, mas não podem introduzir uma nova categoria causal.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -566,6 +567,20 @@ O endpoint aditivo `GET /v1/incidents/{incident_id}/suggestion` expõe apenas a 
 **Compatibilidade e integração:** é uma mudança comportamentalmente arriscada, mas compatível com os consumidores: API e UI já aceitam `model_version` variável e os mesmos três estados. Hotspots coordenados por Rogério são `app/config.py`, `app/agent/`, `app/worker/transaction_worker.py`, `pyproject.toml`, `uv.lock`, `Dockerfile`, `.env.example` e `docs/deploy-railway.md`. A ordem segura é dependência/configuração → seleção do cliente → commit do lifecycle e liberação do lock → geração/validação da sugestão → testes de segurança/contrato → build da imagem → variável secreta no Railway → smoke de um Incident sintético. Nenhuma retry de chamada do modelo é permitida e o modelo continua sem ferramentas, sem escrita de Incident e sem ação financeira.
 
 **Parecer do Integration Contract Guardian — CHANGE CONTROL: `PLAN READY`.** A mudança é compatível: `CTR-AGT-003 v1` já transporta `model_version` e `UNAVAILABLE`; API e UI não exigem versão de modelo fixa. `CTR-AGT-RUN-001 v1` fixa produtor, consumidor, segredo, timeout, fallback, owner, hotspot e prova. A chamada externa é pós-persistência, sem retry e sem side effect financeiro; o único checkpoint ainda externo é o smoke no Railway com a chave configurada.
+
+### DEC-032 — limitar a categoria sugerida ao RCA atual
+
+**Estado:** `DECIDED`. **Owner:** usuário solicitante. **Flight Log:** `FL-20260830-TEAM-033`.
+
+O contrato de transporte `CTR-AGT-003 v1` permanece inalterado. A regra interna `CTR-AGT-GRD-001 v1` determina que `suggested_category`, quando presente, deve ser exatamente a categoria atual de `EvidencePack.root_cause` ou uma das entradas de `EvidencePack.rca_alternatives`. `RetrievalTrace` pode fundamentar razões, limitações e próximos passos, mas não fornece categorias elegíveis. Uma saída com categoria fora desse conjunto é recusada e publicada como `UNAVAILABLE`, preservando o Incident e a causa do motor.
+
+| Contrato interno | Estado | Produtor → consumidor | Precondições e falha | Owner / prova |
+| --- | --- | --- | --- | --- |
+| `CTR-AGT-GRD-001 v1` | IMPLEMENTED | EvidencePack + RetrievalTrace → validador → `DiagnosticSuggestion` | Categoria sugerida pertence à causa atual ou às alternativas atuais; precedente é contexto, não taxonomia. Violação: `UNAVAILABLE`, sem mutação causal. | Altoé/Rogério; testes com categoria de precedente rejeitada e alternativa atual aceita. |
+
+**Compatibilidade e integração:** não há mudança de schema, endpoint, persistência nem consumidor. O prompt e o validador usam o mesmo conjunto fechado do EvidencePack, evitando que uma instrução textual seja o único controle. A mudança não amplia a taxonomia, não habilita pagamento e não cria retry. O rerun real do cenário inconclusivo deve publicar apenas uma alternativa atual ou `UNAVAILABLE`; uma categoria exclusiva de precedente é falha bloqueada pelo validador.
+
+**Parecer do Integration Contract Guardian — PLANNING: `PLAN READY`.** A fronteira é interna ao agente: o produtor já fornece as categorias, o consumidor já aceita `UNAVAILABLE`, e as provas cobrem aceitação e recusa. A categoria causal continua pertencendo somente ao motor determinístico.
 
 ## 18. Classificação de resposta e contexto para o agente
 

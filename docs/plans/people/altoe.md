@@ -95,6 +95,14 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 - Sem chave, o template determinístico permanece o fallback de demo. Com chave, falha do SDK, timeout ou resposta rejeitada persiste `UNAVAILABLE`; não há retry automático, ferramenta de pagamento, promoção de causa ou mutação de Incident.
 - **Handoff para Rogério:** dependency lock, Railway Variables e smoke. **Prova:** teste do request Responses e dos guardrails existentes; validação online depende de credencial configurada fora do repositório.
 
+## Adendo 2.5.1 — grounding de categoria causal
+
+- **Plano geral:** 2.5.1; **contrato interno:** `CTR-AGT-GRD-001 v1`; **decisão:** `DEC-032` / `FL-20260830-TEAM-033`.
+- **Entrada isolada:** `EvidencePack.root_cause.category` e `EvidencePack.rca_alternatives` já persistidos pelo motor; `RetrievalTrace` é apenas contexto recuperado.
+- **Entrega:** prompt explicita que precedente não escolhe categoria e o validador recusa `suggested_category` fora do conjunto atual. Não há mudança em `CTR-AGT-003 v1`, API, UI, banco ou permissões de pagamento.
+- **Prova de integração:** teste offline rejeita `ISSUER_OUTAGE` quando existe somente em precedente e aceita `PROVIDER_DEGRADATION` quando é alternativa atual; rerun sintético com chave retorna alternativa atual ou `UNAVAILABLE`, nunca categoria exclusiva do precedente.
+- **Handoff para Rogério:** revisar/push do patch e registrar o resultado do rerun. Risco residual: o modelo pode ignorar o prompt, mas a saída será bloqueada de forma segura pelo validador.
+
 ## Definition of Done
 
 Evals de grounding/no-answer/injection/leakage passam; review gate sem bloqueantes; integration guardian valida Incident/API/UI; browser acceptance conjunto comprova links e estados.

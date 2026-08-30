@@ -69,13 +69,13 @@ class TemplateSuggestionClient:
         return suggestion.model_dump_json()
 
 
-def _hypothesis_category(pack: EvidencePack) -> str:
+def _hypothesis_category(pack: EvidencePack) -> str | None:
     """Reuse a category the engine already produced; never coin a new one."""
     if pack.root_cause.category:
         return pack.root_cause.category
     if pack.rca_alternatives:
         return pack.rca_alternatives[0].category
-    return "UNCLASSIFIED_DEGRADATION"
+    return None
 
 
 def _scope_label(pack: EvidencePack) -> str:
@@ -93,13 +93,13 @@ def _rate_clause(pack: EvidencePack) -> str:
     )
 
 
-def _operations_summary(pack: EvidencePack, category: str) -> str:
+def _operations_summary(pack: EvidencePack, category: str | None) -> str:
     refusal_clause = ""
     if pack.refusal_code_summaries:
         leading = max(pack.refusal_code_summaries, key=lambda item: item.transaction_count)
         refusal_clause = f" The leading mapped response is {leading.response_code}: {leading.reason}."
     return (
-        f"Investigation hypothesis for {_scope_label(pack)}: {category.replace('_', ' ').lower()} "
+        f"Investigation hypothesis for {_scope_label(pack)}: {(category or 'unclassified operational degradation').replace('_', ' ').lower()} "
         f"between {pack.window.start} and {pack.window.end}, where {_rate_clause(pack)}. "
         "This is a hypothesis to investigate, not the engine's confirmed cause." + refusal_clause
     )

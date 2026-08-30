@@ -78,7 +78,9 @@ def derive_incidents_for_correlation(
 
 
 def _suggest_for_persisted_incident(
-    incident: Incident, decline_profile: dict[str, int], refusal_code_summaries: list[dict[str, Any]]
+    incident: Incident,
+    decline_profile: dict[str, int],
+    refusal_code_summaries: list[dict[str, Any]] | None = None,
 ) -> None:
     """Run the proactive agent on an Incident that is already durable.
 
@@ -90,7 +92,9 @@ def _suggest_for_persisted_incident(
     """
     try:
         DiagnosticAgentService().suggest_for_incident(
-            incident, decline_profile=decline_profile, refusal_code_summaries=refusal_code_summaries
+            incident,
+            decline_profile=decline_profile,
+            refusal_code_summaries=refusal_code_summaries or [],
         )
     except Exception as error:
         logger.warning(

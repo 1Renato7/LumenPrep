@@ -178,6 +178,7 @@ def test_configured_openai_client_uses_terra_high_responses_request(monkeypatch)
     assert calls["request"]["text"] == {"format": {"type": "json_object"}}
     assert "JSON" in calls["request"]["input"]
     assert "Do not mention, quote or reuse engine status labels" in system_prompt()
+    assert "A category named only in the RETRIEVAL TRACE" in system_prompt()
 
 
 def test_new_incident_without_precedent_is_suggested_from_current_evidence():
@@ -270,6 +271,46 @@ def test_invented_evidence_id_is_rejected():
     assert any("evd_invented_999" in item for item in suggestion.limitations)
 
 
+def test_category_from_retrieved_precedent_is_rejected_when_not_in_current_rca():
+    """CTR-AGT-GRD-001: history can explain, but cannot choose today's category."""
+    incident = _incident(
+        state="INCONCLUSIVE",
+        root_cause={
+            "status": "INCONCLUSIVE",
+            "category": None,
+            "confidence": 0.4,
+            "confidence_factors": {"contribution": 0.4},
+            "alternatives": [{"category": "PROVIDER_DEGRADATION", "confidence": 0.6}],
+        },
+    )
+    suggestion = _service(FakeClient(_valid_body(suggested_category="ISSUER_OUTAGE"))).suggest_for_incident(
+        incident, decline_profile=DECLINE_PROFILE
+    )
+
+    assert suggestion.status == "UNAVAILABLE"
+    assert any("retrieved precedents cannot supply" in item for item in suggestion.limitations)
+    assert incident.root_cause.category is None
+
+
+def test_current_rca_alternative_remains_an_allowed_suggested_category():
+    incident = _incident(
+        state="INCONCLUSIVE",
+        root_cause={
+            "status": "INCONCLUSIVE",
+            "category": None,
+            "confidence": 0.4,
+            "confidence_factors": {"contribution": 0.4},
+            "alternatives": [{"category": "PROVIDER_DEGRADATION", "confidence": 0.6}],
+        },
+    )
+    suggestion = _service(FakeClient(_valid_body(suggested_category="PROVIDER_DEGRADATION"))).suggest_for_incident(
+        incident, decline_profile=DECLINE_PROFILE
+    )
+
+    assert suggestion.status == "SUGGESTED"
+    assert suggestion.suggested_category == "PROVIDER_DEGRADATION"
+
+
 def test_non_human_only_execution_is_rejected():
     body = _valid_body(
         recommended_actions=[
@@ -346,8 +387,18 @@ def test_suspected_fraud_declines_produce_a_hypothesis_with_an_explicit_caveat()
         suggested_category="POSSIBLE_RISK_CONTROL_BLOCK",
         summary_for_operations="Declines concentrate on risk-control responses; investigate the rule set.",
     )
+    incident = _incident(
+        state="INCONCLUSIVE",
+        root_cause={
+            "status": "INCONCLUSIVE",
+            "category": None,
+            "confidence": 0.4,
+            "confidence_factors": {"contribution": 0.4},
+            "alternatives": [{"category": "POSSIBLE_RISK_CONTROL_BLOCK", "confidence": 0.6}],
+        },
+    )
     suggestion = _service(FakeClient(body)).suggest_for_incident(
-        _incident(), decline_profile={"SUSPECTED_FRAUD": 80, "NO_DECLINE": 20}
+        incident, decline_profile={"SUSPECTED_FRAUD": 80, "NO_DECLINE": 20}
     )
 
     assert suggestion.status == "SUGGESTED"
