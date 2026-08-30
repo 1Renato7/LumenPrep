@@ -2,6 +2,7 @@ import {
   ApiPayloadError,
   parseDiagnosticSuggestion,
   parseIncidentDetail,
+  parseHumanReviewResponse,
   parseIncidentList,
   parseNotificationFeed,
   parseTransactionIncidentDetail,
@@ -25,6 +26,8 @@ import type {
   TransactionSampleResponse,
   TransactionStatus,
   TransactionIncidentDetail,
+  HumanReviewRequest,
+  HumanReviewResponse,
 } from "./types";
 
 export interface RequestOptions {
@@ -51,6 +54,7 @@ export interface LumenApiClient {
   getIncident(incidentId: string, options?: RequestOptions): Promise<IncidentDetail>;
   /** Additive CTR-AGT-003 read: never changes the engine-owned Incident. */
   getDiagnosticSuggestion(incidentId: string, options?: RequestOptions): Promise<DiagnosticSuggestion>;
+  submitHumanReview(incidentId: string, request: HumanReviewRequest, options?: RequestOptions): Promise<HumanReviewResponse>;
   listNotifications(options?: RequestOptions): Promise<NotificationFeed>;
   markNotificationRead(notificationId: string, options?: RequestOptions): Promise<void>;
 }
@@ -212,6 +216,7 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
     },
     getIncident: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}`, { method: "GET" }, parseIncidentDetail, requestOptions),
     getDiagnosticSuggestion: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}/suggestion`, { method: "GET" }, parseDiagnosticSuggestion, requestOptions),
+    submitHumanReview: (incidentId, body, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}/review`, jsonPost(body), parseHumanReviewResponse, requestOptions),
     listNotifications: (requestOptions) => request("/notifications", { method: "GET" }, parseNotificationFeed, requestOptions),
     markNotificationRead: async (notificationId, requestOptions) => {
       await request(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: "POST" }, () => undefined, requestOptions);

@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { LumenApiError, type LumenApiClient } from "@/lib/api/client-interface";
 import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
-import type { DiagnosticSuggestion, IncidentDetail as IncidentDetailData } from "@/lib/api/types";
+import type { DiagnosticSuggestion, HumanReviewResponse, IncidentDetail as IncidentDetailData } from "@/lib/api/types";
 import styles from "./incidents.module.css";
 
 export function IncidentDetail({ incidentId, api: suppliedApi }: { incidentId: string; api?: LumenApiClient }) {
@@ -83,6 +83,8 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
 
     <section className={`${styles.card} ${styles.actionCard}`}><div><p className={styles.label}>Human decision</p><h2>Human recommendation</h2></div><span className={styles.humanOnly}>HUMAN_ONLY</span><p className={styles.actionText}>{explanation.recommended_action}</p><div className={styles.meta}><Field label="Explanation playbook" value={explanation.playbook_id} /><Field label="Execution" value={explanation.execution} /></div><div className={styles.actionList}>{incident.recommendations.map((item) => <article key={`${item.playbook_id}-${item.action}`}><strong>{item.playbook_id}</strong><p>{item.action}</p><small>{item.recommendation_class ? `${humanize(item.recommendation_class)} · ` : ""}{item.execution} · Rationale: {item.rationale_evidence_ids.join(", ") || "Not provided"}</small></article>)}</div></section>
 
+    <HumanReviewPanel incident={incident} defaultPlaybookId={explanation.playbook_id} api={client.api} source={client.source} />
+
     <section className={styles.card}><p className={styles.label}>Current observed facts</p><h2>Evidence</h2><div className={styles.evidenceGrid}>{incident.evidence.map((evidence) => <article className={styles.evidenceItem} key={evidence.evidence_id}><div><span className={styles.evidenceKind}>{evidence.kind}</span><code>{evidence.evidence_id}</code></div><p>{evidence.statement}</p><small>Source: {evidence.source_ref}</small></article>)}</div></section>
 
     <section className={`${styles.card} ${styles.memory}`}><p className={styles.label}>Historical context only</p><h2>Precedent · {memory.memory_status}</h2>
@@ -103,6 +105,44 @@ function AgentHypothesis({ suggestion, error, loading, onRetry }: { suggestion: 
     {suggestion ? <><div className={styles.meta}><Field label="Suggested category" value={suggestion.suggested_category ?? "No category suggested"} /><Field label="Confidence" value={`${Math.round(suggestion.confidence * 100)}%`} /><Field label="Model" value={suggestion.model_version} /></div><p className={styles.agentSummary}>{suggestion.summary_for_operations}</p>
       {suggestion.status === "SUGGESTED" ? <><h3>Reasons cited by the agent</h3><div className={styles.agentReasons}>{suggestion.reasons.map((reason) => <article key={`${reason.statement}-${reason.evidence_ids.join("-")}`}><p>{reason.statement}</p><EvidenceIds ids={reason.evidence_ids} /></article>)}</div><h3>Agent-proposed investigation steps</h3><div className={styles.actionList}>{suggestion.recommended_actions.map((action) => <article key={`${action.action}-${action.rationale_evidence_ids.join("-")}`}><p>{action.action}</p><small>{action.execution} · Rationale: {action.rationale_evidence_ids.join(", ") || "Not provided"}</small></article>)}</div></> : <p className={styles.warning}><strong>{suggestion.status}.</strong> The agent did not publish a causal hypothesis; use the engine cause and current evidence for the investigation.</p>}
       {suggestion.limitations.length ? <><h3>Agent limitations</h3><ul className={styles.limitations}>{suggestion.limitations.map((item) => <li key={item}>{item}</li>)}</ul></> : null}</> : null}
+  </section>;
+}
+
+function HumanReviewPanel({ incident, defaultPlaybookId, api, source }: { incident: IncidentDetailData["incident"]; defaultPlaybookId: string; api: LumenApiClient | null; source: string }) {
+  const [decision, setDecision] = useState<"APPROVED" | "REJECTED">("APPROVED");
+  const [reviewerId, setReviewerId] = useState("");
+  const [reason, setReason] = useState("");
+  const [cause, setCause] = useState(incident.root_cause.category ?? "");
+  const [playbookId, setPlaybookId] = useState(defaultPlaybookId);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [result, setResult] = useState<HumanReviewResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!api) { setError("The live API is not configured for human review."); return; }
+    setSubmitting(true); setError(null);
+    try {
+      // Keep the key stable after a timeout or a failed response, so retrying does
+      // not create a second human decision.
+      const stableReviewId = reviewId ?? `review-${crypto.randomUUID()}`;
+      setReviewId(stableReviewId);
+      const review = await api.submitHumanReview(incident.incident_id, {
+        schema_version: "1.0", review_id: stableReviewId, reviewer_id: reviewerId.trim(), decision, reason: reason.trim(),
+        ...(decision === "APPROVED" ? { confirmed_cause: cause.trim(), playbook_id: playbookId.trim() } : {}),
+      });
+      setResult(review);
+    } catch (failure) {
+      setError(apiErrorMessage(failure, "The human review could not be saved."));
+    } finally { setSubmitting(false); }
+  }
+
+  return <section className={`${styles.card} ${styles.reviewCard}`} aria-labelledby="human-review-title"><div className={styles.cardTop}><div><p className={styles.label}>Human review</p><h2 id="human-review-title">Confirm or reject this cause</h2></div><span className={styles.humanOnly}>HUMAN_ONLY</span></div><p className={styles.muted}>Only an approval becomes a GraphRAG precedent. A rejection keeps the reviewer reason in the audit graph without influencing future matches.</p>
+    {source === "MOCK_FIXTURE" ? <p className={styles.warning}>Fixture mode: this validates the interaction but does not write to Aura.</p> : null}
+    {result ? <div className={styles.reviewResult} role="status"><strong>{result.review.decision === "APPROVED" ? "Approved and promoted to GraphRAG." : "Rejection recorded in the audit graph."}</strong><p>{result.review.reason}</p></div> : null}
+    {error ? <p className={styles.alert} role="alert">{error}</p> : null}
+    <form className={styles.reviewForm} onSubmit={submit}><label>Reviewer ID<input required value={reviewerId} onChange={(event) => setReviewerId(event.target.value)} /></label><label>Decision<select value={decision} onChange={(event) => { setDecision(event.target.value as "APPROVED" | "REJECTED"); setReviewId(null); }}><option value="APPROVED">Approve cause</option><option value="REJECTED">Reject cause</option></select></label>{decision === "APPROVED" ? <><label>Confirmed cause<input required value={cause} onChange={(event) => setCause(event.target.value)} /></label><label>Playbook<input required value={playbookId} onChange={(event) => setPlaybookId(event.target.value)} /></label></> : null}<label className={styles.reviewReason}>Reason<textarea required minLength={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={decision === "APPROVED" ? "Why was this cause confirmed?" : "Why is this cause being rejected?"} /></label><button className={styles.button} type="submit" disabled={submitting}>{submitting ? "Saving review…" : decision === "APPROVED" ? "Approve and promote" : "Record rejection"}</button></form>
   </section>;
 }
 

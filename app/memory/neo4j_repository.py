@@ -67,6 +67,18 @@ class Neo4jIncidentRepository:
             )
             return tuple(_to_historical(record.data() if hasattr(record, "data") else dict(record)) for record in result)
 
+    def record_human_review(self, incident: Incident, review: dict[str, object]) -> None:
+        """Mirror an already-durable review without making rejection retrievable."""
+        parameters = {
+            "incident_id": incident.incident_id,
+            "occurred_at": incident.detected_at.isoformat(),
+            "scope_json": json.dumps(incident.scope, sort_keys=True),
+            "metrics_json": json.dumps(incident.metrics, sort_keys=True),
+            **review,
+        }
+        with self.driver.session(database=self.database) as session:
+            self._write_review(session, parameters)
+
     def _write(self, session: Any, parameters: dict[str, object]) -> None:
         def write(tx: Any) -> None:
             tx.run(_UPSERT, timeout=self.timeout_seconds, **parameters).consume()
@@ -75,6 +87,15 @@ class Neo4jIncidentRepository:
             session.execute_write(write)
         else:
             session.run(_UPSERT, timeout=self.timeout_seconds, **parameters).consume()
+
+    def _write_review(self, session: Any, parameters: dict[str, object]) -> None:
+        def write(tx: Any) -> None:
+            tx.run(_UPSERT_HUMAN_REVIEW, timeout=self.timeout_seconds, **parameters).consume()
+
+        if hasattr(session, "execute_write"):
+            session.execute_write(write)
+        else:
+            session.run(_UPSERT_HUMAN_REVIEW, timeout=self.timeout_seconds, **parameters).consume()
 
 
 def _to_historical(row: dict[str, object]) -> HistoricalIncident:
@@ -148,5 +169,22 @@ RETURN incident.incident_id AS incident_id,
        incident.evidence_ids AS evidence_ids,
        incident.provenance AS provenance
 ORDER BY incident.occurred_at DESC, incident.incident_id ASC
+"""
+
+_UPSERT_HUMAN_REVIEW = """
+MERGE (incident:Incident {incident_id: $incident_id})
+ON CREATE SET incident.occurred_at = $occurred_at,
+              incident.scope_json = $scope_json,
+              incident.metrics_json = $metrics_json
+SET incident.last_human_review_decision = $decision,
+    incident.last_human_reviewed_at = $reviewed_at
+MERGE (review:HumanReview {review_id: $review_id})
+SET review.decision = $decision,
+    review.reviewer_id = $reviewer_id,
+    review.reason = $reason,
+    review.confirmed_cause = $confirmed_cause,
+    review.playbook_id = $playbook_id,
+    review.reviewed_at = $reviewed_at
+MERGE (review)-[:REVIEWS]->(incident)
 """
 

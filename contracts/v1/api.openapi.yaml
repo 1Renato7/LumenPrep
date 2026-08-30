@@ -176,3 +176,20 @@ paths:
             application/json:
               schema: {$ref: "agent-diagnostic-suggestion.schema.json"}
         "404": {description: "INCIDENT_NOT_FOUND when the Incident does not exist; SUGGESTION_NOT_AVAILABLE when no suggestion has been generated for it."}
+  /incidents/{incident_id}/review:
+    post:
+      operationId: reviewIncident
+      description: "CTR-HRV-001. A human approval promotes a precedent; a rejection is retained only as an auditable graph review."
+      parameters:
+        - {name: incident_id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "human-review-request.schema.json"}
+      responses:
+        "201": {description: Human decision persisted and mirrored to GraphRAG}
+        "404": {description: INCIDENT_NOT_FOUND}
+        "409": {description: REVIEW_ID_CONFLICT}
+        "422": {description: Invalid human review payload}
+        "503": {description: GRAPH_MEMORY_UNAVAILABLE; review remains durable and may be retried with the same review_id}

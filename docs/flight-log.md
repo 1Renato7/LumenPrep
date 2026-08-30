@@ -4775,3 +4775,52 @@ O usuário pediu análise em buckets de um minuto. Mantemos a observação de 60
 - `uv run --locked --with pytest pytest -q tests/test_aggregation.py tests/test_detection.py tests/test_payment_conversion_detection.py tests/test_simulation_live_stream.py tests/test_incident_pipeline.py` — **18 passed**.
 - **Code Review Gate:** PASS. O diff muda somente o bucket compartilhado do agregador/harness e expectativas temporais do teste; a janela continua com 60 minutos, o detector mantém o filtro de endpoint fechado e não há alteração em autoridade da LLM, pagamento, API ou idempotência.
 - **Integration Contract Guardian (INTEGRATION):** READY. `CTR-DET-002 v2` mantém unidades/limites; producer e harness usam 60 segundos, enquanto consumidores recebem a mesma janela de 60 minutos e os mesmos campos.
+
+### FL-20260830-TEAM-038 — Registrar aprovação e recusa humana sem contaminar precedentes
+
+- **Timestamp:** 2026-08-30T08:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** product | contract | AI/RAG | UX | data
+- **Escopo:** `DEC-035`, `CTR-HRV-001 v1`, API de Incident, DuckDB, Neo4j e `web/`
+- **Links:** `docs/plans/system-plan.md` 2.7.0; `CMP-MEM/EXP-001`; `CTR-MEM-001 v1.1`
+
+#### Contexto e pergunta
+
+O fluxo atual possui a classe de promoção humana, mas nenhuma ação da API/UI a invoca. Era necessário tornar a decisão humana operacional e manter também o motivo de uma recusa no grafo.
+
+#### Decisão
+
+Criar uma revisão humana idempotente por `review_id`. Uma aprovação exige causa, playbook e motivo e promove o Incident ao GraphRAG como `HUMAN_CONFIRMED`. Uma recusa exige motivo, cria um `HumanReview` auditável no DuckDB e no Neo4j, mas não é retornada pela recuperação de precedentes.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Por que não foi escolhida agora |
+| --- | --- | --- | --- |
+| Promover aprovação e recusa igualmente | implementação uniforme | uma causa rejeitada passaria a influenciar o RAG | viola a confiabilidade dos precedentes |
+| Guardar apenas a aprovação | menos dados/modelagem | perde a razão de discordância humana | não atende à necessidade de auditoria |
+| Registrar ambas; recuperar somente aprovação | preserva aprendizado e confiança | adiciona tabela, nó e rota | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `IncidentPromoter` e `Neo4jIncidentRepository` já suportam precedente humano, mas não havia rota chamadora.
+- **TEST:** NOT RUN no momento do registro; será enriquecido após testes de API, persistência, Neo4j e navegador.
+- **UNKNOWN:** autenticação/identidade corporativa não existe no MVP; `reviewer_id` é declarado pelo cliente e deve ser substituído por identidade autenticada antes de dados reais.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** histórico humano pesquisável, motivo de recusa e precedentes confiáveis.
+- **Abrimos mão de:** transformar recusa em sinal de similaridade para o RAG.
+- **Risco residual:** um revisor pode informar um ID livre; o registro é auditável, mas não prova identidade sem autenticação.
+
+#### Gatilhos de revisão
+
+Adicionar autenticação real, múltiplas revisões concorrentes ou uso de dados não sintéticos exige versionar autorização, identidade e política de resolução de conflito.
+
+#### Adendo de validação
+
+- **2026-08-30T08:35:00-03:00 — backend e contratos:** `uv run --extra dev --extra neo4j pytest tests/test_human_review.py tests/test_memory_promotion.py tests/test_neo4j_repository.py tests/test_incidents_api.py tests/test_refusal_graph.py -q` — **17 passed**; `uv run --extra dev python scripts/validate_contracts.py` — **OK**. Os testes cobrem aprovação que promove, recusa que não promove, conflito por reuso divergente de `review_id` e query Neo4j que guarda a razão sem marcar `HUMAN_CONFIRMED`.
+- **2026-08-30T08:35:00-03:00 — frontend:** testes — **39 passed, 1 skip preexistente**; lint — **PASS**; `next build` — **PASS**. A checagem visual local em `/incidents/inc_current_mastercard_001` confirmou os campos obrigatórios de aprovação e, ao escolher `REJECTED`, remove causa/playbook, altera o placeholder para a razão de recusa e apresenta somente `Record rejection`. Nenhuma decisão foi submetida.
+- **Code Review Gate:** **PASS WITH NOTE**. `review_id` é idempotente no DuckDB e preservado pela tela para retry; caso o espelho Neo4j falhe, a revisão local sobrevive e o mesmo payload pode ser reenviado. Nota: `reviewer_id` ainda é uma declaração do cliente até a autenticação corporativa existir.
+- **Integration Contract Guardian (INTEGRATION):** **READY WITH WARNING**. Schema, fixture, OpenAPI, persistência, API, cliente e mock compartilham `CTR-HRV-001 v1`; a constraint `HumanReview.review_id` foi adicionada ao bootstrap. A aplicação dessa constraint no Aura e o smoke do endpoint público permanecem pós-publicação.

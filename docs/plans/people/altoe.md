@@ -103,6 +103,13 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 - **Prova de integração:** teste offline rejeita `ISSUER_OUTAGE` quando existe somente em precedente e aceita `PROVIDER_DEGRADATION` quando é alternativa atual; rerun sintético com chave retorna alternativa atual ou `UNAVAILABLE`, nunca categoria exclusiva do precedente.
 - **Handoff para Rogério:** revisar/push do patch e registrar o resultado do rerun. Risco residual: o modelo pode ignorar o prompt, mas a saída será bloqueada de forma segura pelo validador.
 
+## Adendo 2.7.0 — revisão humana auditável
+
+- **Plano geral:** 2.7.0; **contrato:** `CTR-HRV-001 v1`; **decisão:** `DEC-035` / `FL-20260830-TEAM-038`.
+- `APPROVED` chama a promoção já existente e adiciona o motivo do revisor como `HumanReview` no Neo4j. `REJECTED` cria o mesmo registro de auditoria, sem criar `HUMAN_CONFIRMED` nem contaminar a recuperação de precedentes.
+- Persistência local por `review_id` é idempotente; uma repetição com conteúdo diferente é conflito. Se Neo4j estiver indisponível, a API informa falha e a mesma revisão pode ser reenviada, sem perder o motivo durável.
+- A UI de detalhe envia a decisão explícita e mostra o resultado; ela nunca permite que o agente aprove ou recuse uma causa.
+
 ## Definition of Done
 
 Evals de grounding/no-answer/injection/leakage passam; review gate sem bloqueantes; integration guardian valida Incident/API/UI; browser acceptance conjunto comprova links e estados.

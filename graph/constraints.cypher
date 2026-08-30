@@ -7,4 +7,5 @@ CREATE CONSTRAINT provider_id IF NOT EXISTS FOR (node:Provider) REQUIRE node.pro
 CREATE CONSTRAINT country_code IF NOT EXISTS FOR (node:Country) REQUIRE node.code IS UNIQUE;
 CREATE CONSTRAINT brand_name IF NOT EXISTS FOR (node:CardBrand) REQUIRE node.name IS UNIQUE;
 CREATE CONSTRAINT refusal_code_mapping_id IF NOT EXISTS FOR (node:RefusalCode) REQUIRE node.mapping_id IS UNIQUE;
+CREATE CONSTRAINT human_review_id IF NOT EXISTS FOR (node:HumanReview) REQUIRE node.review_id IS UNIQUE;
 

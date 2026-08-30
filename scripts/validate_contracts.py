@@ -50,6 +50,7 @@ PAIRS: dict[str, list[str]] = {
     "agent-retrieval-trace.schema.json": ["agent-retrieval-trace.json"],
     "agent-diagnostic-suggestion.schema.json": ["agent-diagnostic-suggestion.json"],
     "refusal-code-resolution.schema.json": ["refusal-code-resolution.json"],
+    "human-review-request.schema.json": ["human-review-request-approved.json"],
     "../v2/payment-conversion-candidate.schema.json": ["payment-conversion-candidate.json"],
 }
 

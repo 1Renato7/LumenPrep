@@ -14,6 +14,7 @@ import type {
   TransactionStatus,
   TransactionIncidentDetail,
   NotificationFeed,
+  HumanReviewResponse,
 } from "./types";
 
 export class ApiPayloadError extends Error {
@@ -216,8 +217,8 @@ function parseOutcome(value: unknown): TransactionOutcome | null {
 function parseClassification(value: unknown): TransactionClassification | null {
   if (value === null) return null;
   const classification = exactObject(value, ["category", "reason", "confidence", "evidence_ids", "related_incident_ids"], ["refusal_resolution"], "TransactionClassification");
-  const refusal = classification.refusal_resolution === undefined ? undefined : exactObject(classification.refusal_resolution, ["lookup_status", "provider_id", "issuer_bank", "card_brand", "response_code", "outcome", "reason", "source", "mapping_version"], [], "RefusalCodeResolution");
-  return { category: enumValue(classification.category, classificationCategories, "TransactionClassification.category"), reason: string(classification.reason, "TransactionClassification.reason"), confidence: number(classification.confidence, "TransactionClassification.confidence", 0, 1), evidence_ids: stringArray(classification.evidence_ids, "TransactionClassification.evidence_ids"), related_incident_ids: stringArray(classification.related_incident_ids, "TransactionClassification.related_incident_ids"), ...(refusal === undefined ? {} : { refusal_resolution: { lookup_status: enumValue(refusal.lookup_status, new Set(["MATCH_FOUND", "NOT_FOUND", "AMBIGUOUS"]), "RefusalCodeResolution.lookup_status") as "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS", provider_id: string(refusal.provider_id, "RefusalCodeResolution.provider_id"), issuer_bank: string(refusal.issuer_bank, "RefusalCodeResolution.issuer_bank"), card_brand: string(refusal.card_brand, "RefusalCodeResolution.card_brand"), response_code: string(refusal.response_code, "RefusalCodeResolution.response_code"), outcome: enumValue(refusal.outcome, outcomeResults, "RefusalCodeResolution.outcome"), reason: nullableString(refusal.reason, "RefusalCodeResolution.reason"), source: nullableString(refusal.source, "RefusalCodeResolution.source"), mapping_version: nullableString(refusal.mapping_version, "RefusalCodeResolution.mapping_version") } }) } as TransactionClassification;
+  const refusal = classification.refusal_resolution === undefined ? undefined : exactObject(classification.refusal_resolution, ["lookup_status", "provider_id", "issuer_bank", "card_brand", "response_code", "outcome", "normalized_code", "reason", "source", "mapping_version"], ["observed_response_code"], "RefusalCodeResolution");
+  return { category: enumValue(classification.category, classificationCategories, "TransactionClassification.category"), reason: string(classification.reason, "TransactionClassification.reason"), confidence: number(classification.confidence, "TransactionClassification.confidence", 0, 1), evidence_ids: stringArray(classification.evidence_ids, "TransactionClassification.evidence_ids"), related_incident_ids: stringArray(classification.related_incident_ids, "TransactionClassification.related_incident_ids"), ...(refusal === undefined ? {} : { refusal_resolution: { lookup_status: enumValue(refusal.lookup_status, new Set(["MATCH_FOUND", "NOT_FOUND", "AMBIGUOUS"]), "RefusalCodeResolution.lookup_status") as "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS", provider_id: string(refusal.provider_id, "RefusalCodeResolution.provider_id"), issuer_bank: string(refusal.issuer_bank, "RefusalCodeResolution.issuer_bank"), card_brand: string(refusal.card_brand, "RefusalCodeResolution.card_brand"), response_code: string(refusal.response_code, "RefusalCodeResolution.response_code"), outcome: enumValue(refusal.outcome, outcomeResults, "RefusalCodeResolution.outcome"), normalized_code: nullableString(refusal.normalized_code, "RefusalCodeResolution.normalized_code"), reason: nullableString(refusal.reason, "RefusalCodeResolution.reason"), source: nullableString(refusal.source, "RefusalCodeResolution.source"), mapping_version: nullableString(refusal.mapping_version, "RefusalCodeResolution.mapping_version") } }) } as TransactionClassification;
 }
 
 export function parseTransactionRecord(value: unknown): TransactionRecord {
@@ -364,6 +365,13 @@ export function parseTransactionIncidentDetail(value: unknown): TransactionIncid
 export function parseIncidentDetail(value: unknown): IncidentDetail {
   const detail = exactObject(value, ["incident", "memory", "explanation"], [], "IncidentDetail");
   return { incident: parseIncident(detail.incident), memory: parseSimilarIncidents(detail.memory), explanation: parseExplanation(detail.explanation) };
+}
+
+export function parseHumanReviewResponse(value: unknown): HumanReviewResponse {
+  const response = exactObject(value, ["schema_version", "review", "promoted_to_memory"], [], "HumanReviewResponse");
+  if (response.schema_version !== "1.0" || typeof response.promoted_to_memory !== "boolean") fail("HumanReviewResponse is invalid.", value);
+  const review = exactObject(response.review, ["review_id", "incident_id", "decision", "reviewer_id", "reason", "confirmed_cause", "playbook_id", "reviewed_at"], [], "HumanReviewResponse.review");
+  return { schema_version: "1.0", promoted_to_memory: response.promoted_to_memory, review: { review_id: string(review.review_id, "review.review_id"), incident_id: string(review.incident_id, "review.incident_id"), decision: enumValue(review.decision, new Set(["APPROVED", "REJECTED"]), "review.decision") as "APPROVED" | "REJECTED", reviewer_id: string(review.reviewer_id, "review.reviewer_id"), reason: string(review.reason, "review.reason"), confirmed_cause: nullableString(review.confirmed_cause, "review.confirmed_cause"), playbook_id: nullableString(review.playbook_id, "review.playbook_id"), reviewed_at: string(review.reviewed_at, "review.reviewed_at") } };
 }
 
 /** Keep the agent's hypothesis on its additive contract; never parse it as an Incident cause. */

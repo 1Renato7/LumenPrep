@@ -1,0 +1,1 @@
+{"schema_version":"1.0","review_id":"review-approval-001","reviewer_id":"operator_01","decision":"APPROVED","reason":"The issuer outage was confirmed by the operations team.","confirmed_cause":"ISSUER_OUTAGE","playbook_id":"PB-ISSUER-INVESTIGATION"}

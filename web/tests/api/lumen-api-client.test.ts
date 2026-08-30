@@ -11,6 +11,7 @@ import sampleFixture from "../../../contracts/fixtures/transaction-sample-respon
 import similarIncidentsFixture from "../../../contracts/fixtures/similar-incidents.json";
 import succeededFixture from "../../../contracts/fixtures/transaction-succeeded.json";
 import noIncidentFixture from "../../../contracts/fixtures/transaction-incident-detail-no-incident.json";
+import humanReviewFixture from "../../../contracts/fixtures/human-review-request-approved.json";
 import {
   backendStateFor,
   createBatchSubmission,
@@ -24,7 +25,7 @@ import {
 } from "../../lib/api/client-interface";
 import { createMockLumenApiClient } from "../../lib/mocks/transaction-api-client";
 import { parseDiagnosticSuggestion, parseTransactionInput } from "../../lib/api/parse";
-import type { TransactionBatchRequest, TransactionList } from "../../lib/api/types";
+import type { HumanReviewRequest, TransactionBatchRequest, TransactionList } from "../../lib/api/types";
 
 const batchRequest: TransactionBatchRequest = {
   schema_version: "1.0",
@@ -131,6 +132,40 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
   assert.equal(incidentDetails.incidents[0].incident.recommendations[0].recommendation_class, "ESCALATE");
   assert.equal(suggestion.status, "SUGGESTED");
   assert.equal(normalizeApiBaseUrl("https://api.example.test/v1///"), "https://api.example.test/v1");
+});
+
+test("submits CTR-HRV-001 to the incident review route and parses its audit response", async () => {
+  let requestUrl = "";
+  let requestBody = "";
+  const client = createLumenApiClient({
+    baseUrl: "https://api.example.test/v1",
+    fetchImpl: async (url, init) => {
+      requestUrl = String(url);
+      requestBody = String(init?.body);
+      return json({
+        schema_version: "1.0",
+        promoted_to_memory: true,
+        review: {
+          review_id: humanReviewFixture.review_id,
+          incident_id: "incident/one",
+          decision: "APPROVED",
+          reviewer_id: humanReviewFixture.reviewer_id,
+          reason: humanReviewFixture.reason,
+          confirmed_cause: humanReviewFixture.confirmed_cause,
+          playbook_id: humanReviewFixture.playbook_id,
+          reviewed_at: "2026-08-30T12:00:00Z",
+        },
+      }, 201);
+    },
+  });
+
+  const reviewRequest = humanReviewFixture as HumanReviewRequest;
+  const response = await client.submitHumanReview("incident/one", reviewRequest);
+
+  assert.equal(requestUrl, "https://api.example.test/v1/incidents/incident%2Fone/review");
+  assert.deepEqual(JSON.parse(requestBody), reviewRequest);
+  assert.equal(response.review.reason, reviewRequest.reason);
+  assert.equal(response.promoted_to_memory, true);
 });
 
 test("submit preserves Idempotency-Key and an explicit retry reuses its original payload", async () => {

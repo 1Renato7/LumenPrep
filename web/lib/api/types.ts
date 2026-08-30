@@ -132,9 +132,35 @@ export interface RefusalCodeResolution {
   card_brand: string;
   response_code: string;
   outcome: OutcomeResult;
+  normalized_code: string | null;
   reason: string | null;
   source: string | null;
   mapping_version: string | null;
+}
+
+export interface HumanReviewRequest {
+  schema_version: "1.0";
+  review_id: string;
+  reviewer_id: string;
+  decision: "APPROVED" | "REJECTED";
+  reason: string;
+  confirmed_cause?: string | null;
+  playbook_id?: string | null;
+}
+
+export interface HumanReviewResponse {
+  schema_version: "1.0";
+  review: {
+    review_id: string;
+    incident_id: string;
+    decision: "APPROVED" | "REJECTED";
+    reviewer_id: string;
+    reason: string;
+    confirmed_cause: string | null;
+    playbook_id: string | null;
+    reviewed_at: string;
+  };
+  promoted_to_memory: boolean;
 }
 
 export interface TransactionRecord {

@@ -86,6 +86,20 @@ class Neo4jIncidentRepositoryTest(unittest.TestCase):
         self.assertIn("FOREACH (provider_id IN $providers", query)
         self.assertIn("OBSERVED_REFUSAL_CODE", query)
 
+    def test_human_review_is_auditable_without_becoming_a_confirmed_precedent(self) -> None:
+        driver = FakeDriver()
+        repository = Neo4jIncidentRepository(driver)
+        repository.record_human_review(
+            current_incident(),
+            {"review_id": "review-001", "decision": "REJECTED", "reviewer_id": "operator",
+             "reason": "Evidence did not support the proposed cause.", "confirmed_cause": None,
+             "playbook_id": None, "reviewed_at": "2026-08-30T12:00:00Z"},
+        )
+        query, parameters = next(call for call in driver.session_instance.calls if "HumanReview" in call[0])
+        self.assertIn("MERGE (review)-[:REVIEWS]->(incident)", query)
+        self.assertNotIn("HUMAN_CONFIRMED", query)
+        self.assertEqual(parameters["decision"], "REJECTED")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.6.0
+- **Versão:** 2.7.0
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -27,6 +27,7 @@
 - **Changelog 2.5.0:** adiciona uma classificação determinística de códigos de resposta por PSP, emissor e bandeira. O fato por transação é persistido antes da agregação; apenas uma anomalia já detectada produz o resumo estruturado que chega ao agente. O lookup não usa GraphRAG e não cria ação de pagamento.
 - **Changelog 2.5.1:** após o trial by fire local, restringe a categoria publicada pelo agente às categorias que já pertencem ao RCA atual. Precedentes recuperados continuam sendo contexto citável, mas não podem introduzir uma nova categoria causal.
 - **Changelog 2.6.1:** reduz o bucket-base de agregação, harness e detecção de cinco para um minuto. A janela de observação continua em 60 minutos, agora formada por 60 buckets fechados; o baseline continua estritamente anterior e o limiar de amostra não muda.
+- **Changelog 2.7.0:** adiciona `CTR-HRV-001 v1`, a decisão humana idempotente sobre um Incident. Aprovação promove somente um precedente com causa, playbook, evidências e motivo do revisor; recusa persiste motivo auditável no DuckDB/Neo4j, mas não entra na recuperação GraphRAG.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -118,6 +119,7 @@ O MVP vence quando uma pessoa:
 | DEC-021 | DECIDED | Publicar `web/` na main como superfície compartilhada de integração | elimina duplicação sem alegar readiness live | `FL-20260829-TEAM-021` |
 | DEC-033 | DECIDED | Detectar `PAYMENT_CONVERSION` em observação móvel de 60 min formada por 60 buckets fechados de 1 min; exigir ao menos 10 `unique_payments`, três observações históricas anteriores do mesmo slice e queda de pelo menos 15 p.p. cuja bound superior de Wilson fique abaixo do baseline | aumenta a cadência com custo de mais agregações; preserva pagamento único, ausência de future leakage e deduplicação | `FL-20260830-TEAM-037` |
 | DEC-034 | DECIDED | Notificação in-app é criada após o upsert idempotente do Incident e é marcada lida no backend; não há canais externos neste incremento | refresh preserva estado e redelivery não duplica badge/card; não há entrega fora do produto | `FL-20260830-TEAM-036` |
+| DEC-035 | DECIDED | Uma decisão humana é registrada por `review_id`; `APPROVED` promove o Incident como precedente, enquanto `REJECTED` grava o motivo mas é excluída do retrieval | mantém o GraphRAG útil sem apagar divergências humanas | `FL-20260830-TEAM-038` |
 
 ## 5. Arquitetura 2.0
 

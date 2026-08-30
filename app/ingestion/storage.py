@@ -111,6 +111,16 @@ CREATE TABLE IF NOT EXISTS incident_notifications (
     created_at TIMESTAMP NOT NULL,
     read_at TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS incident_reviews (
+    review_id VARCHAR PRIMARY KEY,
+    incident_id VARCHAR NOT NULL,
+    decision VARCHAR NOT NULL CHECK (decision IN ('APPROVED', 'REJECTED')),
+    reviewer_id VARCHAR NOT NULL,
+    reason VARCHAR NOT NULL,
+    confirmed_cause VARCHAR,
+    playbook_id VARCHAR,
+    reviewed_at TIMESTAMP NOT NULL
+);
 CREATE TABLE IF NOT EXISTS refusal_code_catalog (
     mapping_id VARCHAR PRIMARY KEY,
     provider_id VARCHAR NOT NULL,

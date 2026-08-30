@@ -118,6 +118,11 @@ export function createMockLumenApiClient(): MockLumenApiClient {
       if (incidentId !== incident.incident_id) throw new LumenApiError("NOT_FOUND", 404, { correlation_id: "corr_demo_mock_not_found" }, "Agent suggestion fixture was not found.");
       return structuredClone(diagnosticSuggestion);
     },
+    async submitHumanReview(incidentId, request, options) {
+      checkCancelled(options);
+      if (incidentId !== incident.incident_id) throw new LumenApiError("NOT_FOUND", 404, null, "Incident fixture was not found.");
+      return { schema_version: "1.0", promoted_to_memory: request.decision === "APPROVED", review: { review_id: request.review_id, incident_id: incidentId, decision: request.decision, reviewer_id: request.reviewer_id, reason: request.reason, confirmed_cause: request.confirmed_cause ?? null, playbook_id: request.playbook_id ?? null, reviewed_at: "2026-08-30T12:00:00Z" } };
+    },
     async listNotifications(options) {
       checkCancelled(options);
       return { unread_count: 1, notifications: [{ notification_id: "ntf_fixture_001", incident_id: incident.incident_id, created_at: incident.detected_at, read_at: null, incident: structuredClone(incident) }] };

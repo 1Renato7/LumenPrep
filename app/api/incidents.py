@@ -9,9 +9,10 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field, model_validator
 
 from app.agent import DiagnosticSuggestionRepository
 from app.config import settings
@@ -20,7 +21,7 @@ from app.explanation import (
     TransactionGrounding,
     resolve_transaction_grounding_from_api_responses,
 )
-from app.incidents import DuckDBIncidentRepository
+from app.incidents import DuckDBIncidentRepository, ReviewIdConflictError
 from app.ingestion.storage import transaction_record_for_grounding
 from app.memory import (
     Incident,
@@ -28,6 +29,7 @@ from app.memory import (
     InMemoryIncidentRepository,
     Neo4jIncidentRepository,
 )
+from app.memory.promotion import IncidentPromoter, PromotionReview
 from app.memory.repository import IncidentMemoryRepository
 from app.memory.seed import seed_mastercard_d2
 
@@ -35,6 +37,26 @@ router = APIRouter()
 _FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
 _neo4j_driver: Any | None = None
 _neo4j_driver_failed = False
+
+
+class HumanReviewRequest(BaseModel):
+    """CTR-HRV-001 v1 — a reviewer, not an agent, owns this decision."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    review_id: str = Field(min_length=8, max_length=120)
+    reviewer_id: str = Field(min_length=1, max_length=120)
+    decision: Literal["APPROVED", "REJECTED"]
+    reason: str = Field(min_length=3, max_length=4_000)
+    confirmed_cause: str | None = Field(default=None, max_length=160)
+    playbook_id: str | None = Field(default=None, max_length=160)
+
+    @model_validator(mode="after")
+    def approved_reviews_require_a_cause_and_playbook(self) -> "HumanReviewRequest":
+        if self.decision == "APPROVED" and (not self.confirmed_cause or not self.playbook_id):
+            raise ValueError("APPROVED requires confirmed_cause and playbook_id")
+        if self.decision == "REJECTED" and (self.confirmed_cause is not None or self.playbook_id is not None):
+            raise ValueError("REJECTED must not include confirmed_cause or playbook_id")
+        return self
 
 
 def _neo4j_driver_instance() -> Any | None:
@@ -302,3 +324,42 @@ def get_incident(incident_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
     memory, explanation = _memory_and_explanation(incident)
     return build_incident_response(incident, memory, explanation)
+
+
+@router.post("/incidents/{incident_id}/review", status_code=201)
+def review_incident(incident_id: str, request: HumanReviewRequest) -> dict[str, Any]:
+    """Persist and mirror a human approval/rejection without agent authority."""
+    repository = DuckDBIncidentRepository()
+    current_contract = repository.get(incident_id)
+    if current_contract is None:
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+    try:
+        review = repository.record_review(
+            review_id=request.review_id, incident_id=incident_id, decision=request.decision,
+            reviewer_id=request.reviewer_id, reason=request.reason,
+            confirmed_cause=request.confirmed_cause, playbook_id=request.playbook_id,
+        )
+    except ReviewIdConflictError as error:
+        raise HTTPException(status_code=409, detail="REVIEW_ID_CONFLICT") from error
+
+    graph = _memory_repository()
+    if graph is None:
+        raise HTTPException(status_code=503, detail="GRAPH_MEMORY_UNAVAILABLE")
+    current = Incident.from_contract(current_contract.model_dump(mode="json"))
+    try:
+        # Mirror the human rationale first. If promotion subsequently fails, a
+        # retry has an audit trail but no unqualified historical precedent.
+        graph.record_human_review(current, review)
+        if request.decision == "APPROVED":
+            decline_values = current_contract.metrics.get("decline_codes", [])
+            decline_codes = tuple(str(value) for value in decline_values) if isinstance(decline_values, list) else ()
+            temporal_shape = str(current_contract.metrics.get("temporal_shape") or current_contract.metrics.get("metric") or "OBSERVED_WINDOW")
+            IncidentPromoter(graph).promote(current, PromotionReview(
+                review_id=request.review_id, incident_id=incident_id, reviewer_id=request.reviewer_id,
+                confirmed_cause=request.confirmed_cause or "", playbook_id=request.playbook_id or "",
+                decline_codes=decline_codes, temporal_shape=temporal_shape,
+                provenance="REAL_HUMAN_REVIEW",
+            ))
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="GRAPH_MEMORY_UNAVAILABLE") from error
+    return {"schema_version": "1.0", "review": review, "promoted_to_memory": request.decision == "APPROVED"}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/human-review-request.schema.json",
+  "title": "CTR-HRV-001 Human Review Request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "review_id", "reviewer_id", "decision", "reason"],
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"const": "APPROVED"}}},
+      "then": {"required": ["confirmed_cause", "playbook_id"]}
+    },
+    {
+      "if": {"properties": {"decision": {"const": "REJECTED"}}},
+      "then": {
+        "properties": {
+          "confirmed_cause": {"type": "null"},
+          "playbook_id": {"type": "null"}
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "review_id": {"type": "string", "minLength": 8, "maxLength": 120},
+    "reviewer_id": {"type": "string", "minLength": 1, "maxLength": 120},
+    "decision": {"enum": ["APPROVED", "REJECTED"]},
+    "reason": {"type": "string", "minLength": 3, "maxLength": 4000},
+    "confirmed_cause": {"type": ["string", "null"], "maxLength": 160},
+    "playbook_id": {"type": ["string", "null"], "maxLength": 160}
+  }
+}

@@ -37,8 +37,8 @@ class IncidentPromoter:
             raise ValueError("review_id and reviewer_id are required")
         if not review.confirmed_cause or not review.playbook_id:
             raise ValueError("confirmed cause and playbook are required")
-        if not review.decline_codes or not review.temporal_shape:
-            raise ValueError("decline_codes and temporal_shape are required")
+        if not review.temporal_shape:
+            raise ValueError("temporal_shape is required")
         if review.provenance == "SYNTHETIC_EVALUATION" and not self.allow_synthetic_evaluation:
             raise PermissionError("synthetic evaluation records are disabled outside evaluation mode")
 

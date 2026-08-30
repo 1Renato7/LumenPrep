@@ -48,6 +48,16 @@
 .actionList article { padding: .75rem; border: 1px solid rgba(105, 220, 159, .3); border-radius: .7rem; background: rgba(16, 59, 46, .2); }
 .actionList p { margin: .35rem 0; }
 .actionList small { color: #9fb7aa; }
+.reviewCard { display: grid; gap: .8rem; border-color: rgba(104, 177, 255, .48); background: linear-gradient(110deg, rgba(19, 63, 104, .25), rgba(7, 11, 27, .86) 58%); }
+.reviewCard h2 { margin: .25rem 0; }
+.reviewForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+.reviewForm label { display: grid; gap: .32rem; color: #c9d5f5; font-size: .8rem; font-weight: 700; }
+.reviewForm input, .reviewForm select, .reviewForm textarea { width: 100%; box-sizing: border-box; border: 1px solid rgba(153, 172, 255, .45); border-radius: .55rem; background: rgba(8, 16, 43, .86); color: #f4f6ff; font: inherit; padding: .58rem; }
+.reviewForm textarea { min-height: 5.2rem; resize: vertical; }
+.reviewReason { grid-column: 1 / -1; }
+.reviewForm .button { width: fit-content; }
+.reviewResult { padding: .75rem; border: 1px solid rgba(104, 218, 158, .48); border-radius: .65rem; background: rgba(18, 83, 55, .22); color: #e5ffef; }
+.reviewResult p { margin: .4rem 0 0; }
 .memory { border-left: .35rem solid #90f0bd; }
 .alert { border-color: #ff9b9b; background: rgba(99, 26, 31, .36); color: #ffe2e2; }
 .button { min-height: 44px; padding: .58rem .82rem; border: 1px solid rgba(195, 205, 255, .62); border-radius: .6rem; background: rgba(39, 57, 139, .7); color: #f4f6ff; cursor: pointer; font: inherit; font-weight: 800; }

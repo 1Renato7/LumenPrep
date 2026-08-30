@@ -289,7 +289,7 @@ def to_incident(
     )
 
 
-from .repository import DuckDBIncidentRepository, IncidentIdConflictError, causal_fingerprint  # noqa: E402
+from .repository import DuckDBIncidentRepository, IncidentIdConflictError, ReviewIdConflictError, causal_fingerprint  # noqa: E402
 
 __all__ = [
     "CorrelatedCandidates",
@@ -298,6 +298,7 @@ __all__ = [
     "Impact",
     "Incident",
     "IncidentIdConflictError",
+    "ReviewIdConflictError",
     "Recommendation",
     "RootCause",
     "RootCauseAlternative",

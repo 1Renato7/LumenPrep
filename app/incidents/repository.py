@@ -21,6 +21,10 @@ class IncidentIdConflictError(ValueError):
     """An incident ID was reused for a different causal fingerprint."""
 
 
+class ReviewIdConflictError(ValueError):
+    """A review id was reused for a different human decision."""
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -204,3 +208,48 @@ class DuckDBIncidentRepository:
                 [transaction_id],
             ).fetchall()
         return [Incident.model_validate_json(row[0]) for row in rows]
+
+    def record_review(
+        self, *, review_id: str, incident_id: str, decision: str, reviewer_id: str,
+        reason: str, confirmed_cause: str | None = None, playbook_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Durably record one human decision before mirroring it to the graph.
+
+        Retrying the exact submission is safe. Reusing its identifier with a
+        different decision is rejected rather than silently changing an audit
+        record or a historical precedent.
+        """
+        value = (review_id, incident_id, decision, reviewer_id, reason, confirmed_cause, playbook_id)
+        with CONNECTION_LOCK:
+            con = get_connection()
+            if con.execute("SELECT 1 FROM incident_records WHERE incident_id = ?", [incident_id]).fetchone() is None:
+                raise KeyError("incident not found")
+            existing = con.execute(
+                """SELECT incident_id, decision, reviewer_id, reason, confirmed_cause, playbook_id, reviewed_at
+                   FROM incident_reviews WHERE review_id = ?""", [review_id]
+            ).fetchone()
+            if existing is not None:
+                previous = existing[:6]
+                if previous != value[1:]:
+                    raise ReviewIdConflictError("review_id is already bound to another human decision")
+                return _review_row(review_id, existing)
+            reviewed_at = _now()
+            con.execute(
+                """INSERT INTO incident_reviews
+                   (review_id, incident_id, decision, reviewer_id, reason, confirmed_cause, playbook_id, reviewed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                [*value, reviewed_at],
+            )
+        return {
+            "review_id": review_id, "incident_id": incident_id, "decision": decision,
+            "reviewer_id": reviewer_id, "reason": reason, "confirmed_cause": confirmed_cause,
+            "playbook_id": playbook_id, "reviewed_at": reviewed_at.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+
+
+def _review_row(review_id: str, row: tuple[Any, ...]) -> dict[str, Any]:
+    return {
+        "review_id": review_id, "incident_id": row[0], "decision": row[1], "reviewer_id": row[2],
+        "reason": row[3], "confirmed_cause": row[4], "playbook_id": row[5],
+        "reviewed_at": row[6].replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
