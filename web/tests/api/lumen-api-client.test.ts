@@ -207,6 +207,36 @@ test("submit preserves Idempotency-Key and an explicit retry reuses its original
   batchRequest.transactions[0].amount_minor = 100;
 });
 
+test("admin reset sends its key only in the reset request and parses deletion counts", async () => {
+  let seenUrl = "";
+  let seenHeaders: Headers | undefined;
+  let seenBody = "";
+  const client = createLumenApiClient({
+    baseUrl: "https://api.example.test/v1",
+    fetchImpl: async (url, init) => {
+      seenUrl = String(url);
+      seenHeaders = new Headers(init?.headers);
+      seenBody = String(init?.body);
+      return json({
+        schema_version: "1.0",
+        removed: {
+          transaction_incident_links: 1, incident_notifications: 2, incident_suggestions: 3, incident_records: 4,
+          transaction_records: 5, transaction_batches: 6, canonical_attempts: 7, canonical_events: 8,
+          raw_events: 9, quarantine: 10,
+        },
+        correlation_id: "corr-reset",
+      });
+    },
+  });
+
+  const result = await client.resetTransactionData("operator-secret");
+  assert.equal(seenUrl, "https://api.example.test/v1/admin/transaction-data/reset");
+  assert.equal(seenHeaders?.get("X-Lumen-Admin-Key"), "operator-secret");
+  assert.equal(seenBody, '{"confirmation":"DELETE_SYNTHETIC_TRANSACTION_DATA"}');
+  assert.equal(result.removed.transaction_records, 5);
+  assert.equal(result.correlation_id, "corr-reset");
+});
+
 test("different payload with the same key remains a typed 409 conflict", async () => {
   let calls = 0;
   const client = createLumenApiClient({

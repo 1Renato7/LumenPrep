@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "transaction-data-reset-response.schema.json",
+  "title": "TransactionDataResetResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "removed", "correlation_id"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "correlation_id": {"type": "string", "minLength": 1},
+    "removed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transaction_incident_links",
+        "incident_notifications",
+        "incident_suggestions",
+        "incident_records",
+        "transaction_records",
+        "transaction_batches",
+        "canonical_attempts",
+        "canonical_events",
+        "raw_events",
+        "quarantine"
+      ],
+      "properties": {
+        "transaction_incident_links": {"type": "integer", "minimum": 0},
+        "incident_notifications": {"type": "integer", "minimum": 0},
+        "incident_suggestions": {"type": "integer", "minimum": 0},
+        "incident_records": {"type": "integer", "minimum": 0},
+        "transaction_records": {"type": "integer", "minimum": 0},
+        "transaction_batches": {"type": "integer", "minimum": 0},
+        "canonical_attempts": {"type": "integer", "minimum": 0},
+        "canonical_events": {"type": "integer", "minimum": 0},
+        "raw_events": {"type": "integer", "minimum": 0},
+        "quarantine": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

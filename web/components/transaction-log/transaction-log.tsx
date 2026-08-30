@@ -26,6 +26,11 @@ export function TransactionLog({ searchValues, api: suppliedApi }: { searchValue
   const [stale, setStale] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetKey, setResetKey] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
   const cache = useRef(new Map<string, TransactionList>());
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
@@ -71,6 +76,28 @@ export function TransactionLog({ searchValues, api: suppliedApi }: { searchValue
     router.replace(buildTransactionUrl(searchValues, { status: nextStatus, cursor: nextCursor }));
   };
 
+  const resetTransactionData = async () => {
+    if (!api) return;
+    setResetting(true);
+    setResetError(null);
+    try {
+      const result = await api.resetTransactionData(resetKey);
+      cache.current.clear();
+      setResetKey("");
+      setResetOpen(false);
+      setResetMessage(`${result.removed.transaction_records} transaction(s) and their derived data were removed.`);
+      setList({ schema_version: "1.0", items: [], next_cursor: null, correlation_id: result.correlation_id });
+      setError(null);
+      setStale(false);
+      setLoading(false);
+      router.replace(buildTransactionUrl(searchValues, { status: "ALL", cursor: null, batchId: null }));
+    } catch (reason) {
+      setResetError(apiErrorMessage(reason, "The transaction data could not be cleared."));
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <main className={styles.shell}>
       <div className={styles.header}>
@@ -95,6 +122,31 @@ export function TransactionLog({ searchValues, api: suppliedApi }: { searchValue
           </button>
         ))}
       </div>
+
+      {client.source === "LIVE_API" ? (
+        <section className={`${styles.card} ${styles.resetCard}`} aria-labelledby="reset-title">
+          <div>
+            <strong id="reset-title">Demo data</strong>
+            <p className={styles.muted}>Remove all saved synthetic transactions, events, and derived incidents. This cannot be undone.</p>
+          </div>
+          <button className={`${styles.button} ${styles.dangerButton}`} type="button" onClick={() => { setResetError(null); setResetOpen((open) => !open); }} disabled={!api || resetting}>
+            Clear saved data
+          </button>
+          {resetOpen ? (
+            <form className={styles.resetForm} onSubmit={(event) => { event.preventDefault(); void resetTransactionData(); }}>
+              <label htmlFor="transaction-reset-key">Administrator reset key</label>
+              <input id="transaction-reset-key" type="password" value={resetKey} onChange={(event) => setResetKey(event.target.value)} autoComplete="off" required />
+              <p className={styles.muted}>The key is sent only for this request and is not saved by Lumen.</p>
+              {resetError ? <p className={styles.error} role="alert">{resetError}</p> : null}
+              <div className={styles.resetActions}>
+                <button className={styles.button} type="button" onClick={() => { setResetOpen(false); setResetKey(""); setResetError(null); }} disabled={resetting}>Cancel</button>
+                <button className={`${styles.button} ${styles.dangerButton}`} type="submit" disabled={resetting}>{resetting ? "Clearing data…" : "Confirm permanent deletion"}</button>
+              </div>
+            </form>
+          ) : null}
+          {resetMessage ? <p className={styles.notice} role="status">{resetMessage}</p> : null}
+        </section>
+      ) : null}
 
       {stale ? (
         <section className={`${styles.card} ${styles.notice}`} aria-live="polite">

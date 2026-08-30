@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from hashlib import sha256
+from hmac import compare_digest
 import json
 from random import Random, SystemRandom
 from typing import Annotated, Any, Literal
@@ -17,12 +18,14 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
 from app.worker.transaction_worker import run_batch_to_completion
 
 router = APIRouter(prefix="/v1", tags=["transactions"])
 
 MAX_BATCH_SIZE = 100
+RESET_CONFIRMATION = "DELETE_SYNTHETIC_TRANSACTION_DATA"
 _SYSTEM_RANDOM = SystemRandom()
 _CATALOG = {
     "merchants": (
@@ -94,6 +97,18 @@ class BatchRequest(_StrictModel):
     schema_version: Literal["1.0"]
     idempotency_key: str = Field(min_length=8, max_length=100)
     transactions: list[TransactionInput] = Field(min_length=1, max_length=MAX_BATCH_SIZE)
+
+
+class TransactionDataResetRequest(_StrictModel):
+    """Explicit acknowledgement for the destructive synthetic-data operation."""
+
+    confirmation: Literal["DELETE_SYNTHETIC_TRANSACTION_DATA"]
+
+
+class TransactionDataResetResponse(_StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    removed: dict[str, int]
+    correlation_id: str
 
 
 class IdempotencyConflict(Exception):
@@ -208,6 +223,44 @@ _RECORD_COLUMNS = """
 transaction_id, batch_id, created_at, updated_at, status, input_json,
 processing_json, outcome_json, classification_json, correlation_id
 """
+
+
+# Keep reference data (the refusal-code catalog) intact. The other tables are
+# operational transaction data or projections derived from it, ordered so a
+# future foreign-key migration can preserve the same reset behavior.
+_RESET_TABLES = (
+    "transaction_incident_links",
+    "incident_notifications",
+    "incident_suggestions",
+    "incident_records",
+    "transaction_records",
+    "transaction_batches",
+    "canonical_attempts",
+    "canonical_events",
+    "raw_events",
+    "quarantine",
+)
+
+
+def _reset_transaction_data() -> dict[str, int]:
+    """Delete all persisted synthetic transaction data as one DuckDB transaction."""
+    with CONNECTION_LOCK:
+        con = get_connection()
+        removed: dict[str, int] = {}
+        transaction_started = False
+        try:
+            con.execute("BEGIN TRANSACTION")
+            transaction_started = True
+            for table in _RESET_TABLES:
+                removed[table] = int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+                con.execute(f"DELETE FROM {table}")
+            con.execute("COMMIT")
+            transaction_started = False
+        except Exception:
+            if transaction_started:
+                con.execute("ROLLBACK")
+            raise
+    return removed
 
 
 def _batch_response(batch_id: str) -> dict[str, Any]:
@@ -339,6 +392,29 @@ def create_transaction_batch(
         raise HTTPException(status_code=503, detail="INGESTION_UNAVAILABLE") from error
     background_tasks.add_task(run_batch_to_completion, response["batch_id"])
     return response
+
+
+@router.post("/admin/transaction-data/reset", response_model=TransactionDataResetResponse)
+def reset_transaction_data(
+    request: TransactionDataResetRequest,
+    admin_key: Annotated[str | None, Header(alias="X-Lumen-Admin-Key")] = None,
+) -> TransactionDataResetResponse:
+    """Clear the synthetic transaction workspace when an operator confirms it.
+
+    The reset credential lives only in the backend environment; the browser may
+    submit it for this single request but must not persist or preconfigure it.
+    """
+    configured_key = settings.transaction_reset_key
+    if not configured_key:
+        raise HTTPException(status_code=503, detail="TRANSACTION_RESET_NOT_CONFIGURED")
+    if not admin_key or not compare_digest(admin_key, configured_key):
+        raise HTTPException(status_code=403, detail="TRANSACTION_RESET_UNAUTHORIZED")
+    if request.confirmation != RESET_CONFIRMATION:  # Defensive; Pydantic enforces this too.
+        raise HTTPException(status_code=422, detail="TRANSACTION_RESET_CONFIRMATION_REQUIRED")
+    try:
+        return TransactionDataResetResponse(removed=_reset_transaction_data(), correlation_id=_correlation_id())
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="TRANSACTION_RESET_UNAVAILABLE") from error
 
 
 @router.get("/transaction-batches/{batch_id}")

@@ -3,6 +3,7 @@ import type {
   IncidentDetail,
   DiagnosticSuggestion,
   TransactionBatchAccepted,
+  TransactionDataResetResponse,
   TransactionCatalog,
   TransactionClassification,
   TransactionInput,
@@ -201,6 +202,32 @@ export function parseTransactionBatchAccepted(value: unknown): TransactionBatchA
     fail("TransactionBatchAccepted.transaction_ids must be unique and contain 1..100 items.", value);
   }
   return { schema_version: schemaVersion(response.schema_version, "TransactionBatchAccepted.schema_version"), batch_id: string(response.batch_id, "TransactionBatchAccepted.batch_id"), accepted_at: string(response.accepted_at, "TransactionBatchAccepted.accepted_at"), status: "PROCESSING", transaction_ids: transactionIds, correlation_id: string(response.correlation_id, "TransactionBatchAccepted.correlation_id") };
+}
+
+export function parseTransactionDataResetResponse(value: unknown): TransactionDataResetResponse {
+  const response = exactObject(value, ["schema_version", "removed", "correlation_id"], [], "TransactionDataResetResponse");
+  const removed = exactObject(
+    response.removed,
+    ["transaction_incident_links", "incident_notifications", "incident_suggestions", "incident_records", "transaction_records", "transaction_batches", "canonical_attempts", "canonical_events", "raw_events", "quarantine"],
+    [],
+    "TransactionDataResetResponse.removed",
+  );
+  return {
+    schema_version: schemaVersion(response.schema_version, "TransactionDataResetResponse.schema_version"),
+    removed: {
+      transaction_incident_links: integer(removed.transaction_incident_links, "removed.transaction_incident_links"),
+      incident_notifications: integer(removed.incident_notifications, "removed.incident_notifications"),
+      incident_suggestions: integer(removed.incident_suggestions, "removed.incident_suggestions"),
+      incident_records: integer(removed.incident_records, "removed.incident_records"),
+      transaction_records: integer(removed.transaction_records, "removed.transaction_records"),
+      transaction_batches: integer(removed.transaction_batches, "removed.transaction_batches"),
+      canonical_attempts: integer(removed.canonical_attempts, "removed.canonical_attempts"),
+      canonical_events: integer(removed.canonical_events, "removed.canonical_events"),
+      raw_events: integer(removed.raw_events, "removed.raw_events"),
+      quarantine: integer(removed.quarantine, "removed.quarantine"),
+    },
+    correlation_id: string(response.correlation_id, "TransactionDataResetResponse.correlation_id"),
+  };
 }
 
 function parseProcessing(value: unknown): TransactionProcessing {

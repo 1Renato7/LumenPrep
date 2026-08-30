@@ -75,6 +75,10 @@ export function createMockLumenApiClient(): MockLumenApiClient {
       checkCancelled(options);
       return parseTransactionBatchAccepted(batchAcceptedFixture);
     },
+    async resetTransactionData(_adminKey, options) {
+      checkCancelled(options);
+      throw new LumenApiError("HTTP", null, null, "Synthetic fixture data cannot be cleared through the live reset endpoint.");
+    },
     async getTransactionBatch(_batchId, options) {
       checkCancelled(options);
       return listWith([processing]);

@@ -3,6 +3,7 @@ from copy import deepcopy
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from main import app
 
 client = TestClient(app)
@@ -110,3 +111,30 @@ def test_concurrent_batch_submissions_do_not_corrupt_the_shared_connection():
     assert [r.status_code for r in responses] == [202] * 40
     transaction_ids = {r.json()["transaction_ids"][0] for r in responses}
     assert len(transaction_ids) == 40
+
+
+def test_admin_reset_requires_a_configured_matching_key_and_clears_transaction_projections(monkeypatch):
+    accepted = _submit(_batch("reset-before-clear-0001"))
+    assert accepted.status_code == 202
+
+    endpoint = "/v1/admin/transaction-data/reset"
+    confirmation = {"confirmation": "DELETE_SYNTHETIC_TRANSACTION_DATA"}
+    assert client.post(endpoint, json=confirmation).status_code == 503
+
+    monkeypatch.setattr(settings, "transaction_reset_key", "demo-reset-secret")
+    assert client.post(endpoint, json=confirmation).status_code == 403
+    assert client.post(endpoint, json={"confirmation": "no"}, headers={"X-Lumen-Admin-Key": "demo-reset-secret"}).status_code == 422
+
+    reset = client.post(endpoint, json=confirmation, headers={"X-Lumen-Admin-Key": "demo-reset-secret"})
+    assert reset.status_code == 200
+    body = reset.json()
+    assert body["schema_version"] == "1.0"
+    assert body["removed"]["transaction_records"] == 1
+    assert body["removed"]["transaction_batches"] == 1
+    assert client.get("/v1/transactions").json()["items"] == []
+    assert client.get(f"/v1/transaction-batches/{accepted.json()['batch_id']}").status_code == 404
+
+    # Reset removes idempotency state too, so this represents a genuinely fresh demo workspace.
+    after_reset = _submit(_batch("reset-before-clear-0001"))
+    assert after_reset.status_code == 202
+    assert after_reset.json()["batch_id"] != accepted.json()["batch_id"]

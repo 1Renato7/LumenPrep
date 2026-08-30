@@ -85,6 +85,24 @@ export interface TransactionBatchAccepted {
   correlation_id: string;
 }
 
+/** Result of the explicitly confirmed, admin-authorized synthetic-data reset. */
+export interface TransactionDataResetResponse {
+  schema_version: TransactionSchemaVersion;
+  removed: {
+    transaction_incident_links: number;
+    incident_notifications: number;
+    incident_suggestions: number;
+    incident_records: number;
+    transaction_records: number;
+    transaction_batches: number;
+    canonical_attempts: number;
+    canonical_events: number;
+    raw_events: number;
+    quarantine: number;
+  };
+  correlation_id: string;
+}
+
 export type TransactionStatus = "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNKNOWN";
 export type ProcessingStage =
   | "RECEIVED"

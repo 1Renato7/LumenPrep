@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     lumen_data_dir: str = "."
     duckdb_path: str | None = None
     demo_mode: bool = False
+    transaction_reset_key: str | None = None
 
     cors_allowed_origins: str = ""
 

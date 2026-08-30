@@ -4897,3 +4897,17 @@ Agrupamento por similaridade parcial, revisão retroativa de causa ou necessidad
 - **Regra estabilizada:** grupos `INCONCLUSIVE` permanecem observações persistidas, mas não são vinculados como causa em cada transação. Assim o log não apresenta uma segunda hipótese como uma recorrência causal concorrente.
 - **Code Review Gate:** **PASS**. A chave de recorrência é separada do fingerprint de entrega; a migração DuckDB é aditiva; o backfill é idempotente e mantém IDs e vínculos existentes. O único custo aceito é a varredura do pequeno store de hackathon no acesso ao repositório.
 - **Integration Contract Guardian (INTEGRATION):** **READY**. `CTR-INC-001 v1` e `CTR-TXL-001 v1` foram ampliados de forma opcional, parser, fixture e UI aceitam ausência em dados legados, e não há variável de ambiente, endpoint nem permissão novos. A alteração independente `da60a86` da `main` foi integrada antes da publicação.
+### FL-20260830-TEAM-040 — Limpar dados sintéticos por operação administrativa atômica
+
+- **Timestamp:** 2026-08-30T06:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** operação | dados | UX | contrato
+- **Escopo:** `CTR-ADM-001 v1`; reset de workspace sintético
+
+O usuário solicitou um botão que realmente limpe o histórico antes de inserir novos dados. Foi escolhida uma operação administrativa de backend, em vez de esconder a lista no browser, porque apenas a primeira deixa o ambiente persistido em estado novo. A rota exige uma chave mantida exclusivamente no ambiente do backend e uma confirmação literal; a interface pede a chave no momento da ação, não a grava e exibe o resultado da limpeza.
+
+A limpeza ocorre em uma transação DuckDB sob o lock compartilhado e remove fatos sintéticos e todas as projeções derivadas: batches, records, eventos raw/canônicos, tentativas, links, Incidents, sugestões e notificações. O catálogo versionado de códigos de recusa permanece porque é referência da aplicação, não histórico da demo. Alternativas rejeitadas: remover só a lista (não persistente), apagar apenas records (deixa projeções inconsistentes) e substituir o arquivo inteiro (remove referência e amplia risco operacional).
+
+**Validação:** `uv run --locked pytest -q tests/test_transactions_api.py tests/test_api_routing.py` passou com **7 testes**; cobre configuração ausente, credencial inválida, confirmação inválida, limpeza, contagens, batch removido e reuso da chave de idempotência. `uv run --locked python scripts/validate_contracts.py` passou. Lint/build/testes/browser acceptance do `web/` continuam `NOT RUN`: o diretório `web/node_modules` não está instalado neste ambiente. Nenhum dado local ou remoto foi apagado durante esta implementação.

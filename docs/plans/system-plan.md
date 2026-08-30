@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.8.0
+- **Versão:** 2.9.0
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -29,6 +29,7 @@
 - **Changelog 2.6.1:** reduz o bucket-base de agregação, harness e detecção de cinco para um minuto. A janela de observação continua em 60 minutos, agora formada por 60 buckets fechados; o baseline continua estritamente anterior e o limiar de amostra não muda.
 - **Changelog 2.7.0:** adiciona `CTR-HRV-001 v1`, a decisão humana idempotente sobre um Incident. Aprovação promove somente um precedente com causa, playbook, evidências e motivo do revisor; recusa persiste motivo auditável no DuckDB/Neo4j, mas não entra na recuperação GraphRAG.
 - **Changelog 2.8.0:** adiciona ao `CTR-INC-001 v1` o campo aditivo `recurrence_first_detected_at`, calculado por tipo causal (categoria, métrica e escopo completo) sem misturar janelas ou correlações. O `CTR-TXL-001 v1` expõe a mesma data junto de cada Incident relacionado, para que o log mostre a origem da recorrência.
+- **Changelog 2.9.0:** adiciona `CTR-ADM-001 v1`, uma operação administrativa configurável para limpar atomica e explicitamente os dados sintéticos persistidos. O frontend nunca incorpora a credencial; o operador a informa apenas no momento da confirmação. Catálogos versionados de referência permanecem intactos.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -625,7 +626,26 @@ input (provider, issuer, bandeira, código)
 
 **Parecer do Integration Contract Guardian — PLANNING: `PLAN READY`.** O contrato é aditivo para a entrada e para o EvidencePack, há um owner único para catálogo/worker, mock legada preservada e a fronteira do agente continua somente leitura. Dados reais de PSP exigem governança de fonte e atualização versionada do catálogo; não bloqueiam a fatia atual.
 
-## 19. Recuperação de demo — janela de sete horas
+## 19. Manutenção controlada de dados sintéticos
+
+### DEC-038 — reset administrativo, explícito e atômico do workspace sintético
+
+**Estado:** `IMPLEMENTED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-038`.
+
+`CTR-ADM-001 v1` adiciona `POST /v1/admin/transaction-data/reset`, restrito a uma chave definida exclusivamente no Railway (`TRANSACTION_RESET_KEY`). A requisição exige a confirmação literal `DELETE_SYNTHETIC_TRANSACTION_DATA` e envia a chave somente no cabeçalho `X-Lumen-Admin-Key`; a interface não armazena nem configura essa chave.
+
+Sob o lock compartilhado do DuckDB, uma única transação remove os fatos sintéticos (`raw_events`, canônicos, tentativas, batches e records) e todas as projeções operacionais derivadas (links, Incidents, sugestões e notificações). O catálogo `refusal_code_catalog` é dado versionado da aplicação e não é removido. O retorno tem as contagens por tabela e `correlation_id`; credencial ausente/configuração ausente/falha do store são estados explícitos.
+
+| Alternativa | Benefício | Risco/custo | Decisão |
+| --- | --- | --- | --- |
+| Ocultar dados no browser | implementação mínima | refresh repõe o histórico; não limpa a demo | rejeitada |
+| Apagar somente `transaction_records` | menos SQL | batches, eventos e Incidents ficam órfãos ou enganosos | rejeitada |
+| Apagar todo o arquivo DuckDB | reset simples | remove catálogo de referência e exige recriação operacional | rejeitada |
+| Limpeza transacional de fatos + projeções | workspace realmente novo, sem redeploy | ação destrutiva requer chave e confirmação | escolhida |
+
+**Gate de integração:** CORS aceita somente o cabeçalho de reset além dos cabeçalhos públicos existentes; o endpoint é `POST` para manter o método permitido no cliente cross-origin. A validação cobre credencial/configuração, confirmação, contagens e novo uso da chave de idempotência após a limpeza. A prova visual local depende de instalar as dependências do `web/`.
+
+## 20. Recuperação de demo — janela de sete horas
 
 ### DEC-027 — priorizar prova ao vivo do mecanismo causal sobre integrações amplas
 

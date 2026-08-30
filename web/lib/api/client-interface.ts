@@ -7,6 +7,7 @@ import {
   parseNotificationFeed,
   parseTransactionIncidentDetail,
   parseTransactionBatchAccepted,
+  parseTransactionDataResetResponse,
   parseTransactionCatalog,
   parseTransactionList,
   parseTransactionRecord,
@@ -18,6 +19,7 @@ import type {
   IncidentDetail,
   DiagnosticSuggestion,
   TransactionBatchAccepted,
+  TransactionDataResetResponse,
   TransactionBatchRequest,
   TransactionCatalog,
   TransactionList,
@@ -46,6 +48,7 @@ export interface LumenApiClient {
   getTransactionCatalog(options?: RequestOptions): Promise<TransactionCatalog>;
   generateTransactionSamples(request: TransactionSampleRequest, options?: RequestOptions): Promise<TransactionSampleResponse>;
   createTransactionBatch(request: TransactionBatchRequest, options?: RequestOptions): Promise<TransactionBatchAccepted>;
+  resetTransactionData(adminKey: string, options?: RequestOptions): Promise<TransactionDataResetResponse>;
   getTransactionBatch(batchId: string, options?: RequestOptions): Promise<TransactionList>;
   listTransactions(query?: ListTransactionsQuery, options?: RequestOptions): Promise<TransactionList>;
   getTransaction(transactionId: string, options?: RequestOptions): Promise<TransactionRecord>;
@@ -206,6 +209,15 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
     getTransactionCatalog: (requestOptions) => request("/transaction-catalog", { method: "GET" }, parseTransactionCatalog, requestOptions),
     generateTransactionSamples: (body, requestOptions) => request("/transaction-samples", jsonPost(body), parseTransactionSampleResponse, requestOptions),
     createTransactionBatch: (body, requestOptions) => request("/transaction-batches", jsonPost(body, { "Idempotency-Key": body.idempotency_key }), parseTransactionBatchAccepted, requestOptions),
+    resetTransactionData: (adminKey, requestOptions) => {
+      if (!adminKey) throw new LumenApiError("VALIDATION", 422, null, "An administrator reset key is required.");
+      return request(
+        "/admin/transaction-data/reset",
+        jsonPost({ confirmation: "DELETE_SYNTHETIC_TRANSACTION_DATA" }, { "X-Lumen-Admin-Key": adminKey }),
+        parseTransactionDataResetResponse,
+        requestOptions,
+      );
+    },
     getTransactionBatch: (batchId, requestOptions) => request(`/transaction-batches/${encodeURIComponent(batchId)}`, { method: "GET" }, parseTransactionList, requestOptions),
     listTransactions: (query, requestOptions) => request(`/transactions${toQuery(query)}`, { method: "GET" }, parseTransactionList, requestOptions),
     getTransaction: (transactionId, requestOptions) => request(`/transactions/${encodeURIComponent(transactionId)}`, { method: "GET" }, parseTransactionRecord, requestOptions),

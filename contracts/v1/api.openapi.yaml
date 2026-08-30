@@ -77,6 +77,34 @@ paths:
         "409": {description: IDEMPOTENCY_KEY_CONFLICT}
         "422": {description: INVALID_TRANSACTION_BATCH}
         "503": {description: INGESTION_UNAVAILABLE; nothing accepted unless a durable record exists}
+  /admin/transaction-data/reset:
+    post:
+      operationId: resetTransactionData
+      description: Deletes all persisted synthetic transaction data and its derived operational projections. The refusal-code catalog remains intact.
+      parameters:
+        - name: X-Lumen-Admin-Key
+          in: header
+          required: true
+          schema: {type: string, minLength: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirmation]
+              properties:
+                confirmation: {type: string, const: DELETE_SYNTHETIC_TRANSACTION_DATA}
+      responses:
+        "200":
+          description: Synthetic transaction workspace cleared atomically
+          content:
+            application/json:
+              schema: {$ref: "transaction-data-reset-response.schema.json"}
+        "403": {description: TRANSACTION_RESET_UNAUTHORIZED}
+        "422": {description: TRANSACTION_RESET_CONFIRMATION_REQUIRED}
+        "503": {description: TRANSACTION_RESET_NOT_CONFIGURED or TRANSACTION_RESET_UNAVAILABLE}
   /transaction-batches/{batch_id}:
     get:
       operationId: getTransactionBatch
