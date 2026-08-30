@@ -4912,6 +4912,41 @@ A limpeza ocorre em uma transação DuckDB sob o lock compartilhado e remove fat
 
 **Validação:** `uv run --locked pytest -q tests/test_transactions_api.py tests/test_api_routing.py` passou com **7 testes**; cobre configuração ausente, credencial inválida, confirmação inválida, limpeza, contagens, batch removido e reuso da chave de idempotência. `uv run --locked python scripts/validate_contracts.py` passou. Lint/build/testes/browser acceptance do `web/` continuam `NOT RUN`: o diretório `web/node_modules` não está instalado neste ambiente. Nenhum dado local ou remoto foi apagado durante esta implementação.
 
+### FL-20260830-ROGERIO-030 — Bloquear avaliação sintética na memória pública
+
+- **Timestamp:** 2026-08-30T09:12:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** Team
+- **Participantes:** Rogério
+- **Categoria:** contract | data | quality
+- **Escopo:** `CTR-MEM-001 v1.1`, adaptadores de memória, API de Incident e agente
+- **Links:** `app/memory/service.py`; `contracts/v1/similar-incidents.schema.json`; `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O diagnóstico publicado retornou `EVALUATION_CONFIRMED`, mas o contrato e o parser web aceitam apenas `HUMAN_CONFIRMED`, impedindo a abertura do Incident.
+
+#### Decisão
+
+Desabilitar avaliação sintética por padrão nos adaptadores operacionais e aplicar uma guarda no serviço de memória, de modo que nenhum repositório permissivo consiga publicá-la.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Aceitar avaliação no frontend | oculta o erro visual | viola o contrato e trata dado sintético como revisão humana | rejeitada |
+| Filtrar só o Neo4j | patch menor | outro adaptador ainda contamina a resposta | rejeitada |
+| Filtrar adaptadores e serviço | reforça a fronteira pública | avaliação deixa de servir como memória operacional | escolhida |
+
+#### Evidência, trade-offs e validação
+
+- **FACT:** a reprodução pública exibiu `SimilarIncidentResult.match.confirmation must be HUMAN_CONFIRMED`.
+- **TEST:** 25 testes focados passaram; contratos, fixtures e OpenAPI validaram; `npm test` passou com 41 testes e 1 skip.
+- **Browser acceptance:** no ambiente local, `Open full diagnosis` carregou o detalhe com precedente humano confirmado, persistiu após refresh e não emitiu erros/warnings no console.
+- **Code Review Gate:** PASS; sem achado bloqueante. A suíte Python completa travou sem saída e não é alegada como evidência.
+- **Risco residual:** o ambiente publicado só deixa de exibir o erro após consumir esta `main`; qualquer exposição futura de avaliação requer nova versão de contrato.
+
 ### FL-20260830-ROGERIO-031 — Usar GPT-5.6 Sol com raciocínio médio no agente configurável
 
 - **Timestamp:** 2026-08-30T10:15:00-03:00
@@ -4946,7 +4981,7 @@ A documentação oficial da OpenAI identifica `gpt-5.6-sol` e suporta `reasoning
 #### Evidência, hipóteses e desconhecidos
 
 - **FACT:** o cliente continua pós-persistência, sem ferramenta e sem side effect financeiro.
-- **TEST:** `uv run --locked pytest -q tests/test_agent_suggestion.py` — **31 passed**, incluindo o request com os defaults Sol/`medium`; asserção direta de `Settings` confirmou a mesma combinação; `git diff --check` passou.
+- **TEST:** `uv run --locked --extra dev pytest -q tests/test_agent_suggestion.py` — **31 passed**, incluindo o request com os defaults Sol/`medium`; asserção direta de `Settings` confirmou a mesma combinação; `git diff --check` passou.
 - **ASSUMPTION:** a conta Railway possui acesso ao modelo; validar com Incident sintético e chave configurada.
 - **UNKNOWN:** custo e latência reais até o smoke externo.
 
@@ -4977,4 +5012,4 @@ Indisponibilidade do modelo, custo/latência incompatível, falha de guardrail o
 
 - **Code Review Gate:** PASS. Foram revisados `Settings`, defaults do cliente e request Responses; não há alteração de schema, endpoint, permissão, retry ou consumidor. Fixtures Terra permanecem históricas.
 - **Browser acceptance:** NOT RUN. Não há UI/rota alterada e a materialização do novo `model_version` exige chave; a tentativa de conectar o navegador local expirou antes de abrir uma aba.
-- **Integration Contract Guardian (INTEGRATION):** READY WITH WARNINGS. O branch parte de `origin/main@10d2ec7`; a alteração é compatível, consumidores aceitam versão variável e o único checkpoint pendente é o smoke externo.
+- **Integration Contract Guardian (INTEGRATION):** READY WITH WARNINGS. O merge com `origin/main@301148f` preservou `FL-20260830-ROGERIO-030` e esta entrada, sem alterar contrato; o único checkpoint pendente é o smoke externo.
