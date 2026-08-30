@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import field_validator, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
     lumen_data_dir: str = "."
     duckdb_path: str | None = None
     demo_mode: bool = False
+    transaction_reset_key: str | None = None
 
     cors_allowed_origins: str = ""
 
@@ -18,16 +20,11 @@ class Settings(BaseSettings):
     neo4j_user: str | None = None
     neo4j_password: str | None = None
     neo4j_database: str = "neo4j"
-    graphrag_evaluation_mode: bool = False
 
     openai_api_key: str | None = None
-    openai_model: str = "gpt-5"
-
-    @field_validator("demo_mode", mode="before")
-    @classmethod
-    def empty_demo_mode_means_false(cls, value: object) -> object:
-        """Allow the documented ``DEMO_MODE=`` placeholder in a local .env file."""
-        return False if value == "" else value
+    openai_model: str = "gpt-5.6-sol"
+    openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "medium"
+    openai_timeout_seconds: float = 20.0
 
     @model_validator(mode="after")
     def default_duckdb_path_to_data_dir(self) -> "Settings":

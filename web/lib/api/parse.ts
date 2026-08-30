@@ -3,6 +3,7 @@ import type {
   IncidentDetail,
   DiagnosticSuggestion,
   TransactionBatchAccepted,
+  TransactionDataResetResponse,
   TransactionCatalog,
   TransactionClassification,
   TransactionInput,
@@ -13,6 +14,8 @@ import type {
   TransactionSampleResponse,
   TransactionStatus,
   TransactionIncidentDetail,
+  NotificationFeed,
+  HumanReviewResponse,
 } from "./types";
 
 export class ApiPayloadError extends Error {
@@ -133,7 +136,7 @@ export function parseTransactionInput(value: unknown): TransactionInput {
   const input = exactObject(
     value,
     ["merchant_id", "provider_id", "issuer_bank", "country", "currency", "amount_minor", "payment_method_category"],
-    ["client_reference", "occurred_at", "card_brand", "card_type", "provider_connection_id", "channel"],
+    ["client_reference", "occurred_at", "card_brand", "card_type", "provider_connection_id", "provider_response_code", "channel"],
     "TransactionInput",
   );
   const country = string(input.country, "TransactionInput.country");
@@ -156,6 +159,7 @@ export function parseTransactionInput(value: unknown): TransactionInput {
     ...(input.card_brand === undefined ? {} : { card_brand: nullableString(input.card_brand, "TransactionInput.card_brand") }),
     ...(cardType === undefined ? {} : { card_type: cardType }),
     ...(input.provider_connection_id === undefined ? {} : { provider_connection_id: nullableString(input.provider_connection_id, "TransactionInput.provider_connection_id") }),
+    ...(input.provider_response_code === undefined ? {} : { provider_response_code: nullableString(input.provider_response_code, "TransactionInput.provider_response_code") }),
     ...(channel === undefined ? {} : { channel }),
   };
 }
@@ -200,6 +204,32 @@ export function parseTransactionBatchAccepted(value: unknown): TransactionBatchA
   return { schema_version: schemaVersion(response.schema_version, "TransactionBatchAccepted.schema_version"), batch_id: string(response.batch_id, "TransactionBatchAccepted.batch_id"), accepted_at: string(response.accepted_at, "TransactionBatchAccepted.accepted_at"), status: "PROCESSING", transaction_ids: transactionIds, correlation_id: string(response.correlation_id, "TransactionBatchAccepted.correlation_id") };
 }
 
+export function parseTransactionDataResetResponse(value: unknown): TransactionDataResetResponse {
+  const response = exactObject(value, ["schema_version", "removed", "correlation_id"], [], "TransactionDataResetResponse");
+  const removed = exactObject(
+    response.removed,
+    ["transaction_incident_links", "incident_notifications", "incident_suggestions", "incident_records", "transaction_records", "transaction_batches", "canonical_attempts", "canonical_events", "raw_events", "quarantine"],
+    [],
+    "TransactionDataResetResponse.removed",
+  );
+  return {
+    schema_version: schemaVersion(response.schema_version, "TransactionDataResetResponse.schema_version"),
+    removed: {
+      transaction_incident_links: integer(removed.transaction_incident_links, "removed.transaction_incident_links"),
+      incident_notifications: integer(removed.incident_notifications, "removed.incident_notifications"),
+      incident_suggestions: integer(removed.incident_suggestions, "removed.incident_suggestions"),
+      incident_records: integer(removed.incident_records, "removed.incident_records"),
+      transaction_records: integer(removed.transaction_records, "removed.transaction_records"),
+      transaction_batches: integer(removed.transaction_batches, "removed.transaction_batches"),
+      canonical_attempts: integer(removed.canonical_attempts, "removed.canonical_attempts"),
+      canonical_events: integer(removed.canonical_events, "removed.canonical_events"),
+      raw_events: integer(removed.raw_events, "removed.raw_events"),
+      quarantine: integer(removed.quarantine, "removed.quarantine"),
+    },
+    correlation_id: string(response.correlation_id, "TransactionDataResetResponse.correlation_id"),
+  };
+}
+
 function parseProcessing(value: unknown): TransactionProcessing {
   const processing = exactObject(value, ["stage", "progress_percent"], ["failure_code"], "TransactionProcessing");
   return { stage: enumValue(processing.stage, processingStages, "TransactionProcessing.stage"), progress_percent: integer(processing.progress_percent, "TransactionProcessing.progress_percent", 0, 100), ...(processing.failure_code === undefined ? {} : { failure_code: nullableString(processing.failure_code, "TransactionProcessing.failure_code") }) } as TransactionProcessing;
@@ -213,8 +243,16 @@ function parseOutcome(value: unknown): TransactionOutcome | null {
 
 function parseClassification(value: unknown): TransactionClassification | null {
   if (value === null) return null;
-  const classification = exactObject(value, ["category", "reason", "confidence", "evidence_ids", "related_incident_ids"], [], "TransactionClassification");
-  return { category: enumValue(classification.category, classificationCategories, "TransactionClassification.category"), reason: string(classification.reason, "TransactionClassification.reason"), confidence: number(classification.confidence, "TransactionClassification.confidence", 0, 1), evidence_ids: stringArray(classification.evidence_ids, "TransactionClassification.evidence_ids"), related_incident_ids: stringArray(classification.related_incident_ids, "TransactionClassification.related_incident_ids") } as TransactionClassification;
+  const classification = exactObject(value, ["category", "reason", "confidence", "evidence_ids", "related_incident_ids"], ["refusal_resolution", "related_incidents"], "TransactionClassification");
+  const refusal = classification.refusal_resolution === undefined ? undefined : exactObject(classification.refusal_resolution, ["lookup_status", "provider_id", "issuer_bank", "card_brand", "response_code", "observed_response_code", "outcome", "normalized_code", "reason", "source", "mapping_version"], [], "RefusalCodeResolution");
+  const relatedIncidents = classification.related_incidents === undefined ? undefined : (() => {
+    if (!Array.isArray(classification.related_incidents)) fail("TransactionClassification.related_incidents must be an array.", classification.related_incidents);
+    return classification.related_incidents.map((item, index) => {
+      const related = exactObject(item, ["incident_id", "recurrence_first_detected_at"], [], `TransactionClassification.related_incidents[${index}]`);
+      return { incident_id: string(related.incident_id, `TransactionClassification.related_incidents[${index}].incident_id`), recurrence_first_detected_at: nullableString(related.recurrence_first_detected_at, `TransactionClassification.related_incidents[${index}].recurrence_first_detected_at`) };
+    });
+  })();
+  return { category: enumValue(classification.category, classificationCategories, "TransactionClassification.category"), reason: string(classification.reason, "TransactionClassification.reason"), confidence: number(classification.confidence, "TransactionClassification.confidence", 0, 1), evidence_ids: stringArray(classification.evidence_ids, "TransactionClassification.evidence_ids"), related_incident_ids: stringArray(classification.related_incident_ids, "TransactionClassification.related_incident_ids"), ...(relatedIncidents === undefined ? {} : { related_incidents: relatedIncidents }), ...(refusal === undefined ? {} : { refusal_resolution: { lookup_status: enumValue(refusal.lookup_status, new Set(["MATCH_FOUND", "NOT_FOUND", "AMBIGUOUS"]), "RefusalCodeResolution.lookup_status") as "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS", provider_id: string(refusal.provider_id, "RefusalCodeResolution.provider_id"), issuer_bank: string(refusal.issuer_bank, "RefusalCodeResolution.issuer_bank"), card_brand: string(refusal.card_brand, "RefusalCodeResolution.card_brand"), response_code: string(refusal.response_code, "RefusalCodeResolution.response_code"), observed_response_code: string(refusal.observed_response_code, "RefusalCodeResolution.observed_response_code"), outcome: enumValue(refusal.outcome, outcomeResults, "RefusalCodeResolution.outcome"), normalized_code: nullableString(refusal.normalized_code, "RefusalCodeResolution.normalized_code"), reason: nullableString(refusal.reason, "RefusalCodeResolution.reason"), source: nullableString(refusal.source, "RefusalCodeResolution.source"), mapping_version: nullableString(refusal.mapping_version, "RefusalCodeResolution.mapping_version") } }) } as TransactionClassification;
 }
 
 export function parseTransactionRecord(value: unknown): TransactionRecord {
@@ -241,13 +279,17 @@ export function parseTransactionList(value: unknown): TransactionList {
 }
 
 export function parseIncident(value: unknown): Incident {
-  const incident = exactObject(value, ["schema_version", "incident_id", "state", "detected_at", "estimated_started_at", "title", "scope", "metrics", "root_cause", "impact", "evidence", "recommendations", "limitations", "correlation_id"], ["memory_matches"], "Incident");
+  const incident = exactObject(value, ["schema_version", "incident_id", "state", "detected_at", "estimated_started_at", "title", "scope", "metrics", "root_cause", "impact", "evidence", "recommendations", "limitations", "correlation_id"], ["memory_matches", "recurrence_first_detected_at"], "Incident");
   if (incident.schema_version !== "1.0") fail("Incident.schema_version must be 1.0.", value);
   const states = new Set(["DETECTED", "INVESTIGATING", "SUPPORTED", "INCONCLUSIVE", "RECOVERED", "HUMAN_CONFIRMED", "CLOSED"]);
   const scope = object(incident.scope, "Incident.scope");
   const metrics = object(incident.metrics, "Incident.metrics");
   for (const [key, scopeValue] of Object.entries(scope)) scope[key] = stringArray(scopeValue, `Incident.scope.${key}`);
   for (const [key, metric] of Object.entries(metrics)) {
+    if (Array.isArray(metric)) {
+      stringArray(metric, `Incident.metrics.${key}`);
+      continue;
+    }
     if (metric !== null && typeof metric !== "string" && (typeof metric !== "number" || !Number.isFinite(metric))) fail(`Incident.metrics.${key} has an invalid value.`, metric);
   }
   const rootCause = exactObject(incident.root_cause, ["status", "category", "confidence", "confidence_factors"], ["alternatives"], "Incident.root_cause");
@@ -278,6 +320,7 @@ export function parseIncident(value: unknown): Incident {
     state: enumValue(incident.state, states, "Incident.state") as Incident["state"],
     detected_at: string(incident.detected_at, "Incident.detected_at"),
     estimated_started_at: string(incident.estimated_started_at, "Incident.estimated_started_at"),
+    ...(incident.recurrence_first_detected_at === undefined ? {} : { recurrence_first_detected_at: nullableString(incident.recurrence_first_detected_at, "Incident.recurrence_first_detected_at") }),
     title: string(incident.title, "Incident.title"),
     scope: scope as Incident["scope"],
     metrics: metrics as Incident["metrics"],
@@ -294,6 +337,24 @@ export function parseIncident(value: unknown): Incident {
 export function parseIncidentList(value: unknown): Incident[] {
   if (!Array.isArray(value)) fail("Incident list must be an array.", value);
   return value.map(parseIncident);
+}
+
+export function parseNotificationFeed(value: unknown): NotificationFeed {
+  const feed = exactObject(value, ["notifications", "unread_count"], [], "NotificationFeed");
+  if (!Array.isArray(feed.notifications)) fail("NotificationFeed.notifications must be an array.", value);
+  return {
+    unread_count: integer(feed.unread_count, "NotificationFeed.unread_count", 0),
+    notifications: feed.notifications.map((item, index) => {
+      const notification = exactObject(item, ["notification_id", "incident_id", "created_at", "read_at", "incident"], [], `NotificationFeed.notifications[${index}]`);
+      return {
+        notification_id: string(notification.notification_id, "notification_id"),
+        incident_id: string(notification.incident_id, "incident_id"),
+        created_at: string(notification.created_at, "created_at"),
+        read_at: nullableString(notification.read_at, "read_at"),
+        incident: parseIncident(notification.incident),
+      };
+    }),
+  };
 }
 
 export function parseIncidentDetailList(value: unknown): IncidentDetail[] {
@@ -343,6 +404,13 @@ export function parseTransactionIncidentDetail(value: unknown): TransactionIncid
 export function parseIncidentDetail(value: unknown): IncidentDetail {
   const detail = exactObject(value, ["incident", "memory", "explanation"], [], "IncidentDetail");
   return { incident: parseIncident(detail.incident), memory: parseSimilarIncidents(detail.memory), explanation: parseExplanation(detail.explanation) };
+}
+
+export function parseHumanReviewResponse(value: unknown): HumanReviewResponse {
+  const response = exactObject(value, ["schema_version", "review", "promoted_to_memory"], [], "HumanReviewResponse");
+  if (response.schema_version !== "1.0" || typeof response.promoted_to_memory !== "boolean") fail("HumanReviewResponse is invalid.", value);
+  const review = exactObject(response.review, ["review_id", "incident_id", "decision", "reviewer_id", "reason", "confirmed_cause", "playbook_id", "reviewed_at"], [], "HumanReviewResponse.review");
+  return { schema_version: "1.0", promoted_to_memory: response.promoted_to_memory, review: { review_id: string(review.review_id, "review.review_id"), incident_id: string(review.incident_id, "review.incident_id"), decision: enumValue(review.decision, new Set(["APPROVED", "REJECTED"]), "review.decision") as "APPROVED" | "REJECTED", reviewer_id: string(review.reviewer_id, "review.reviewer_id"), reason: string(review.reason, "review.reason"), confirmed_cause: nullableString(review.confirmed_cause, "review.confirmed_cause"), playbook_id: nullableString(review.playbook_id, "review.playbook_id"), reviewed_at: string(review.reviewed_at, "review.reviewed_at") } };
 }
 
 /** Keep the agent's hypothesis on its additive contract; never parse it as an Incident cause. */

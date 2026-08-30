@@ -2,10 +2,10 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.4.4
+- **Versão:** 2.9.1
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
-- **Change class:** `CHANGE CONTROL`; adiciona `CTR-MEM-PROMOTE-001 v1` e o path compatível `POST /v1/incidents/{incident_id}/confirmation` a `CTR-API-001 v3.1`, sem alterar `CTR-INC-001 v1`.
+- **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
 - **Fonte de verdade:** este arquivo; planos em `docs/plans/people/` são projeções.
 - **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
 - **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
@@ -23,9 +23,14 @@
 - **Changelog 2.4.1:** diante de sete horas restantes de hackathon, congela o escopo de demo em uma fatia vertical: stream sintético contínuo, duas degradações simultâneas, diagnóstico causal/evidência, recomendação humana e trial by fire. Integração real Yuno e RAG/agente amplo saem do caminho crítico.
 - **Changelog 2.4.2:** torna a primeira etapa da demo reproduzível por `CTR-DEMO-001 v1`: um endpoint restrito a `DEMO_MODE` semeia janelas temporais de baseline pelo stream interno. Não recebe payload Yuno nem altera a entrada pública de transações.
 - **Changelog 2.4.3:** congela a fatia implementada do agente proativo em `CTR-AGT-001`–`003 v1`: EvidencePack imutável, recuperação somente da memória/playbooks já autorizados, sugestão `HUMAN_ONLY` separada de `CTR-INC-001` e cliente determinístico padrão. O caminho OpenAI é opt-in e não integra a demo crítica.
-- **Changelog 2.4.4:** fecha a captura explícita de revisão humana para memória: `POST /v1/incidents/{incident_id}/confirmation` só promove um Incident já persistido após receber revisão com identidade declarada, causa, playbook, perfil temporal e evidências existentes. Falha ou ausência do Neo4j responde erro; não há fallback em memória local apresentado como confirmação. Autenticação de produção do revisor continua fora do MVP sintético.
-- **Changelog 2.3.1:** adiciona `CMP-QA-001`, um avaliador local do case. O modelo OpenAI seleciona apenas probes allowlisted contra uma instância isolada em memória e redige o parecer; não recebe ferramentas abertas, dados reais ou rota pública.
-- **Changelog 2.3.2:** torna `CMP-QA-001` um auditor de proveniência de erro. O parecer não pode aprovar se a falha exibida não for reconstruível a partir do input, do adaptador sintético determinístico e dos eventos bruto/canônico persistidos, ou se a serialização da mesma entrada mudar o resultado.
+- **Changelog 2.4.4:** por decisão explícita do usuário solicitante, ativa o cliente OpenAI no Railway quando `OPENAI_API_KEY` estiver configurada. O runtime usa `gpt-5.6-terra` com `reasoning.effort=high`; a ausência de chave mantém o template determinístico e indisponibilidade do provedor produz `UNAVAILABLE`, sem alterar Incident, causa ou pagamentos.
+- **Changelog 2.5.0:** adiciona uma classificação determinística de códigos de resposta por PSP, emissor e bandeira. O fato por transação é persistido antes da agregação; apenas uma anomalia já detectada produz o resumo estruturado que chega ao agente. O lookup não usa GraphRAG e não cria ação de pagamento.
+- **Changelog 2.5.1:** após o trial by fire local, restringe a categoria publicada pelo agente às categorias que já pertencem ao RCA atual. Precedentes recuperados continuam sendo contexto citável, mas não podem introduzir uma nova categoria causal.
+- **Changelog 2.6.1:** reduz o bucket-base de agregação, harness e detecção de cinco para um minuto. A janela de observação continua em 60 minutos, agora formada por 60 buckets fechados; o baseline continua estritamente anterior e o limiar de amostra não muda.
+- **Changelog 2.7.0:** adiciona `CTR-HRV-001 v1`, a decisão humana idempotente sobre um Incident. Aprovação promove somente um precedente com causa, playbook, evidências e motivo do revisor; recusa persiste motivo auditável no DuckDB/Neo4j, mas não entra na recuperação GraphRAG.
+- **Changelog 2.8.0:** adiciona ao `CTR-INC-001 v1` o campo aditivo `recurrence_first_detected_at`, calculado por tipo causal (categoria, métrica e escopo completo) sem misturar janelas ou correlações. O `CTR-TXL-001 v1` expõe a mesma data junto de cada Incident relacionado, para que o log mostre a origem da recorrência.
+- **Changelog 2.9.0:** adiciona `CTR-ADM-001 v1`, uma operação administrativa configurável para limpar atomica e explicitamente os dados sintéticos persistidos. O frontend nunca incorpora a credencial; o operador a informa apenas no momento da confirmação. Catálogos versionados de referência permanecem intactos.
+- **Changelog 2.9.1:** atualiza os defaults internos do agente para `gpt-5.6-sol` e `reasoning.effort=medium`, sem alterar `CTR-AGT-RUN-001 v1`, Responses API, fallback determinístico, política de não retry ou autoridade `HUMAN_ONLY`.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -79,7 +84,7 @@ O MVP vence quando uma pessoa:
 - Uma linha inicial e controles `Add transaction`, `Duplicate` e `Remove`.
 - O catálogo vem de `GET /v1/transaction-catalog`; nenhum option ID fica hardcoded.
 - `Generate sample transactions` recebe quantidade de 1 a 100, chama `POST /v1/transaction-samples` e preenche linhas editáveis. Seed continua uma capacidade opcional da API, mas não é exposta como controle público. A resposta nunca inclui outcome, status, métricas, causa ou ground truth.
-- Campos: referência opcional, timestamp opcional, merchant, provider, banco emissor, país, moeda, valor em unidade mínima, método, bandeira/tipo quando aplicáveis e conexão opcional.
+- Campos: referência opcional, timestamp opcional, merchant, provider, banco emissor, país, moeda, valor em unidade mínima, método, bandeira/tipo quando aplicáveis, código de resposta do provedor quando disponível e conexão opcional.
 - Um `Submit batch` envia de 1 a 100 itens com `Idempotency-Key`.
 - A resposta `202` redireciona para `/transactions?batch_id=...`; erro preserva os dados digitados.
 
@@ -115,7 +120,10 @@ O MVP vence quando uma pessoa:
 | DEC-017 | DECIDED | Progresso é persistido pelo backend; preservar DuckDB/Volume e gerador como harness interno | polling honesto, uma réplica no MVP e mínimo retrabalho; adapter permite Postgres/SSE posterior | `FL-20260829-TEAM-017` |
 | DEC-020 | DECIDED | Navegação usa três destinos e `UNKNOWN` entra na atenção técnica sem virar Incident por inferência da UI | preserva `CTR-TXL-001` e `CTR-INC-001` | `FL-20260829-TEAM-020` |
 | DEC-021 | DECIDED | Publicar `web/` na main como superfície compartilhada de integração | elimina duplicação sem alegar readiness live | `FL-20260829-TEAM-021` |
-| DEC-030 | DECIDED | Exigir revisão humana explícita antes de promover Incident atual ao Neo4j | adiciona `CTR-MEM-PROMOTE-001 v1` e path aditivo; não altera causa atual | `FL-20260830-TEAM-034` |
+| DEC-033 | DECIDED | Detectar `PAYMENT_CONVERSION` em observação móvel de 60 min formada por 60 buckets fechados de 1 min; exigir ao menos 10 `unique_payments`, três observações históricas anteriores do mesmo slice e queda de pelo menos 15 p.p. cuja bound superior de Wilson fique abaixo do baseline | aumenta a cadência com custo de mais agregações; preserva pagamento único, ausência de future leakage e deduplicação | `FL-20260830-TEAM-037` |
+| DEC-034 | DECIDED | Notificação in-app é criada após o upsert idempotente do Incident e é marcada lida no backend; não há canais externos neste incremento | refresh preserva estado e redelivery não duplica badge/card; não há entrega fora do produto | `FL-20260830-TEAM-036` |
+| DEC-035 | DECIDED | Uma decisão humana é registrada por `review_id`; `APPROVED` promove o Incident como precedente, enquanto `REJECTED` grava o motivo mas é excluída do retrieval | mantém o GraphRAG útil sem apagar divergências humanas | `FL-20260830-TEAM-038` |
+| DEC-036 | DECIDED | Recorrência operacional é identificada por categoria causal, métrica e escopo completo, ignorando janela e correlation ID; o primeiro `detected_at` é persistido e propagado ao log de transações somente para causas `SUPPORTED` | expõe duração real da recorrência sem agrupar incidentes simultâneos de escopos ou tipos diferentes nem apresentar hipótese inconclusiva como causa no log | `FL-20260830-TEAM-039` |
 
 ## 5. Arquitetura 2.0
 
@@ -132,8 +140,7 @@ flowchart LR
     DB --> AGG[Aggregate and baseline]
     AGG --> DET[Detect and RCA]
     DET --> INC[Incidents]
-    INC --> REVIEW[Human review]
-    REVIEW --> MEM[Neo4j memory]
+    INC --> MEM[Neo4j memory]
     INC --> EXP[Grounded explainer]
     MEM --> EXP
     EXP --> API
@@ -179,7 +186,6 @@ RECEIVED → NORMALIZING → CLASSIFYING → AGGREGATING → ANALYZING → COMPL
 | CMP-MEM/EXP-001 | memória e explicação grounded | Altoé | CTR-INC → CTR-MEM/LLM | RAG eval matrix |
 | CMP-HARNESS-001 | cenários e tráfego interno | Renato | internal config → batch API | existing scenario fixtures |
 | CMP-DEPLOY-001 | Railway runtime/volume/env | Rogério | repo/env → health | deploy smoke |
-| CMP-QA-001 | avaliador local e auditor de proveniência | Team | `avaliacao.md` + API local → parecer e evidências | oráculos de grounding + reconstrução de erro + equivalência de transporte |
 
 Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, dependency lock e env; André coordena `web/`; Renato coordena simulator/detector; Altoé coordena graph/prompts. Mudança de contrato começa aqui.
 
@@ -188,16 +194,17 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | ID/versão | Estado | Produtor → consumidores | Propósito | Erros/fallback | Evidência |
 | --- | --- | --- | --- | --- | --- |
 | CTR-TXN-001 v1 | FROZEN / IMPLEMENTED ON MAIN | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | endpoints, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
-| CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome e classificação | stale/unknown explícitos | worker, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
-| CTR-API-001 v3.1 | IMPLEMENTED / READY FOR REVIEW | API → WEB | health, batch, logs, detail, metrics, incidents e confirmação humana aditiva | timeout e códigos tipados; confirmação retorna `404`, `409`, `422` ou `503` | OpenAPI, schemas, fixtures e testes de confirmação locais |
+| CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome, classificação e a primeira ocorrência de cada Incident relacionado | stale/unknown explícitos; campo aditivo pode estar ausente em registros legados até a migração local | worker, schemas e fixtures; validação de recorrência em `FL-20260830-TEAM-039` |
+| CTR-API-001 v3 | FROZEN / IMPLEMENTED ON MAIN | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | endpoints e OpenAPI em `origin/main@103073b`; CORS/deploy pendentes |
 | CTR-TDI-001 v1 | IMPLEMENTED / READY FOR REVIEW | API → WEB | detalhe grounded de uma transação e seus Incidents autorizados | `404` para transação inexistente; `NO_INCIDENT` e `PARTIAL` explícitos | schema, fixture, OpenAPI e testes HTTP na branch `codex/integrate-grounded-transactions` |
 | CTR-SCN-001 v2 | INTERNAL MIGRATION PENDING | DATA/HARNESS → DATA | injeção e ground truth apenas para teste | nunca exposto na UI pública | scenario draft `cc24c7a`; código atual será adaptado pelo harness |
 | CTR-EVT-001 v1 | FROZEN | DATA/TXN → ING | canonical payment attempt event | quarantine/dedupe/watermark | schema existente |
 | CTR-AGG-001 v1 | FROZEN | AGG → DET/RCA | métricas calculadas | `INSUFFICIENT_VOLUME` | schema existente |
 | CTR-DET-001 v1 | FROZEN | DET → INC | candidatos numéricos | `NO_ANOMALY`, data quality | schema existente |
-| CTR-INC-001 v1 | FROZEN, adendo 2.1.1 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação e impacto local priorizável | `INCONCLUSIVE` válido; moedas não recebem conversão implícita | fixtures existentes + testes de serialização/prioridade/correlação |
+| CTR-DET-002 v2 | FROZEN / PROPOSED | DET → INC/AGENT/API/WEB | candidato `PAYMENT_CONVERSION`, com janela observada, baseline anterior, `unique_payments` e `estimated_lost_conversions` | baixa amostra, baseline insuficiente ou janela aberta não produzem candidato; redelivery preserva ID | `contracts/v2/payment-conversion-candidate.schema.json`, fixture e testes de janela/revisão |
+| CTR-NOT-001 v1 | FROZEN / PROPOSED | INC repository → API → WEB | notificação in-app persistente por Incident criado, com leitura backend-authoritativa | sem canais externos; leitura repetida é no-op; mesma chave de Incident não duplica | `notification_records`, OpenAPI, fixture, API/web tests |
+| CTR-INC-001 v1 | FROZEN, adendos 2.1.1/2.8.0 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação, impacto local priorizável e data da primeira ocorrência do mesmo tipo causal | `INCONCLUSIVE` válido; moedas não recebem conversão implícita; campo de recorrência é aditivo | fixtures existentes + testes de serialização/prioridade/correlação |
 | CTR-MEM-001 v1.1 | FROZEN / RUNTIME READY FOR REVIEW | MEM → EXP/API | precedente tipado via adapter Neo4j opcional | `NO_PRECEDENT`, `MEMORY_UNAVAILABLE`; fallback local explícito | Compose, bootstrap, runtime e testes de fallback na branch `codex/neo4j-docker-runtime` |
-| CTR-MEM-PROMOTE-001 v1 | IMPLEMENTED / READY FOR REVIEW | API/human review → Neo4j | cria precedente histórico somente após revisão humana declarada | `404`, `409`, `422`, `503`; jamais usa fallback local como confirmação | schemas/fixtures `incident-confirmation*`, teste HTTP e adapter Neo4j |
 | CTR-LLM-001 v1 | FROZEN | EXP → API/WEB | explicação grounded | template determinístico | schema existente |
 | CTR-DEP-001 v1 | FROZEN | Railway/Vercel → team | URLs, env, health e CORS | local mode; no fake live | deployment plan |
 
@@ -213,6 +220,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 - RAG recebe somente Incident já derivado e não é chamado por transação individual.
 - `GET /v1/incidents` sempre devolve uma lista homogênea de `Incident`; quando filtrada por `transaction_id`, a lista só contém Incidents que passam por ID relacionado, evidência de classificação e `correlation_id` compatível.
 - `GET /v1/transactions/{transaction_id}/incidents` é o único detalhe grounded público: devolve `RESOLVED`, `PARTIAL` ou `NO_INCIDENT`, evidência autorizada, Incident, memória, ExplanationBundle e limitações sem promover precedente a causa atual.
+- `CTR-MEM-001 v1.1` expõe somente precedentes com `confirmation=HUMAN_CONFIRMED`; registros de avaliação sintética permanecem fora da resposta pública.
 - `root_cause.alternatives` é uma lista ordenada por confiança decrescente; cada item é hipótese, não causa atual, e não altera `root_cause.status`.
 - `recommendation_class` só classifica a recomendação humana (`INVESTIGATE`, `MONITOR` ou `ESCALATE`); `execution` permanece obrigatoriamente `HUMAN_ONLY`.
 - Incidentes são ordenados por `impact.amount_minor` apenas dentro do bucket da mesma `currency`; sem FX versionado não há comparação global entre moedas.
@@ -556,9 +564,108 @@ Incident persistido → CTR-AGT-001 EvidencePack → agente read-only
 
 `CTR-AGT-001` EvidencePack, `CTR-AGT-002` RetrievalTrace e `CTR-AGT-003` DiagnosticSuggestion são contratos v1 implementados. O agente roda após o Incident ser produzido pelo motor, escreve sua saída separadamente e nunca altera `root_cause`, estado do Incident ou qualquer pagamento. A recuperação usa somente `IncidentMemoryService` e playbooks versionados já presentes; o cliente padrão é determinístico/offline. `SUGGESTED` exige ao menos duas evidências atuais de fontes distintas; caso contrário retorna `INSUFFICIENT_EVIDENCE`, e falha técnica retorna `UNAVAILABLE`.
 
-O endpoint aditivo `GET /v1/incidents/{incident_id}/suggestion` expõe apenas a hipótese já persistida. Integração de corpus externo, embeddings, vector store, taxonomia de fraude mais ampla ou cliente OpenAI na imagem Railway continua fora desta revisão e exige novo change control.
+O endpoint aditivo `GET /v1/incidents/{incident_id}/suggestion` expõe apenas a hipótese já persistida. Esta decisão congelou a fatia 2.4.3; sua restrição operacional sobre o cliente OpenAI no Railway foi substituída por `DEC-030`. Corpus externo, embeddings, vector store e taxonomia de fraude mais ampla continuam fora desta revisão e exigem novo change control.
 
-## 18. Recuperação de demo — janela de sete horas
+### DEC-030 — ativar geração OpenAI configurável para a hipótese do agente
+
+**Estado:** `DECIDED`. **Owner:** usuário solicitante. **Flight Log:** `FL-20260830-TEAM-031`.
+
+`CTR-AGT-001`–`003 v1` permanecem congelados e não recebem campos, estados nem permissões novos. A configuração interna `CTR-AGT-RUN-001 v1` seleciona `OpenAISuggestionClient` somente quando `OPENAI_API_KEY` existe; ele chama `gpt-5.6-terra` com `reasoning.effort=high` pela Responses API. Sem chave, o agente mantém `deterministic-template-v1`; se o SDK ou a OpenAI falhar após a seleção, persiste a sugestão tipada `UNAVAILABLE` já prevista no `CTR-AGT-003`.
+
+| Contrato interno | Estado | Produtor → consumidor | Precondições e falha | Owner / prova |
+| --- | --- | --- | --- | --- |
+| `CTR-AGT-RUN-001 v1` | IMPLEMENTED | Railway Variables / `Settings` → `DiagnosticAgentService` → OpenAI Responses API | `OPENAI_API_KEY` secreto; `OPENAI_MODEL=gpt-5.6-terra`; `OPENAI_REASONING_EFFORT=high`. Sem chave: template. Falha/timeout: `UNAVAILABLE`, sem retry e sem rollback do Incident. | Rogério; testes unitários de seleção e request + smoke Railway com Incident sintético. |
+
+**Compatibilidade e integração:** é uma mudança comportamentalmente arriscada, mas compatível com os consumidores: API e UI já aceitam `model_version` variável e os mesmos três estados. Hotspots coordenados por Rogério são `app/config.py`, `app/agent/`, `app/worker/transaction_worker.py`, `pyproject.toml`, `uv.lock`, `Dockerfile`, `.env.example` e `docs/deploy-railway.md`. A ordem segura é dependência/configuração → seleção do cliente → commit do lifecycle e liberação do lock → geração/validação da sugestão → testes de segurança/contrato → build da imagem → variável secreta no Railway → smoke de um Incident sintético. Nenhuma retry de chamada do modelo é permitida e o modelo continua sem ferramentas, sem escrita de Incident e sem ação financeira.
+
+**Parecer do Integration Contract Guardian — CHANGE CONTROL: `PLAN READY`.** A mudança é compatível: `CTR-AGT-003 v1` já transporta `model_version` e `UNAVAILABLE`; API e UI não exigem versão de modelo fixa. `CTR-AGT-RUN-001 v1` fixa produtor, consumidor, segredo, timeout, fallback, owner, hotspot e prova. A chamada externa é pós-persistência, sem retry e sem side effect financeiro; o único checkpoint ainda externo é o smoke no Railway com a chave configurada.
+
+### DEC-032 — limitar a categoria sugerida ao RCA atual
+
+**Estado:** `DECIDED`. **Owner:** usuário solicitante. **Flight Log:** `FL-20260830-TEAM-033`.
+
+O contrato de transporte `CTR-AGT-003 v1` permanece inalterado. A regra interna `CTR-AGT-GRD-001 v1` determina que `suggested_category`, quando presente, deve ser exatamente a categoria atual de `EvidencePack.root_cause` ou uma das entradas de `EvidencePack.rca_alternatives`. `RetrievalTrace` pode fundamentar razões, limitações e próximos passos, mas não fornece categorias elegíveis. Uma saída com categoria fora desse conjunto é recusada e publicada como `UNAVAILABLE`, preservando o Incident e a causa do motor.
+
+| Contrato interno | Estado | Produtor → consumidor | Precondições e falha | Owner / prova |
+| --- | --- | --- | --- | --- |
+| `CTR-AGT-GRD-001 v1` | IMPLEMENTED | EvidencePack + RetrievalTrace → validador → `DiagnosticSuggestion` | Categoria sugerida pertence à causa atual ou às alternativas atuais; precedente é contexto, não taxonomia. Violação: `UNAVAILABLE`, sem mutação causal. | Altoé/Rogério; testes com categoria de precedente rejeitada e alternativa atual aceita. |
+
+**Compatibilidade e integração:** não há mudança de schema, endpoint, persistência nem consumidor. O prompt e o validador usam o mesmo conjunto fechado do EvidencePack, evitando que uma instrução textual seja o único controle. A mudança não amplia a taxonomia, não habilita pagamento e não cria retry. O rerun real do cenário inconclusivo deve publicar apenas uma alternativa atual ou `UNAVAILABLE`; uma categoria exclusiva de precedente é falha bloqueada pelo validador.
+
+**Parecer do Integration Contract Guardian — PLANNING: `PLAN READY`.** A fronteira é interna ao agente: o produtor já fornece as categorias, o consumidor já aceita `UNAVAILABLE`, e as provas cobrem aceitação e recusa. A categoria causal continua pertencendo somente ao motor determinístico.
+
+## 18. Classificação de resposta e contexto para o agente
+
+### DEC-031 — catálogo determinístico de códigos e resumo de incidentes
+
+**Estado:** `DECIDED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-032`.
+
+O código de resposta informado para uma transação é um fato de domínio, não texto para recuperação generativa. `CTR-RFC-001 v1` resolve o código em uma tabela DuckDB versionada, usando a precedência `provider_id` → `issuer_bank` → `card_brand` → código. O registro de transação preserva o código recebido, o resultado resolvido (`SUCCEEDED|FAILED|UNKNOWN`), a razão legível, fonte e versão do mapeamento. Quando não houver correspondência, o sistema preserva `UNKNOWN` e uma limitação explícita; nunca inventa uma recusa.
+
+O worker usa a resolução quando há código informado; os exemplos legados sem código permanecem no adaptador sintético existente. Assim, compatibilidade de demo não é confundida com uma classificação de produção. O catálogo inicial cobre os provedores reais hoje configurados (`Adyen`, `dLocal` e a forma textual de decline code do `Stripe`); a expansão de códigos é dados versionados, não alteração do agente.
+
+O agente não recebe uma conexão com DuckDB, transações individuais nem uma consulta tardia. Depois que detector e RCA já persistiram um Incident, o pipeline constrói `CTR-RFC-002 v1` `RefusalCodeSummary`: agrupamentos factuais de provider/bandeira/código/razão/fonte/versão e contagem, limitados ao `correlation_id`, janela e escopo do Incident. Esses itens viram evidências citáveis do `CTR-AGT-001` EvidencePack.
+
+```text
+input (provider, issuer, bandeira, código)
+  → CTR-RFC-001 catálogo determinístico
+  → TransactionRecord: outcome + classification + refusal_resolution
+  → evento canônico / cube: perfil de declines
+  → detector limiar + baseline
+  ├─ sem anomalia: explicação da transação, sem sugestão do agente
+  └─ Incident persistido
+       → CTR-RFC-002 resumo de códigos do escopo/janela
+       → EvidencePack imutável → agente HUMAN_ONLY → sugestão fundamentada
+```
+
+| Contrato | Produtor → consumidor | Conteúdo, limite e teste |
+| --- | --- | --- |
+| `CTR-RFC-001 v1` `RefusalCodeResolution` | catálogo/worker → `TransactionRecord` | provider, banco, bandeira, código, resultado, razão, fonte, versão e `MATCH_FOUND|NOT_FOUND|AMBIGUOUS`; lookup determinístico e teste de precedência. |
+| `CTR-RFC-002 v1` `RefusalCodeSummary` | transações persistidas/incident pipeline → `EvidencePack` | somente agregados no escopo e janela do Incident; razão original, contagem e evidência citável; teste de exclusão fora de correlação/escopo. |
+| `CTR-AGT-001 v1` (aditivo) | incident pipeline → agente | inclui `refusal_code_summaries` e IDs autorizados; agente não obtém SQL, ferramenta financeira ou autoridade causal. |
+
+**Regra operacional:** uma ou poucas recusas por saldo insuficiente explicam aquelas transações, mas não comprovam incidente. Um pico só chega ao agente depois de ultrapassar a detecção/baseline existente; a sugestão deve descrevê-lo como hipótese operacional, jamais declarar incidente de saldo ou executar retry/rerouting.
+
+**Parecer do Integration Contract Guardian — PLANNING: `PLAN READY`.** O contrato é aditivo para a entrada e para o EvidencePack, há um owner único para catálogo/worker, mock legada preservada e a fronteira do agente continua somente leitura. Dados reais de PSP exigem governança de fonte e atualização versionada do catálogo; não bloqueiam a fatia atual.
+
+## 19. Manutenção controlada de dados sintéticos
+
+### DEC-038 — reset administrativo, explícito e atômico do workspace sintético
+
+**Estado:** `IMPLEMENTED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-038`.
+
+`CTR-ADM-001 v1` adiciona `POST /v1/admin/transaction-data/reset`, restrito a uma chave definida exclusivamente no Railway (`TRANSACTION_RESET_KEY`). A requisição exige a confirmação literal `DELETE_SYNTHETIC_TRANSACTION_DATA` e envia a chave somente no cabeçalho `X-Lumen-Admin-Key`; a interface não armazena nem configura essa chave.
+
+Sob o lock compartilhado do DuckDB, uma única transação remove os fatos sintéticos (`raw_events`, canônicos, tentativas, batches e records) e todas as projeções operacionais derivadas (links, Incidents, sugestões e notificações). O catálogo `refusal_code_catalog` é dado versionado da aplicação e não é removido. O retorno tem as contagens por tabela e `correlation_id`; credencial ausente/configuração ausente/falha do store são estados explícitos.
+
+| Alternativa | Benefício | Risco/custo | Decisão |
+| --- | --- | --- | --- |
+| Ocultar dados no browser | implementação mínima | refresh repõe o histórico; não limpa a demo | rejeitada |
+| Apagar somente `transaction_records` | menos SQL | batches, eventos e Incidents ficam órfãos ou enganosos | rejeitada |
+| Apagar todo o arquivo DuckDB | reset simples | remove catálogo de referência e exige recriação operacional | rejeitada |
+| Limpeza transacional de fatos + projeções | workspace realmente novo, sem redeploy | ação destrutiva requer chave e confirmação | escolhida |
+
+**Gate de integração:** CORS aceita somente o cabeçalho de reset além dos cabeçalhos públicos existentes; o endpoint é `POST` para manter o método permitido no cliente cross-origin. A validação cobre credencial/configuração, confirmação, contagens e novo uso da chave de idempotência após a limpeza. A prova visual local depende de instalar as dependências do `web/`.
+
+### DEC-039 — usar GPT-5.6 Sol com raciocínio médio como default do agente
+
+**Estado:** `DECIDED`. **Owner:** usuário solicitante. **Flight Log:** `FL-20260830-ROGERIO-031`.
+
+`CTR-AGT-RUN-001 v1` permanece inalterado: quando `OPENAI_API_KEY` estiver disponível, `OpenAISuggestionClient` chama a Responses API com `gpt-5.6-sol` e `reasoning.effort=medium`. Sem chave, usa `deterministic-template-v1`; timeout, indisponibilidade ou saída inválida resultam em `UNAVAILABLE`, com `max_retries=0`. Não há ferramentas, mutação de Incident, promoção causal ou ação financeira.
+
+| Contrato interno | Estado | Produtor → consumidor | Precondições e falha | Owner / prova |
+| --- | --- | --- | --- | --- |
+| `CTR-AGT-RUN-001 v1` | IMPLEMENTED | Railway Variables / `Settings` → `DiagnosticAgentService` → OpenAI Responses API | `OPENAI_API_KEY` secreto; `OPENAI_MODEL=gpt-5.6-sol`; `OPENAI_REASONING_EFFORT=medium`. Sem chave: template. Falha/timeout: `UNAVAILABLE`, sem retry. | Rogério; teste unitário dos defaults; smoke Railway sintético pendente. |
+
+### DEC-040 — classificar falhas pela semântica do código resolvido
+
+**Estado:** `IMPLEMENTED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-041`.
+
+`FAILED` registra apenas que a tentativa não concluiu; não autoriza atribuir a decisão ao emissor. No worker, `ACQUIRER_ERROR` e `EXCESSIVE_RETRY_BLOCKED` viram `PROVIDER_ERROR`, `ISSUER_UNAVAILABLE` vira `TIMEOUT` e as recusas conhecidas restantes preservam `ISSUER_DECLINE`. O evento canônico acompanha `PROVIDER`, `TECHNICAL` ou `ISSUER`; `UNKNOWN` permanece explícito.
+
+`RefusalCodeResolution` passa a exigir `normalized_code` e `observed_response_code` no `TransactionRecord`, schema e parser web. Não há mudança de outcome, retry, pagamento, endpoint nem schema de topo; o catálogo DuckDB continua a autoridade.
+
+## 20. Recuperação de demo — janela de sete horas
 
 ### DEC-027 — priorizar prova ao vivo do mecanismo causal sobre integrações amplas
 

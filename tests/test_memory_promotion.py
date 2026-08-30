@@ -49,7 +49,7 @@ class IncidentPromotionTest(unittest.TestCase):
                 current_incident(), review(provenance="SYNTHETIC_EVALUATION")
             )
 
-    def test_synthetic_review_is_retrievable_only_in_explicit_evaluation_mode(self) -> None:
+    def test_synthetic_review_never_crosses_the_public_precedent_boundary(self) -> None:
         repository = InMemoryIncidentRepository(include_evaluation=True)
         IncidentPromoter(repository, allow_synthetic_evaluation=True).promote(
             current_incident(), review(provenance="SYNTHETIC_EVALUATION")
@@ -65,7 +65,7 @@ class IncidentPromotionTest(unittest.TestCase):
             correlation_id="corr-promotion-query-001",
         )
         result = IncidentMemoryService(repository).retrieve(query)
-        self.assertEqual("MATCH_FOUND", result.memory_status.value)
+        self.assertEqual("NO_PRECEDENT", result.memory_status.value)
 
 
 if __name__ == "__main__":

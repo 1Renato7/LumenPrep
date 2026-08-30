@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { formatMetricValue } from "../../lib/format/metric";
+
 import batchAcceptedFixture from "../../../contracts/fixtures/transaction-batch-accepted.json";
 import catalogFixture from "../../../contracts/fixtures/transaction-catalog.json";
 import explanationFixture from "../../../contracts/fixtures/explanation-bundle.json";
@@ -11,6 +13,7 @@ import sampleFixture from "../../../contracts/fixtures/transaction-sample-respon
 import similarIncidentsFixture from "../../../contracts/fixtures/similar-incidents.json";
 import succeededFixture from "../../../contracts/fixtures/transaction-succeeded.json";
 import noIncidentFixture from "../../../contracts/fixtures/transaction-incident-detail-no-incident.json";
+import humanReviewFixture from "../../../contracts/fixtures/human-review-request-approved.json";
 import {
   backendStateFor,
   createBatchSubmission,
@@ -23,8 +26,8 @@ import {
   type LumenApiClient,
 } from "../../lib/api/client-interface";
 import { createMockLumenApiClient } from "../../lib/mocks/transaction-api-client";
-import { parseDiagnosticSuggestion, parseTransactionInput } from "../../lib/api/parse";
-import type { TransactionBatchRequest, TransactionList } from "../../lib/api/types";
+import { parseDiagnosticSuggestion, parseIncident, parseTransactionInput, parseTransactionRecord } from "../../lib/api/parse";
+import type { HumanReviewRequest, TransactionBatchRequest, TransactionList } from "../../lib/api/types";
 
 const batchRequest: TransactionBatchRequest = {
   schema_version: "1.0",
@@ -133,6 +136,59 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
   assert.equal(normalizeApiBaseUrl("https://api.example.test/v1///"), "https://api.example.test/v1");
 });
 
+test("accepts string-array incident metrics allowed by CTR-INC-001", () => {
+  const incident = parseIncident({
+    ...incidentFixture,
+    metrics: {
+      ...incidentFixture.metrics,
+      decline_codes: ["DO_NOT_HONOR", "INSUFFICIENT_FUNDS", "SUSPECTED_FRAUD"],
+    },
+  });
+
+  assert.deepEqual(incident.metrics.decline_codes, ["DO_NOT_HONOR", "INSUFFICIENT_FUNDS", "SUSPECTED_FRAUD"]);
+  assert.equal(formatMetricValue(incident.metrics.decline_codes), "DO_NOT_HONOR, INSUFFICIENT_FUNDS, SUSPECTED_FRAUD");
+});
+
+test("formats decimal incident metrics with two decimal places", () => {
+  assert.equal(formatMetricValue(0.928374), "0,93");
+  assert.equal(formatMetricValue("0.928374"), "0,93");
+  assert.equal(formatMetricValue(492), "492");
+});
+
+test("submits CTR-HRV-001 to the incident review route and parses its audit response", async () => {
+  let requestUrl = "";
+  let requestBody = "";
+  const client = createLumenApiClient({
+    baseUrl: "https://api.example.test/v1",
+    fetchImpl: async (url, init) => {
+      requestUrl = String(url);
+      requestBody = String(init?.body);
+      return json({
+        schema_version: "1.0",
+        promoted_to_memory: true,
+        review: {
+          review_id: humanReviewFixture.review_id,
+          incident_id: "incident/one",
+          decision: "APPROVED",
+          reviewer_id: humanReviewFixture.reviewer_id,
+          reason: humanReviewFixture.reason,
+          confirmed_cause: humanReviewFixture.confirmed_cause,
+          playbook_id: humanReviewFixture.playbook_id,
+          reviewed_at: "2026-08-30T12:00:00Z",
+        },
+      }, 201);
+    },
+  });
+
+  const reviewRequest = humanReviewFixture as HumanReviewRequest;
+  const response = await client.submitHumanReview("incident/one", reviewRequest);
+
+  assert.equal(requestUrl, "https://api.example.test/v1/incidents/incident%2Fone/review");
+  assert.deepEqual(JSON.parse(requestBody), reviewRequest);
+  assert.equal(response.review.reason, reviewRequest.reason);
+  assert.equal(response.promoted_to_memory, true);
+});
+
 test("submit preserves Idempotency-Key and an explicit retry reuses its original payload", async () => {
   const headers: string[] = [];
   const bodies: string[] = [];
@@ -155,6 +211,36 @@ test("submit preserves Idempotency-Key and an explicit retry reuses its original
   assert.deepEqual(headers, ["idem-key-123", "idem-key-123"]);
   assert.deepEqual(bodies, [bodies[0], bodies[0]]);
   batchRequest.transactions[0].amount_minor = 100;
+});
+
+test("admin reset sends its key only in the reset request and parses deletion counts", async () => {
+  let seenUrl = "";
+  let seenHeaders: Headers | undefined;
+  let seenBody = "";
+  const client = createLumenApiClient({
+    baseUrl: "https://api.example.test/v1",
+    fetchImpl: async (url, init) => {
+      seenUrl = String(url);
+      seenHeaders = new Headers(init?.headers);
+      seenBody = String(init?.body);
+      return json({
+        schema_version: "1.0",
+        removed: {
+          transaction_incident_links: 1, incident_notifications: 2, incident_suggestions: 3, incident_records: 4,
+          transaction_records: 5, transaction_batches: 6, canonical_attempts: 7, canonical_events: 8,
+          raw_events: 9, quarantine: 10,
+        },
+        correlation_id: "corr-reset",
+      });
+    },
+  });
+
+  const result = await client.resetTransactionData("operator-secret");
+  assert.equal(seenUrl, "https://api.example.test/v1/admin/transaction-data/reset");
+  assert.equal(seenHeaders?.get("X-Lumen-Admin-Key"), "operator-secret");
+  assert.equal(seenBody, '{"confirmation":"DELETE_SYNTHETIC_TRANSACTION_DATA"}');
+  assert.equal(result.removed.transaction_records, 5);
+  assert.equal(result.correlation_id, "corr-reset");
 });
 
 test("different payload with the same key remains a typed 409 conflict", async () => {
@@ -196,6 +282,21 @@ test("unknown response properties are rejected rather than cast silently", async
   const invalidCatalog = { ...catalogFixture, unexpected: "not part of CTR-TXN-001" };
   const client = createLumenApiClient({ baseUrl: "https://api.example.test/v1", fetchImpl: async () => json(invalidCatalog) });
   await assert.rejects(client.getTransactionCatalog(), (error: unknown) => error instanceof LumenApiError && error.code === "INVALID_RESPONSE");
+});
+
+test("parses the normalized code preserved in a refusal resolution", () => {
+  const record = parseTransactionRecord({
+    ...processingFixture,
+    status: "FAILED",
+    processing: { stage: "COMPLETE", progress_percent: 100, failure_code: null },
+    outcome: { result: "FAILED", provider_response_code: "4", normalized_decline_code: "ACQUIRER_ERROR", latency_ms: 42 },
+    classification: {
+      category: "PROVIDER_ERROR", reason: "Acquirer error", confidence: 1, evidence_ids: ["evt_acquirer"], related_incident_ids: [],
+      refusal_resolution: { lookup_status: "MATCH_FOUND", provider_id: "ADYEN", issuer_bank: "NUBANK_BR", card_brand: "VISA", response_code: "4", observed_response_code: "4", outcome: "FAILED", normalized_code: "ACQUIRER_ERROR", reason: "Acquirer error", source: "ADYEN_REFUSAL_REASON", mapping_version: "2026.08.30" },
+    },
+  });
+  assert.equal(record.classification?.category, "PROVIDER_ERROR");
+  assert.equal(record.classification?.refusal_resolution?.normalized_code, "ACQUIRER_ERROR");
 });
 
 test("CTR-TDI-001 parses NO_INCIDENT and rejects invalid status invariants and duplicate IDs", async () => {

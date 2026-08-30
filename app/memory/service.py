@@ -95,7 +95,8 @@ class IncidentMemoryService:
         return tuple(
             candidate
             for candidate in repository.confirmed_incidents(incident)
-            if candidate.incident_id != incident.incident_id
+            if candidate.confirmation == "HUMAN_CONFIRMED"
+            and candidate.incident_id != incident.incident_id
             and cutoff <= candidate.occurred_at <= incident.detected_at
             and _shares_scope(incident, candidate)
         )

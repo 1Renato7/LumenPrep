@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { LumenApiError, type LumenApiClient } from "@/lib/api/client-interface";
 import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
-import type { DiagnosticSuggestion, IncidentDetail as IncidentDetailData } from "@/lib/api/types";
+import type { DiagnosticSuggestion, HumanReviewResponse, IncidentDetail as IncidentDetailData } from "@/lib/api/types";
+import { formatMetricValue } from "@/lib/format/metric";
 import styles from "./incidents.module.css";
 
 export function IncidentDetail({ incidentId, api: suppliedApi }: { incidentId: string; api?: LumenApiClient }) {
@@ -62,7 +63,7 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
     <section className={`${styles.card} ${styles.executiveCard}`} aria-labelledby="executive-summary-title">
       <div className={styles.cardTop}><span className={styles.state}>{incident.state}</span><span className={inconclusive ? styles.causeInconclusive : styles.causeSupported}>{incident.root_cause.status}</span></div>
       <h2 id="executive-summary-title">Executive summary</h2><p className={styles.lead}>{explanation.executive_summary}</p>
-      <div className={styles.meta}><Field label="Detected" value={formatDate(incident.detected_at)} /><Field label="Estimated start" value={formatDate(incident.estimated_started_at)} /><Field label="Correlation ID" value={incident.correlation_id} /><Field label="Model" value={explanation.model_version} /></div>
+      <div className={styles.meta}><Field label="Detected" value={formatDate(incident.detected_at)} /><Field label="First occurrence" value={incident.recurrence_first_detected_at ? formatDate(incident.recurrence_first_detected_at) : "Not available"} /><Field label="Estimated start" value={formatDate(incident.estimated_started_at)} /><Field label="Correlation ID" value={incident.correlation_id} /><Field label="Model" value={explanation.model_version} /></div>
     </section>
 
     <section className={styles.twoColumn}>
@@ -76,13 +77,15 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
       <article className={`${styles.card} ${styles.impactCard}`}><p className={styles.label}>Business exposure</p><h2>{formatMoney(incident.impact.amount_minor, incident.impact.currency)}</h2><p className={styles.muted}>GMV at risk · {humanize(incident.impact.method)}</p><div className={styles.meta}><Field label="Lower bound" value={formatOptionalMoney(incident.impact.lower_bound_minor, incident.impact.currency)} /><Field label="Upper bound" value={formatOptionalMoney(incident.impact.upper_bound_minor, incident.impact.currency)} /></div>
         <h3>Operational summary</h3><p>{explanation.operations_summary}</p>
         <h3>Scope</h3><div className={styles.tagGroups}>{Object.entries(incident.scope).map(([dimension, values]) => <div key={dimension}><span className={styles.label}>{humanize(dimension)}</span><div className={styles.tags}>{values.map((value) => <span key={value}>{value}</span>)}</div></div>)}</div>
-        <h3>Metrics returned</h3><dl className={styles.metrics}>{Object.entries(incident.metrics).map(([name, value]) => <div key={name}><dt>{humanize(name)}</dt><dd>{formatMetric(value)}</dd></div>)}</dl>
+        <h3>Metrics returned</h3><dl className={styles.metrics}>{Object.entries(incident.metrics).map(([name, value]) => <div key={name}><dt>{humanize(name)}</dt><dd>{formatMetricValue(value)}</dd></div>)}</dl>
       </article>
     </section>
 
     <AgentHypothesis suggestion={suggestion} error={suggestionError} loading={!suggestion && !suggestionError} onRetry={() => { setSuggestion(null); setSuggestionError(null); setReload((value) => value + 1); }} />
 
     <section className={`${styles.card} ${styles.actionCard}`}><div><p className={styles.label}>Human decision</p><h2>Human recommendation</h2></div><span className={styles.humanOnly}>HUMAN_ONLY</span><p className={styles.actionText}>{explanation.recommended_action}</p><div className={styles.meta}><Field label="Explanation playbook" value={explanation.playbook_id} /><Field label="Execution" value={explanation.execution} /></div><div className={styles.actionList}>{incident.recommendations.map((item) => <article key={`${item.playbook_id}-${item.action}`}><strong>{item.playbook_id}</strong><p>{item.action}</p><small>{item.recommendation_class ? `${humanize(item.recommendation_class)} · ` : ""}{item.execution} · Rationale: {item.rationale_evidence_ids.join(", ") || "Not provided"}</small></article>)}</div></section>
+
+    <HumanReviewPanel incident={incident} defaultPlaybookId={explanation.playbook_id} api={client.api} source={client.source} />
 
     <section className={`${styles.card} ${styles.diagnosticLogs}`} aria-labelledby="diagnostic-logs-title"><p className={styles.label}>Diagnosis audit trail</p><h2 id="diagnostic-logs-title">Logs used to calculate this diagnosis</h2><p className={styles.muted}>These current signals were used by the deterministic engine to determine whether this is an incident or whether the cause remains inconclusive. Historical incidents are shown separately as context and do not determine the current cause.</p>
       {diagnosticLogs.length ? <div className={styles.evidenceGrid}>{diagnosticLogs.map((evidence) => <article className={styles.evidenceItem} key={evidence.evidence_id}><div><span className={styles.evidenceKind}>{evidence.kind}</span><code>{evidence.evidence_id}</code></div><p>{evidence.statement}</p><small>Log source: {evidence.source_ref}</small></article>)}</div> : <p className={styles.warning} role="status">No current calculation logs were returned for this diagnosis.</p>}
@@ -111,15 +114,48 @@ function AgentHypothesis({ suggestion, error, loading, onRetry }: { suggestion: 
   </section>;
 }
 
+function HumanReviewPanel({ incident, defaultPlaybookId, api, source }: { incident: IncidentDetailData["incident"]; defaultPlaybookId: string; api: LumenApiClient | null; source: string }) {
+  const [decision, setDecision] = useState<"APPROVED" | "REJECTED">("APPROVED");
+  const [reviewerId, setReviewerId] = useState("");
+  const [reason, setReason] = useState("");
+  const [cause, setCause] = useState(incident.root_cause.category ?? "");
+  const [playbookId, setPlaybookId] = useState(defaultPlaybookId);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [result, setResult] = useState<HumanReviewResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!api) { setError("The live API is not configured for human review."); return; }
+    setSubmitting(true); setError(null);
+    try {
+      // Keep the key stable after a timeout or a failed response, so retrying does
+      // not create a second human decision.
+      const stableReviewId = reviewId ?? `review-${crypto.randomUUID()}`;
+      setReviewId(stableReviewId);
+      const review = await api.submitHumanReview(incident.incident_id, {
+        schema_version: "1.0", review_id: stableReviewId, reviewer_id: reviewerId.trim(), decision, reason: reason.trim(),
+        ...(decision === "APPROVED" ? { confirmed_cause: cause.trim(), playbook_id: playbookId.trim() } : {}),
+      });
+      setResult(review);
+    } catch (failure) {
+      setError(apiErrorMessage(failure, "The human review could not be saved."));
+    } finally { setSubmitting(false); }
+  }
+
+  return <section className={`${styles.card} ${styles.reviewCard}`} aria-labelledby="human-review-title"><div className={styles.cardTop}><div><p className={styles.label}>Human review</p><h2 id="human-review-title">Confirm or reject this cause</h2></div><span className={styles.humanOnly}>HUMAN_ONLY</span></div><p className={styles.muted}>Only an approval becomes a GraphRAG precedent. A rejection keeps the reviewer reason in the audit graph without influencing future matches.</p>
+    {source === "MOCK_FIXTURE" ? <p className={styles.warning}>Fixture mode: this validates the interaction but does not write to Aura.</p> : null}
+    {result ? <div className={styles.reviewResult} role="status"><strong>{result.review.decision === "APPROVED" ? "Approved and promoted to GraphRAG." : "Rejection recorded in the audit graph."}</strong><p>{result.review.reason}</p></div> : null}
+    {error ? <p className={styles.alert} role="alert">{error}</p> : null}
+    <form className={styles.reviewForm} onSubmit={submit}><label>Reviewer ID<input required value={reviewerId} onChange={(event) => setReviewerId(event.target.value)} /></label><label>Decision<select value={decision} onChange={(event) => { setDecision(event.target.value as "APPROVED" | "REJECTED"); setReviewId(null); }}><option value="APPROVED">Approve cause</option><option value="REJECTED">Reject cause</option></select></label>{decision === "APPROVED" ? <><label>Confirmed cause<input required value={cause} onChange={(event) => setCause(event.target.value)} /></label><label>Playbook<input required value={playbookId} onChange={(event) => setPlaybookId(event.target.value)} /></label></> : null}<label className={styles.reviewReason}>Reason<textarea required minLength={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={decision === "APPROVED" ? "Why was this cause confirmed?" : "Why is this cause being rejected?"} /></label><button className={styles.button} type="submit" disabled={submitting}>{submitting ? "Saving review…" : decision === "APPROVED" ? "Approve and promote" : "Record rejection"}</button></form>
+  </section>;
+}
+
 function Field({ label, value }: { label: string; value: string }) { return <div><p className={styles.label}>{label}</p><p className={styles.value}>{value}</p></div>; }
 function EvidenceIds({ ids }: { ids: string[] }) { return ids.length ? <ul className={styles.inlineIds}>{ids.map((id) => <li key={id}><code>{id}</code></li>)}</ul> : <p>No evidence IDs were returned.</p>; }
 function formatMoney(amountMinor: number, currency: string): string { return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(amountMinor / 100); }
 function formatOptionalMoney(amountMinor: number | null | undefined, currency: string): string { return amountMinor === null || amountMinor === undefined ? "Not provided" : formatMoney(amountMinor, currency); }
-function formatMetric(value: number | string | null): string {
-  if (value === null) return "Not available";
-  if (typeof value !== "number" || Number.isInteger(value)) return String(value);
-  return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
-}
 function formatDate(value: string): string { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)); }
 function humanize(value: string): string { return value.toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase()); }
 function BackIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /><path d="M9 12h10" /></svg>; }

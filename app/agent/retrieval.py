@@ -188,5 +188,5 @@ def _neo4j_repository() -> IncidentMemoryRepository | None:
     return Neo4jIncidentRepository(
         _neo4j_driver,
         database=settings.neo4j_database,
-        include_evaluation=settings.demo_mode or settings.graphrag_evaluation_mode,
+        include_evaluation=False,
     )

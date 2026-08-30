@@ -7,13 +7,14 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-MetricName = Literal["APPROVAL_RATE", "LATENCY_P95", "TIMEOUT_RATE"]
+MetricName = Literal["APPROVAL_RATE", "PAYMENT_CONVERSION", "LATENCY_P95", "TIMEOUT_RATE"]
 
 
 class SeasonalBaseline(BaseModel):
     """Seasonal expectation calculated only from prior windows of one slice."""
 
     approval_rate: float
+    payment_conversion: float = 0.0
     latency_p95_ms: float
     latency_p95_mad: float
     timeout_rate: float
@@ -34,7 +35,7 @@ class DetectionSignal(BaseModel):
 class AnomalyCandidate(BaseModel):
     """CTR-DET-001 v1 payload. It deliberately contains no root-cause claim."""
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "2.0"] = "1.0"
     candidate_id: str
     window: dict[str, str]
     slice: dict[str, str]
@@ -46,6 +47,7 @@ class AnomalyCandidate(BaseModel):
     effect_relative: float
     statistical_strength: float
     lost_approvals: float
+    estimated_lost_conversions: float = 0.0
     loss_coverage: float
     temporal_consistency: float
     data_quality: float

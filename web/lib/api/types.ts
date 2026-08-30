@@ -34,6 +34,7 @@ export interface TransactionInput {
   card_brand?: string | null;
   card_type?: CardType;
   provider_connection_id?: string | null;
+  provider_response_code?: string | null;
   channel?: TransactionChannel;
 }
 
@@ -84,6 +85,24 @@ export interface TransactionBatchAccepted {
   correlation_id: string;
 }
 
+/** Result of the explicitly confirmed, admin-authorized synthetic-data reset. */
+export interface TransactionDataResetResponse {
+  schema_version: TransactionSchemaVersion;
+  removed: {
+    transaction_incident_links: number;
+    incident_notifications: number;
+    incident_suggestions: number;
+    incident_records: number;
+    transaction_records: number;
+    transaction_batches: number;
+    canonical_attempts: number;
+    canonical_events: number;
+    raw_events: number;
+    quarantine: number;
+  };
+  correlation_id: string;
+}
+
 export type TransactionStatus = "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNKNOWN";
 export type ProcessingStage =
   | "RECEIVED"
@@ -121,6 +140,50 @@ export interface TransactionClassification {
   confidence: number;
   evidence_ids: string[];
   related_incident_ids: string[];
+  related_incidents?: Array<{
+    incident_id: string;
+    recurrence_first_detected_at: string | null;
+  }>;
+  refusal_resolution?: RefusalCodeResolution;
+}
+
+export interface RefusalCodeResolution {
+  lookup_status: "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS";
+  provider_id: string;
+    issuer_bank: string;
+    card_brand: string;
+    response_code: string;
+    observed_response_code: string;
+    outcome: OutcomeResult;
+  normalized_code: string | null;
+  reason: string | null;
+  source: string | null;
+  mapping_version: string | null;
+}
+
+export interface HumanReviewRequest {
+  schema_version: "1.0";
+  review_id: string;
+  reviewer_id: string;
+  decision: "APPROVED" | "REJECTED";
+  reason: string;
+  confirmed_cause?: string | null;
+  playbook_id?: string | null;
+}
+
+export interface HumanReviewResponse {
+  schema_version: "1.0";
+  review: {
+    review_id: string;
+    incident_id: string;
+    decision: "APPROVED" | "REJECTED";
+    reviewer_id: string;
+    reason: string;
+    confirmed_cause: string | null;
+    playbook_id: string | null;
+    reviewed_at: string;
+  };
+  promoted_to_memory: boolean;
 }
 
 export interface TransactionRecord {
@@ -159,9 +222,11 @@ export interface Incident {
   state: IncidentState;
   detected_at: string;
   estimated_started_at: string;
+  recurrence_first_detected_at?: string | null;
   title: string;
   scope: Record<string, string[]>;
-  metrics: Record<string, number | string | null>;
+  /** CTR-INC-001 permits scalar metrics and string dimensions such as decline codes. */
+  metrics: Record<string, number | string | string[] | null>;
   root_cause: {
     status: "SUPPORTED" | "INCONCLUSIVE";
     category: string | null;
@@ -276,4 +341,18 @@ export interface TransactionIncidentDetail {
   incidents: TransactionIncidentLink[];
   rejected_incident_ids: string[];
   limitations: string[];
+}
+
+/** CTR-NOT-001: backend-owned read state for the in-app Incident feed. */
+export interface IncidentNotification {
+  notification_id: string;
+  incident_id: string;
+  created_at: string;
+  read_at: string | null;
+  incident: Incident;
+}
+
+export interface NotificationFeed {
+  notifications: IncidentNotification[];
+  unread_count: number;
 }

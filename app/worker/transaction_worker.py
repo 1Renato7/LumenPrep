@@ -19,27 +19,88 @@ from uuid import uuid4
 
 from app.ingestion import ingest_event
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
+from app.refusal_codes import RefusalCodeLookup, resolve_refusal_code
 from app.simulation.transaction_outcomes import AdaptedTransaction, adapt_transaction
-from app.worker.incident_pipeline import derive_incidents_for_correlation
+from app.worker.incident_pipeline import SuggestionJob, _suggest_for_persisted_incident, derive_incidents_for_correlation
 
 STAGE_ORDER = ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING", "COMPLETE"]
 _PROGRESS_BY_STAGE = {stage: index * 20 for index, stage in enumerate(STAGE_ORDER)}
 DEFAULT_LEASE_SECONDS = 30
+
+_FAILED_CLASSIFICATIONS_BY_NORMALIZED_CODE = {
+    "ACQUIRER_ERROR": "PROVIDER_ERROR",
+    "EXCESSIVE_RETRY_BLOCKED": "PROVIDER_ERROR",
+    "ISSUER_UNAVAILABLE": "TIMEOUT",
+}
+_EVENT_DECLINE_CATEGORIES = {
+    "ISSUER_DECLINE": "ISSUER",
+    "PROVIDER_ERROR": "PROVIDER",
+    "TIMEOUT": "TECHNICAL",
+    "UNKNOWN": "UNKNOWN",
+}
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _classification_category(result: str, normalized_code: str | None) -> str:
+    """Return a coarse record category without inventing an issuer decision."""
+    if result == "SUCCEEDED":
+        return "APPROVED"
+    if result == "UNKNOWN":
+        return "UNKNOWN"
+    return _FAILED_CLASSIFICATIONS_BY_NORMALIZED_CODE.get(normalized_code or "", "ISSUER_DECLINE")
+
+
 def _generate_outcome(
     transaction_id: str, transaction_input: dict[str, Any], correlation_id: str
 ) -> AdaptedTransaction:
-    """Adapt a persisted public input without consulting ground truth or storage."""
-    return adapt_transaction(
+    """Adapt a persisted input and, when present, apply its versioned response-code fact."""
+    adapted = adapt_transaction(
         transaction_input,
         transaction_id=transaction_id,
         correlation_id=correlation_id,
     )
+    response_code = transaction_input.get("provider_response_code")
+    if not response_code:
+        return adapted
+    resolution = resolve_refusal_code(
+        get_connection(),
+        RefusalCodeLookup(
+            str(transaction_input["provider_id"]),
+            str(transaction_input["issuer_bank"]),
+            str(transaction_input.get("card_brand") or "NOT_APPLICABLE"),
+            str(response_code),
+        ),
+    )
+    payload = {
+        **resolution.as_payload(),
+        # Preserve provider spelling/case for the durable event.  The resolution
+        # key is deliberately canonicalised for lookup, but it is not the raw
+        # acquisition fact auditors need to compare later.
+        "observed_response_code": str(response_code),
+    }
+    result = resolution.outcome
+    category = _classification_category(result, resolution.normalized_code)
+    classification = dict(adapted.classification)
+    classification.update({
+        "category": category,
+        "reason": resolution.reason or "No unique mapping was found for this provider response code.",
+        "confidence": 1.0 if resolution.lookup_status.value == "MATCH_FOUND" else 0.35,
+        "refusal_resolution": payload,
+    })
+    outcome = dict(adapted.outcome)
+    outcome.update({"result": result, "provider_response_code": str(response_code),
+                    "normalized_decline_code": (resolution.normalized_code if result == "FAILED" else None)})
+    event = dict(adapted.event)
+    event["status"] = {"SUCCEEDED": "SUCCEEDED", "FAILED": "DECLINED", "UNKNOWN": "ERROR"}[result]
+    event["decline"] = None if result == "SUCCEEDED" else {
+        "normalized_code": outcome["normalized_decline_code"] or "UNMAPPED_DECLINE",
+        "category": _EVENT_DECLINE_CATEGORIES[category], "retryability": "UNKNOWN", "raw_code": str(response_code),
+        "raw_message": resolution.reason or "Unmapped provider response code",
+    }
+    return AdaptedTransaction(result=result, outcome=outcome, classification=classification, event=event)
 
 
 def _acquire_lease(con, transaction_id: str, worker_id: str, lease_seconds: int) -> bool:
@@ -61,13 +122,13 @@ def _acquire_lease(con, transaction_id: str, worker_id: str, lease_seconds: int)
     return acquired is not None
 
 
-def _advance_locked(con, transaction_id: str) -> None:
+def _advance_locked(con, transaction_id: str) -> list[SuggestionJob]:
     row = con.execute(
         "SELECT status, processing_json, input_json, correlation_id FROM transaction_records WHERE transaction_id = ?",
         [transaction_id],
     ).fetchone()
     if row is None or row[0] != "PROCESSING":
-        return
+        return []
 
     processing = json.loads(row[1])
     stage_index = STAGE_ORDER.index(processing["stage"])
@@ -85,9 +146,10 @@ def _advance_locked(con, transaction_id: str) -> None:
                 transaction_id,
             ],
         )
-        return
+        return []
 
     transaction_started = False
+    suggestion_jobs: list[SuggestionJob] = []
     try:
         adapted = _generate_outcome(transaction_id, json.loads(row[2]), row[3])
         con.execute("BEGIN TRANSACTION")
@@ -102,7 +164,7 @@ def _advance_locked(con, transaction_id: str) -> None:
         ingestion = ingest_event(adapted.event)
         if ingestion.status not in {"ACCEPTED", "DUPLICATE"}:
             raise RuntimeError(f"canonical event was {ingestion.status}")
-        derive_incidents_for_correlation(con, row[3])
+        derive_incidents_for_correlation(con, row[3], suggestion_jobs=suggestion_jobs)
         authored_classification = con.execute(
             "SELECT classification_json FROM transaction_records WHERE transaction_id = ?",
             [transaction_id],
@@ -137,10 +199,17 @@ def _advance_locked(con, transaction_id: str) -> None:
                 transaction_id,
             ],
         )
-        return
+        return []
+    return suggestion_jobs
 
 
-def advance_transaction(transaction_id: str, *, worker_id: str | None = None, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> bool:
+def advance_transaction(
+    transaction_id: str,
+    *,
+    worker_id: str | None = None,
+    lease_seconds: int = DEFAULT_LEASE_SECONDS,
+    run_suggestions: bool = True,
+) -> bool:
     """Advance ``transaction_id`` by exactly one stage. Returns False if it is not a
     leasable PROCESSING record (already terminal, or currently leased by someone else).
 
@@ -154,7 +223,14 @@ def advance_transaction(transaction_id: str, *, worker_id: str | None = None, le
     with CONNECTION_LOCK:
         if not _acquire_lease(con, transaction_id, worker_id, lease_seconds):
             return False
-        _advance_locked(con, transaction_id)
+        suggestion_jobs = _advance_locked(con, transaction_id)
+    if run_suggestions:
+        for job in suggestion_jobs:
+            # Keep older in-process worker tests/jobs compatible while every newly
+            # created job carries the RFC summary as its third value.
+            incident, decline_profile = job[0], job[1]
+            refusal_code_summaries = job[2] if len(job) > 2 else []
+            _suggest_for_persisted_incident(incident, decline_profile, refusal_code_summaries)
     return True
 
 
@@ -178,7 +254,9 @@ def advance_one(*, worker_id: str | None = None, lease_seconds: int = DEFAULT_LE
     return transaction_id
 
 
-def run_to_completion(transaction_id: str, *, worker_id: str | None = None) -> None:
+def run_to_completion(
+    transaction_id: str, *, worker_id: str | None = None, run_suggestions: bool = True
+) -> None:
     """Drive one transaction through every remaining stage. Safe to call again on an
     already-terminal or already-leased transaction — it becomes a no-op."""
     for _ in range(len(STAGE_ORDER)):
@@ -188,7 +266,7 @@ def run_to_completion(transaction_id: str, *, worker_id: str | None = None) -> N
             ).fetchone()
         if row is None or row[0] != "PROCESSING":
             return
-        if not advance_transaction(transaction_id, worker_id=worker_id):
+        if not advance_transaction(transaction_id, worker_id=worker_id, run_suggestions=run_suggestions):
             return
 
 
@@ -201,7 +279,7 @@ def run_batch_to_completion(batch_id: str) -> None:
         run_to_completion(transaction_id)
 
 
-def reconcile_stuck(*, max_records: int = 1000) -> int:
+def reconcile_stuck(*, max_records: int = 1000, run_suggestions: bool = True) -> int:
     """Resume every PROCESSING record found at startup (or on demand). Records with a
     live lease from a still-running worker are simply skipped by ``advance_transaction``'s
     lease check, so calling this concurrently with an active worker is harmless."""
@@ -210,5 +288,5 @@ def reconcile_stuck(*, max_records: int = 1000) -> int:
             "SELECT transaction_id FROM transaction_records WHERE status = 'PROCESSING' LIMIT ?", [max_records]
         ).fetchall()]
     for transaction_id in ids:
-        run_to_completion(transaction_id)
+        run_to_completion(transaction_id, run_suggestions=run_suggestions)
     return len(ids)

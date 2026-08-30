@@ -5,7 +5,8 @@ it must survive four independent checks:
 
 1. **Shape** — strict JSON against CTR-AGT-003; unknown fields are rejected.
 2. **Grounding** — every cited evidence ID exists in the EvidencePack or in an
-   authorized retrieved source.  Invented IDs, numbers and precedents fail here.
+   authorized retrieved source, and a suggested category belongs to the current
+   engine RCA. Invented IDs, numbers, precedents and categories fail here.
 3. **Authority** — the response may not touch ``root_cause``, may not promote a
    status, and may not assert fraud as established fact.
 4. **Payment safety** — every action is ``HUMAN_ONLY`` and investigative.  No
@@ -44,12 +45,20 @@ ENGINE_OWNED_KEYS = frozenset(
 )
 
 # Verbs that move money or traffic.  This challenge diagnoses; it never remediates.
+#
+# Only verb forms belong here.  ``authorization`` and ``authorisation`` were
+# removed because in payments they are the ordinary nouns of the thing being
+# investigated -- "authorization rate", "authorization logs", "authorization
+# response" -- so they rejected purely investigative steps and cost the whole
+# suggestion.  The verbs ``authorize``/``authorise`` still block any attempt to
+# act.  ``charge`` and ``capture`` stay in their verb *and* noun forms: they are
+# rarer as nouns here and the conservative side of that trade is the safe one.
 FINANCIAL_ACTION_PATTERN = re.compile(
     r"\b("
     r"retry|retries|retrying|reroute|re-route|rerouting|refund|refunds|refunding|"
     r"capture|captures|capturing|chargeback|void|voiding|settle|settling|"
     r"cancel|cancels|cancelling|canceling|cancellation|"
-    r"authorize|authorise|authorization|authorisation|"
+    r"authorize|authorise|"
     r"charge|charges|charging|failover|fail-over|"
     r"switch traffic|shift traffic|disable the provider|execute the payment|process the payment"
     r")\b",
@@ -94,6 +103,7 @@ def parse_and_validate(
     _reject_engine_authority(payload)
     suggestion = _parse_contract(payload)
     _validate_grounding(suggestion, pack=pack, trace=trace)
+    _validate_category_grounding(suggestion, pack=pack)
     _validate_actions(suggestion)
     _validate_language(suggestion, pack=pack)
     _validate_status_rules(suggestion)
@@ -155,6 +165,24 @@ def _validate_grounding(
     if invented:
         raise SuggestionPolicyError(
             f"suggestion cites evidence IDs that do not exist in the EvidencePack or an authorized source: {invented}"
+        )
+
+
+def _validate_category_grounding(suggestion: DiagnosticSuggestion, *, pack: EvidencePack) -> None:
+    """Keep the model's label within the engine's current RCA taxonomy.
+
+    Retrieval can explain why an operator should investigate, but a historical
+    precedent is not an eligible source of a *current* causal category.
+    """
+    if suggestion.suggested_category is None:
+        return
+    allowed = {item.category for item in pack.rca_alternatives}
+    if pack.root_cause.category is not None:
+        allowed.add(pack.root_cause.category)
+    if suggestion.suggested_category not in allowed:
+        raise SuggestionPolicyError(
+            f"suggested_category {suggestion.suggested_category!r} is not in the current engine root cause "
+            "or RCA alternatives; retrieved precedents cannot supply a current category"
         )
 
 

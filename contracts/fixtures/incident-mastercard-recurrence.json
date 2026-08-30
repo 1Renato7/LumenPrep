@@ -4,6 +4,7 @@
   "state": "SUPPORTED",
   "detected_at": "2026-08-29T14:06:00Z",
   "estimated_started_at": "2026-08-29T14:03:00Z",
+  "recurrence_first_detected_at": "2026-08-22T14:06:00Z",
   "title": "Queda de aprovação Mastercard no provider Stripe no Brasil",
   "scope": {"provider_id": ["stripe"], "country": ["BR"], "card_brand": ["MASTERCARD"]},
   "metrics": {"eligible_attempts": 492, "approval_rate_observed": 0.51, "approval_rate_expected": 0.84, "provider_latency_p95_ms_observed": 4100, "provider_latency_p95_ms_expected": 820, "lost_approvals": 162},

@@ -26,7 +26,7 @@ from app.incidents import Incident
 from app.memory import IncidentMemoryService
 
 from .evidence import build_evidence_pack
-from .llm import SuggestionClient, TemplateSuggestionClient
+from .llm import SuggestionClient, configured_suggestion_client
 from .models import (
     AgentRetrievalTrace,
     DiagnosticSuggestion,
@@ -57,7 +57,7 @@ class DiagnosticAgentService:
         repository: DiagnosticSuggestionRepository | None = None,
         minimum_independent_evidence: int = MINIMUM_INDEPENDENT_EVIDENCE,
     ) -> None:
-        self.client = client if client is not None else TemplateSuggestionClient()
+        self.client = client if client is not None else configured_suggestion_client()
         self.memory_service = memory_service
         self.repository = repository if repository is not None else DiagnosticSuggestionRepository()
         self.minimum_independent_evidence = minimum_independent_evidence
@@ -67,9 +67,10 @@ class DiagnosticAgentService:
         incident: Incident | Mapping[str, Any],
         *,
         decline_profile: Mapping[str, int] | None = None,
+        refusal_code_summaries: list[Mapping[str, Any]] | None = None,
         persist: bool = True,
     ) -> DiagnosticSuggestion:
-        pack = build_evidence_pack(incident, decline_profile=decline_profile)
+        pack = build_evidence_pack(incident, decline_profile=decline_profile, refusal_code_summaries=refusal_code_summaries)
         idempotency_key = suggestion_idempotency_key(
             incident_id=pack.incident_id,
             evidence_fingerprint=pack.evidence_fingerprint,

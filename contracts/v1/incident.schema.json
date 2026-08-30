@@ -11,6 +11,7 @@
     "state": {"enum": ["DETECTED", "INVESTIGATING", "SUPPORTED", "INCONCLUSIVE", "RECOVERED", "HUMAN_CONFIRMED", "CLOSED"]},
     "detected_at": {"type": "string", "format": "date-time"},
     "estimated_started_at": {"type": "string", "format": "date-time"},
+    "recurrence_first_detected_at": {"type": ["string", "null"], "format": "date-time"},
     "title": {"type": "string", "minLength": 1},
     "scope": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
     "metrics": {"type": "object", "additionalProperties": {"oneOf": [{"type": ["number", "string", "null"]}, {"type": "array", "items": {"type": "string"}}]}},

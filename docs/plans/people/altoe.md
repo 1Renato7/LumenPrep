@@ -89,6 +89,41 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 - falha de memória/modelo vira estado explícito e template, nunca explicação fabricada;
 - sem ferramenta de pagamento ou mutação operacional.
 
+## Adendo 2.4.4 — runtime OpenAI do agente
+
+- **Plano geral:** 2.4.4; **contrato interno:** `CTR-AGT-RUN-001 v1`; **decisão:** `DEC-030` / `FL-20260830-TEAM-031`.
+- O cliente configurado é `gpt-5.6-terra` com `reasoning.effort=high`, selecionado apenas no backend quando `OPENAI_API_KEY` estiver presente. O input continua restrito ao `EvidencePack` e ao `RetrievalTrace`; o contrato publicado `CTR-AGT-003 v1` não muda.
+- Sem chave, o template determinístico permanece o fallback de demo. Com chave, falha do SDK, timeout ou resposta rejeitada persiste `UNAVAILABLE`; não há retry automático, ferramenta de pagamento, promoção de causa ou mutação de Incident.
+- **Handoff para Rogério:** dependency lock, Railway Variables e smoke. **Prova:** teste do request Responses e dos guardrails existentes; validação online depende de credencial configurada fora do repositório.
+
+## Adendo 2.5.1 — grounding de categoria causal
+
+- **Plano geral:** 2.5.1; **contrato interno:** `CTR-AGT-GRD-001 v1`; **decisão:** `DEC-032` / `FL-20260830-TEAM-033`.
+- **Entrada isolada:** `EvidencePack.root_cause.category` e `EvidencePack.rca_alternatives` já persistidos pelo motor; `RetrievalTrace` é apenas contexto recuperado.
+- **Entrega:** prompt explicita que precedente não escolhe categoria e o validador recusa `suggested_category` fora do conjunto atual. Não há mudança em `CTR-AGT-003 v1`, API, UI, banco ou permissões de pagamento.
+- **Prova de integração:** teste offline rejeita `ISSUER_OUTAGE` quando existe somente em precedente e aceita `PROVIDER_DEGRADATION` quando é alternativa atual; rerun sintético com chave retorna alternativa atual ou `UNAVAILABLE`, nunca categoria exclusiva do precedente.
+- **Handoff para Rogério:** revisar/push do patch e registrar o resultado do rerun. Risco residual: o modelo pode ignorar o prompt, mas a saída será bloqueada de forma segura pelo validador.
+
+## Adendo 2.7.0 — revisão humana auditável
+
+- **Plano geral:** 2.7.0; **contrato:** `CTR-HRV-001 v1`; **decisão:** `DEC-035` / `FL-20260830-TEAM-038`.
+- `APPROVED` chama a promoção já existente e adiciona o motivo do revisor como `HumanReview` no Neo4j. `REJECTED` cria o mesmo registro de auditoria, sem criar `HUMAN_CONFIRMED` nem contaminar a recuperação de precedentes.
+- Persistência local por `review_id` é idempotente; uma repetição com conteúdo diferente é conflito. Se Neo4j estiver indisponível, a API informa falha e a mesma revisão pode ser reenviada, sem perder o motivo durável.
+- A UI de detalhe envia a decisão explícita e mostra o resultado; ela nunca permite que o agente aprove ou recuse uma causa.
+
+## Adendo 2.8.0 — primeira ocorrência de recorrência
+
+- **Plano geral:** 2.8.0; **contratos:** `CTR-INC-001 v1` e `CTR-TXL-001 v1` aditivos; **decisão:** `DEC-036` / `FL-20260830-TEAM-039`.
+- A persistência calcula uma assinatura de recorrência por categoria causal, métrica e escopo completo, separada do fingerprint de entrega por janela. O primeiro `detected_at` dessa assinatura permanece estável nas ocorrências futuras.
+- A API devolve `recurrence_first_detected_at` no Incident e, nos logs de transação, em cada Incident relacionado. A interface deve exibir a data explicitamente, sem inferi-la de precedentes GraphRAG.
+
+## Adendo 2.9.1 — default do runtime OpenAI
+
+- **Plano geral:** 2.9.1; **contrato interno:** `CTR-AGT-RUN-001 v1`; **decisão:** `DEC-039` / `FL-20260830-ROGERIO-031`.
+- O runtime configurado passa a `gpt-5.6-sol` com `reasoning.effort=medium`; o `EvidencePack`, o `RetrievalTrace`, o prompt e a validação grounded não mudam.
+- A saída segue somente `HUMAN_ONLY`: sem ferramentas, promoção causal, escrita de Incident ou ação financeira. Falha de modelo, SDK ou timeout continua `UNAVAILABLE` e sem retry; sem chave, o fallback é `deterministic-template-v1`.
+- **Handoff para Rogério:** defaults e runbook sincronizados; a prova externa permanece um smoke sintético no Railway, condicionado à chave e ao acesso ao modelo.
+
 ## Definition of Done
 
 Evals de grounding/no-answer/injection/leakage passam; review gate sem bloqueantes; integration guardian valida Incident/API/UI; browser acceptance conjunto comprova links e estados.

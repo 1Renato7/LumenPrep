@@ -1,0 +1,14 @@
+.wrap { position: fixed; z-index: 50; top: 1rem; right: 1rem; display: grid; gap: .55rem; justify-items: end; }
+.live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.screenReaderOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.bell { position: relative; display: grid; width: 2.8rem; height: 2.8rem; place-items: center; border: 1px solid rgba(151,169,255,.6); border-radius: 50%; background: #111936; color: #fff; cursor: pointer; }
+.bell:focus-visible, .popover a:focus-visible { outline: 3px solid #b3c0ff; outline-offset: 2px; }
+.bell svg { width: 1.3rem; }
+.badge { position: absolute; top: -.32rem; right: -.28rem; min-width: 1.15rem; padding: .1rem .28rem; border-radius: 999px; background: #ef485e; color: #fff; font-size: .72rem; font-weight: 800; }
+.popover { width: min(24rem, calc(100vw - 2rem)); border: 1px solid rgba(139,159,255,.42); border-radius: .85rem; background: #111936; box-shadow: 0 16px 45px rgba(0,0,0,.35); }
+.popover p { margin: .2rem 0 0; color: #b6c1df; font-size: .83rem; }
+.popover { display: grid; max-height: 22rem; overflow: auto; }
+.popover article { padding: .8rem 1rem; border-bottom: 1px solid rgba(139,159,255,.18); }
+.popover article:last-child { border-bottom: 0; }
+.popover a { color: #fff; text-decoration: none; }.popover small { display: block; margin-top: .23rem; color: #adb9dc; }.read { opacity: .62; }
+@media (max-width: 760px) { .wrap { top: .7rem; right: .7rem; } }

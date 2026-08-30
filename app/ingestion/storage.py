@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS incident_records (
     correlation_id VARCHAR NOT NULL,
     window_start TIMESTAMP NOT NULL,
     window_end TIMESTAMP NOT NULL,
+    recurrence_key VARCHAR,
+    recurrence_first_detected_at TIMESTAMP,
     state VARCHAR NOT NULL,
     payload_json VARCHAR NOT NULL,
     created_at TIMESTAMP NOT NULL,
@@ -105,11 +107,43 @@ CREATE TABLE IF NOT EXISTS transaction_incident_links (
     linked_at TIMESTAMP NOT NULL,
     PRIMARY KEY (transaction_id, incident_id)
 );
+CREATE TABLE IF NOT EXISTS incident_notifications (
+    notification_id VARCHAR PRIMARY KEY,
+    incident_id VARCHAR UNIQUE NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    read_at TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS incident_reviews (
+    review_id VARCHAR PRIMARY KEY,
+    incident_id VARCHAR NOT NULL,
+    decision VARCHAR NOT NULL CHECK (decision IN ('APPROVED', 'REJECTED')),
+    reviewer_id VARCHAR NOT NULL,
+    reason VARCHAR NOT NULL,
+    confirmed_cause VARCHAR,
+    playbook_id VARCHAR,
+    reviewed_at TIMESTAMP NOT NULL
+);
+CREATE TABLE IF NOT EXISTS refusal_code_catalog (
+    mapping_id VARCHAR PRIMARY KEY,
+    provider_id VARCHAR NOT NULL,
+    issuer_bank VARCHAR NOT NULL,
+    card_brand VARCHAR NOT NULL,
+    response_code VARCHAR NOT NULL,
+    normalized_code VARCHAR,
+    outcome VARCHAR NOT NULL CHECK (outcome IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')),
+    reason VARCHAR NOT NULL,
+    source VARCHAR NOT NULL,
+    mapping_version VARCHAR NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE
+);
 """
 
 _MIGRATION_SQL = """
 ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_owner VARCHAR;
 ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMP;
+ALTER TABLE refusal_code_catalog ADD COLUMN IF NOT EXISTS normalized_code VARCHAR;
+ALTER TABLE incident_records ADD COLUMN IF NOT EXISTS recurrence_key VARCHAR;
+ALTER TABLE incident_records ADD COLUMN IF NOT EXISTS recurrence_first_detected_at TIMESTAMP;
 """
 
 _connection: duckdb.DuckDBPyConnection | None = None
@@ -123,6 +157,10 @@ def get_connection() -> duckdb.DuckDBPyConnection:
         # Existing Railway Volumes can predate the durable-worker lease columns.
         # Upgrade them in place before the startup reconciliation reads those fields.
         _connection.execute(_MIGRATION_SQL)
+        # Mapping rows are application-owned, versioned reference data. They are
+        # seeded idempotently so an existing Railway volume can receive new codes.
+        from app.refusal_codes.seed import seed_catalog
+        seed_catalog(_connection)
     return _connection
 
 

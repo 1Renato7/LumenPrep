@@ -11,38 +11,51 @@ from __future__ import annotations
 import json
 import logging
 from hashlib import sha256
-from typing import Any
+from typing import Any, TypeAlias
 
 from app.agent import DiagnosticAgentService
-from app.aggregation import WindowMetrics, compute_windows
-from app.detection import detect_candidates
+from app.aggregation import WindowMetrics, compute_payment_conversion_observations, compute_windows
+from app.detection import detect_candidates, detect_payment_conversion_candidates
 from app.incidents import DuckDBIncidentRepository, Evidence, Incident, correlate_candidates, compute_impact, to_incident
 from app.rca import explore_slices, rank_hypotheses
 
 logger = logging.getLogger(__name__)
 
 LOW_SAMPLE_ATTEMPTS = 12
+MINIMUM_UNIQUE_PAYMENTS = 10
+# Outcome sentinels of the decline profile: they describe the healthy or
+# unmapped part of a window, not a refusal anyone can be routed to.
+DECLINE_PROFILE_SENTINELS = frozenset({"NO_DECLINE", "NOT_APPLICABLE", "UNMAPPED_DECLINE"})
+SuggestionJob: TypeAlias = tuple[Incident, dict[str, int], list[dict[str, Any]]]
 
 
-def derive_incidents_for_correlation(con, correlation_id: str) -> list[str]:
+def derive_incidents_for_correlation(
+    con, correlation_id: str, *, suggestion_jobs: list[SuggestionJob] | None = None
+) -> list[str]:
     """Persist newly observed Incident groups and return their stable IDs.
 
     Detector history may contain other correlations, but only candidates produced
     for the just-processed correlation may create or update its Incidents.
     """
     windows = compute_windows(con)
+    conversion_windows = compute_payment_conversion_observations(con)
     candidates = [
         candidate
         for candidate in detect_candidates(windows, low_sample_attempts=LOW_SAMPLE_ATTEMPTS)
         if candidate.correlation_id == correlation_id and candidate.slice
     ]
+    candidates.extend(
+        candidate for candidate in detect_payment_conversion_candidates(
+            conversion_windows, minimum_unique_payments=MINIMUM_UNIQUE_PAYMENTS
+        ) if candidate.correlation_id == correlation_id and candidate.slice
+    )
     if not candidates:
         return []
 
     repository = DuckDBIncidentRepository()
     incident_ids: list[str] = []
     for group in correlate_candidates(_most_specific_candidates(candidates)):
-        window = _window_for_group(windows, group.correlation_id, group.candidates[0])
+        window = _window_for_group(windows + conversion_windows, group.correlation_id, group.candidates[0])
         if window is None:
             continue
         ranking = rank_hypotheses(explore_slices(group.candidates, min_support=LOW_SAMPLE_ATTEMPTS))
@@ -63,24 +76,38 @@ def derive_incidents_for_correlation(con, correlation_id: str) -> list[str]:
             ),
             decline_codes=_memory_decline_codes(window.decline_profile),
         )
-        persisted = repository.upsert(incident)
+        persisted, created = repository.upsert_with_status(incident)
+        if created:
+            repository.create_notification(persisted.incident_id)
         _link_matching_transactions(con, repository, persisted.model_dump(mode="json"))
-        _suggest_for_persisted_incident(persisted, window.decline_profile)
+        summaries = _refusal_code_summaries(con, persisted.model_dump(mode="json"))
+        if suggestion_jobs is None:
+            _suggest_for_persisted_incident(persisted, window.decline_profile, summaries)
+        else:
+            suggestion_jobs.append((persisted, dict(window.decline_profile), summaries))
         incident_ids.append(persisted.incident_id)
     return incident_ids
 
 
-def _suggest_for_persisted_incident(incident: Incident, decline_profile: dict[str, int]) -> None:
+def _suggest_for_persisted_incident(
+    incident: Incident,
+    decline_profile: dict[str, int],
+    refusal_code_summaries: list[dict[str, Any]] | None = None,
+) -> None:
     """Run the proactive agent on an Incident that is already durable.
 
-    This call is deliberately last and deliberately swallowed.  It runs inside
-    the worker's DuckDB transaction, so an agent error escaping here would roll
-    back the transaction lifecycle it has nothing to do with.  Detection, the
-    Incident and the deterministic explanation must survive a model that is
-    slow, unavailable or wrong.
+    This call is deliberately last and deliberately swallowed. The transaction
+    worker schedules it only after committing and releasing its DuckDB lock, so
+    a slow or unavailable model never holds the transaction lifecycle open.
+    Detection, the Incident and the deterministic explanation survive a model
+    that is slow, unavailable or wrong.
     """
     try:
-        DiagnosticAgentService().suggest_for_incident(incident, decline_profile=decline_profile)
+        DiagnosticAgentService().suggest_for_incident(
+            incident,
+            decline_profile=decline_profile,
+            refusal_code_summaries=refusal_code_summaries or [],
+        )
     except Exception as error:
         logger.warning(
             "diagnostic agent skipped for %s: %s", incident.incident_id, type(error).__name__
@@ -148,6 +175,13 @@ def _evidence(candidates: tuple[dict[str, Any], ...], decline_profile: dict[str,
                     source_ref=source,
                 )
             )
+        if candidate.get("metric") == "PAYMENT_CONVERSION":
+            values.append(Evidence(
+                evidence_id=f"evd_conversion_{candidate['candidate_id']}", kind="PAYMENT_CONVERSION",
+                statement=(f"Payment conversion was {candidate['observed']:.1%} against a historical {candidate['expected']:.1%} "
+                           f"baseline across {candidate['sample_size']} unique payments in the closed 60-minute observation."),
+                source_ref=f"conversion://{candidate['window']['start']}/{candidate['window']['end']}",
+            ))
     if decline_profile:
         dominant, count = max(decline_profile.items(), key=lambda item: item[1])
         values.append(
@@ -171,9 +205,25 @@ def _memory_decline_codes(profile: dict[str, int]) -> list[str]:
 
 
 def _category_from_decline_profile(profile: dict[str, int], fallback: str | None) -> str:
-    if not profile:
+    """Derive the category from the leading *decline*, never from the sentinels.
+
+    ``NO_DECLINE`` counts the approvals of the window and ``NOT_APPLICABLE``
+    counts methods that have no issuer decline at all. Leaving either in the
+    argmax lets the healthy majority of a degraded window pick the category: a
+    window that fell to 63% approval still has more approvals than refusals, so
+    the sentinel wins, the function falls through to ``fallback`` and this
+    override silently never fires. The same exclusion already guards
+    ``app.agent.llm._dominant_decline``.
+    """
+    declines = {
+        code: count
+        for code, count in profile.items()
+        if count > 0 and code not in DECLINE_PROFILE_SENTINELS
+    }
+    if not declines:
         return fallback or "UNCLASSIFIED_DEGRADATION"
-    code = max(profile.items(), key=lambda item: item[1])[0]
+    # The code breaks ties so the same profile always yields the same category.
+    code = max(declines.items(), key=lambda item: (item[1], item[0]))[0]
     if code.startswith("PROVIDER_"):
         return "PROVIDER_DEGRADATION"
     if code.startswith("ISSUER_") or code in {"DO_NOT_HONOR", "INSUFFICIENT_FUNDS", "TRANSACTION_NOT_PERMITTED"}:
@@ -184,7 +234,15 @@ def _category_from_decline_profile(profile: dict[str, int], fallback: str | None
 
 
 def _link_matching_transactions(con, repository: DuckDBIncidentRepository, incident: dict[str, Any]) -> None:
-    """Link only records with matching correlation, scope and existing evidence."""
+    """Link only supported causes with matching correlation, scope and evidence.
+
+    An INCONCLUSIVE detector group is retained as an operational observation,
+    but it is not authored as a causal Incident on every transaction. That
+    keeps the log's causal links stable and prevents a second, non-diagnostic
+    card from being presented as a confirmed recurrence.
+    """
+    if incident.get("state") != "SUPPORTED":
+        return
     rows = con.execute(
         "SELECT transaction_id, input_json, classification_json, correlation_id FROM transaction_records WHERE correlation_id = ?",
         [incident["correlation_id"]],
@@ -207,9 +265,20 @@ def _link_matching_transactions(con, repository: DuckDBIncidentRepository, incid
             correlation_id=correlation_id,
         )
         related = [item for item in classification.get("related_incident_ids", []) if isinstance(item, str)]
-        if incident["incident_id"] not in related:
+        is_new_link = incident["incident_id"] not in related
+        if is_new_link:
             related.append(incident["incident_id"])
             classification["related_incident_ids"] = sorted(related)
+            existing_recurrences = classification.get("related_incidents", [])
+            retained = [
+                item for item in existing_recurrences
+                if isinstance(item, dict) and item.get("incident_id") != incident["incident_id"]
+            ] if isinstance(existing_recurrences, list) else []
+            retained.append({
+                "incident_id": incident["incident_id"],
+                "recurrence_first_detected_at": incident.get("recurrence_first_detected_at"),
+            })
+            classification["related_incidents"] = sorted(retained, key=lambda item: str(item["incident_id"]))
             con.execute(
                 "UPDATE transaction_records SET classification_json = ? WHERE transaction_id = ?",
                 [json.dumps(classification, sort_keys=True), transaction_id],
@@ -231,3 +300,49 @@ def _input_matches_scope(transaction_input: dict[str, Any], scope: dict[str, lis
         if input_field is None or str(transaction_input.get(input_field)) not in allowed:
             return False
     return True
+
+
+def _refusal_code_summaries(con, incident: dict[str, Any]) -> list[dict[str, Any]]:
+    """Create CTR-RFC-002 only from persisted, already-linked transaction facts.
+
+    The join with the canonical event bounds the data to the Incident's window;
+    it prevents a later response in the same correlation from being presented as
+    evidence for an earlier spike.
+    """
+    rows = con.execute(
+        """SELECT record.input_json, record.classification_json
+           FROM transaction_incident_links link
+           JOIN transaction_records record ON record.transaction_id = link.transaction_id
+           JOIN canonical_events event ON event.event_id = 'evt_' || record.transaction_id
+           WHERE link.incident_id = ? AND link.correlation_id = ?
+             AND event.event_time >= ? AND event.event_time < ?""",
+        [incident["incident_id"], incident["correlation_id"], incident["estimated_started_at"], incident["detected_at"]],
+    ).fetchall()
+    grouped: dict[tuple[str, str, str, str, str, str, str, str], int] = {}
+    for input_json, classification_json in rows:
+        if not classification_json:
+            continue
+        classification = json.loads(classification_json)
+        resolution = classification.get("refusal_resolution")
+        if not isinstance(resolution, dict) or resolution.get("lookup_status") != "MATCH_FOUND":
+            continue
+        if resolution.get("outcome") != "FAILED" or not resolution.get("reason"):
+            continue
+        payload = json.loads(input_json)
+        key = (
+            str(payload.get("provider_id", "UNKNOWN")), str(payload.get("issuer_bank", "UNKNOWN")),
+            str(payload.get("card_brand") or "NOT_APPLICABLE"),
+            str(resolution["response_code"]), str(resolution["reason"]),
+            str(resolution.get("normalized_code") or "UNMAPPED_DECLINE"),
+            str(resolution.get("source") or "UNKNOWN"), str(resolution.get("mapping_version") or "UNKNOWN"),
+        )
+        grouped[key] = grouped.get(key, 0) + 1
+    summaries: list[dict[str, Any]] = []
+    for key, count in sorted(grouped.items(), key=lambda item: (-item[1], item[0])):
+        provider_id, issuer_bank, card_brand, response_code, reason, normalized_code, source, mapping_version = key
+        digest = sha256("|".join(key).encode("utf-8")).hexdigest()[:16]
+        summaries.append({"provider_id": provider_id, "issuer_bank": issuer_bank, "card_brand": card_brand,
+                          "response_code": response_code, "normalized_code": normalized_code, "reason": reason, "source": source,
+                          "mapping_version": mapping_version, "transaction_count": count,
+                          "evidence_id": f"evd_refusal_{digest}"})
+    return summaries

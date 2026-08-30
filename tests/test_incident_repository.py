@@ -9,14 +9,14 @@ from app.ingestion.storage import get_connection
 from main import app
 
 
-def _incident(incident_id: str, *, scope: dict[str, list[str]] | None = None, correlation_id: str = "corr_repo") -> Incident:
+def _incident(incident_id: str, *, scope: dict[str, list[str]] | None = None, correlation_id: str = "corr_repo", detected_at: str = "2026-08-30T12:05:00Z") -> Incident:
     return Incident.model_validate(
         {
             "schema_version": "1.0",
             "incident_id": incident_id,
             "state": "SUPPORTED",
-            "detected_at": "2026-08-30T12:05:00Z",
-            "estimated_started_at": "2026-08-30T12:00:00Z",
+            "detected_at": detected_at,
+            "estimated_started_at": detected_at.replace("12:05", "12:00"),
             "title": "Provider degradation",
             "scope": scope or {"provider_id": ["provider_alpha"], "country": ["BR"]},
             "metrics": {"eligible_attempts": 100},
@@ -44,6 +44,20 @@ def test_upsert_is_idempotent_by_window_and_full_causal_scope():
     assert [item.incident_id for item in repository.list()] == [first.incident_id]
 
 
+def test_notification_is_persistent_and_idempotent_for_one_new_incident():
+    repository = DuckDBIncidentRepository()
+    incident, created = repository.upsert_with_status(_incident("inc_notification"))
+    assert created is True
+    repository.create_notification(incident.incident_id)
+    repository.create_notification(incident.incident_id)
+    notifications = repository.notifications()
+    assert len(notifications) == 1
+    assert notifications[0]["read_at"] is None
+    assert repository.mark_notification_read(notifications[0]["notification_id"]) is True
+    assert repository.mark_notification_read(notifications[0]["notification_id"]) is True
+    assert repository.notifications()[0]["read_at"] is not None
+
+
 def test_simultaneous_distinct_causal_fingerprints_remain_separate():
     repository = DuckDBIncidentRepository()
     provider = repository.upsert(_incident("inc_provider"))
@@ -58,6 +72,17 @@ def test_incident_id_cannot_be_reused_for_a_different_fingerprint():
 
     with pytest.raises(IncidentIdConflictError):
         repository.upsert(_incident("inc_shared", scope={"issuer_bank": ["bank_br_a"], "country": ["BR"]}))
+
+
+def test_recurrence_preserves_first_detection_across_windows_and_correlations():
+    repository = DuckDBIncidentRepository()
+    first = repository.upsert(_incident("inc_week_one", correlation_id="corr_week_one", detected_at="2026-08-23T12:05:00Z"))
+    recurrence = repository.upsert(_incident("inc_week_two", correlation_id="corr_week_two", detected_at="2026-08-30T12:05:00Z"))
+    different_scope = repository.upsert(_incident("inc_other_scope", correlation_id="corr_week_two", scope={"provider_id": ["provider_beta"], "country": ["BR"]}, detected_at="2026-08-30T12:05:00Z"))
+
+    assert first.recurrence_first_detected_at == "2026-08-23T12:05:00Z"
+    assert recurrence.recurrence_first_detected_at == first.recurrence_first_detected_at
+    assert different_scope.recurrence_first_detected_at == "2026-08-30T12:05:00Z"
 
 
 def test_transaction_link_requires_matching_correlation_and_evidence():

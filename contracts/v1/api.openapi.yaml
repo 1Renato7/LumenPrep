@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: CTR-API-001 Lumen API
-  version: 3.1.0
+  version: 3.0.0
   description: Public API served by the Railway backend and consumed by the Vercel frontend.
 servers:
   - url: https://api.example.up.railway.app/v1
@@ -9,6 +9,21 @@ servers:
   - url: http://127.0.0.1:8000/v1
     description: Local development
 paths:
+  /refusal-codes/resolve:
+    get:
+      operationId: resolveRefusalCode
+      parameters:
+        - {name: provider_id, in: query, required: true, schema: {type: string, minLength: 1}}
+        - {name: issuer_bank, in: query, required: true, schema: {type: string, minLength: 1}}
+        - {name: card_brand, in: query, required: true, schema: {type: string, minLength: 1}}
+        - {name: response_code, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 32}}
+      responses:
+        "200":
+          description: Deterministic provider response-code classification
+          content:
+            application/json:
+              schema: {$ref: "refusal-code-resolution.schema.json"}
+        "422": {description: INVALID_REFUSAL_CODE_LOOKUP}
   /health:
     get:
       operationId: getHealth
@@ -62,6 +77,34 @@ paths:
         "409": {description: IDEMPOTENCY_KEY_CONFLICT}
         "422": {description: INVALID_TRANSACTION_BATCH}
         "503": {description: INGESTION_UNAVAILABLE; nothing accepted unless a durable record exists}
+  /admin/transaction-data/reset:
+    post:
+      operationId: resetTransactionData
+      description: Deletes all persisted synthetic transaction data and its derived operational projections. The refusal-code catalog remains intact.
+      parameters:
+        - name: X-Lumen-Admin-Key
+          in: header
+          required: true
+          schema: {type: string, minLength: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirmation]
+              properties:
+                confirmation: {type: string, const: DELETE_SYNTHETIC_TRANSACTION_DATA}
+      responses:
+        "200":
+          description: Synthetic transaction workspace cleared atomically
+          content:
+            application/json:
+              schema: {$ref: "transaction-data-reset-response.schema.json"}
+        "403": {description: TRANSACTION_RESET_UNAUTHORIZED}
+        "422": {description: TRANSACTION_RESET_CONFIRMATION_REQUIRED}
+        "503": {description: TRANSACTION_RESET_NOT_CONFIGURED or TRANSACTION_RESET_UNAVAILABLE}
   /transaction-batches/{batch_id}:
     get:
       operationId: getTransactionBatch
@@ -126,6 +169,20 @@ paths:
         - {name: transaction_id, in: query, required: false, schema: {type: string, minLength: 1}, description: "Restrict the homogeneous Incident list to evidence-authorized IDs from the transaction classification. Use /transactions/{transaction_id}/incidents for memory and explanation detail."}
       responses:
         "200": {description: Incident list}
+  /notifications:
+    get:
+      operationId: listNotifications
+      description: Persistent CTR-NOT-001 in-app notification feed. The backend owns unread state.
+      responses:
+        "200": {description: Notification feed with unread count and Incident summaries}
+  /notifications/{notification_id}/read:
+    post:
+      operationId: markNotificationRead
+      parameters:
+        - {name: notification_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: Idempotently marked read}
+        "404": {description: NOTIFICATION_NOT_FOUND}
   /incidents/{incident_id}:
     get:
       operationId: getIncident
@@ -147,24 +204,20 @@ paths:
             application/json:
               schema: {$ref: "agent-diagnostic-suggestion.schema.json"}
         "404": {description: "INCIDENT_NOT_FOUND when the Incident does not exist; SUGGESTION_NOT_AVAILABLE when no suggestion has been generated for it."}
-  /incidents/{incident_id}/confirmation:
+  /incidents/{incident_id}/review:
     post:
-      operationId: confirmIncident
-      description: "Records a declared human review as a historical Neo4j precedent. It never changes the current RCA diagnosis. Authentication of reviewer_id is deployment-specific and required before exposing this route outside the synthetic demo boundary."
+      operationId: reviewIncident
+      description: "CTR-HRV-001. A human approval promotes a precedent; a rejection is retained only as an auditable graph review."
       parameters:
         - {name: incident_id, in: path, required: true, schema: {type: string}}
       requestBody:
         required: true
         content:
           application/json:
-            schema: {$ref: "incident-confirmation-request.schema.json"}
+            schema: {$ref: "human-review-request.schema.json"}
       responses:
-        "200":
-          description: "Human confirmation persisted in Neo4j, or idempotent replay of the same review."
-          content:
-            application/json:
-              schema: {$ref: "incident-confirmation.schema.json"}
-        "404": {description: "INCIDENT_NOT_FOUND"}
-        "409": {description: "INCIDENT_ALREADY_CONFIRMED"}
-        "422": {description: "INVALID_CONFIRMATION"}
-        "503": {description: "MEMORY_UNAVAILABLE or MEMORY_PERSISTENCE_FAILED; no local fallback is treated as a confirmed precedent."}
+        "201": {description: Human decision persisted and mirrored to GraphRAG}
+        "404": {description: INCIDENT_NOT_FOUND}
+        "409": {description: REVIEW_ID_CONFLICT}
+        "422": {description: Invalid human review payload}
+        "503": {description: GRAPH_MEMORY_UNAVAILABLE; review remains durable and may be retried with the same review_id}

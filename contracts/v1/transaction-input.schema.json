@@ -27,6 +27,7 @@
     "card_type": {"enum": ["CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE", null]},
     "provider_connection_id": {"type": ["string", "null"], "maxLength": 100},
     "channel": {"enum": ["WEB", "MOBILE", "POS", "API", null]}
+    ,"provider_response_code": {"type": ["string", "null"], "minLength": 1, "maxLength": 32}
   },
   "allOf": [
     {

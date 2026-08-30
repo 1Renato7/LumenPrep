@@ -14,6 +14,7 @@ def test_docker_uses_frozen_uv_lock_and_installs_neo4j_extra():
     dockerfile = (Path(__file__).resolve().parent.parent / "Dockerfile").read_text(encoding="utf-8")
     assert "COPY pyproject.toml uv.lock" in dockerfile
     assert "COPY config ./config" in dockerfile
+    assert "COPY data ./data" in dockerfile
     assert "uv sync --frozen --no-dev --extra neo4j" in dockerfile
     assert "mkdir -p /data" in dockerfile
     assert 'ENV PATH="/app/.venv/bin:$PATH"' in dockerfile
@@ -71,6 +72,15 @@ def test_health_is_degraded_when_startup_reconciliation_fails():
     assert response.status_code == 503
     assert response.json()["status"] == "degraded"
     assert response.json()["dependencies"]["worker"]["status"] == "unavailable"
+
+
+def test_startup_reconciliation_skips_remote_agent_suggestions():
+    with patch("main.reconcile_stuck", return_value=0) as reconciliation:
+        app = create_app(Settings())
+        with TestClient(app) as client:
+            assert client.get("/v1/health").status_code == 200
+
+    reconciliation.assert_called_once_with(run_suggestions=False)
 
 
 def test_existing_volume_is_migrated_before_worker_reconciliation(tmp_path):

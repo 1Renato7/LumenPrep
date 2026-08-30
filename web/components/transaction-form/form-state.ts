@@ -22,7 +22,8 @@ export type TransactionField =
   | "payment_method_category"
   | "card_brand"
   | "card_type"
-  | "provider_connection_id";
+  | "provider_connection_id"
+  | "provider_response_code";
 
 export interface TransactionFormRow {
   id: string;
@@ -69,6 +70,7 @@ export function createEmptyRow(id = createRowId()): TransactionFormRow {
       card_brand: "",
       card_type: "",
       provider_connection_id: "",
+      provider_response_code: "",
     },
   };
 }
@@ -243,6 +245,7 @@ function transactionToRow(transaction: TransactionInput): TransactionFormRow {
       card_brand: transaction.card_brand ?? "",
       card_type: transaction.card_type ?? "",
       provider_connection_id: transaction.provider_connection_id ?? "",
+      provider_response_code: transaction.provider_response_code ?? "",
     },
   };
 }
@@ -262,6 +265,7 @@ function rowToTransaction(row: TransactionFormRow): TransactionInput {
     card_brand: nullIfBlank(values.card_brand),
     card_type: (nullIfBlank(values.card_type) ?? null) as TransactionInput["card_type"],
     provider_connection_id: nullIfBlank(values.provider_connection_id),
+    provider_response_code: nullIfBlank(values.provider_response_code),
   };
 }
 
@@ -299,6 +303,7 @@ const fields = new Set<TransactionField>([
   "card_brand",
   "card_type",
   "provider_connection_id",
+  "provider_response_code",
 ]);
 
 function assertOption(

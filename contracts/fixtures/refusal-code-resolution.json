@@ -1,0 +1,1 @@
+{"schema_version":"1.0","lookup_status":"MATCH_FOUND","provider_id":"ADYEN","issuer_bank":"NUBANK_BR","card_brand":"VISA","response_code":"51","outcome":"FAILED","normalized_code":"INSUFFICIENT_FUNDS","reason":"Insufficient funds","source":"ADYEN_RAW_ACQUIRER","mapping_version":"2026.08.30"}

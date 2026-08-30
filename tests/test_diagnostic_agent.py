@@ -17,7 +17,9 @@ def test_template_suggestion_is_grounded_human_only_and_does_not_change_the_inci
     incident = _incident()
     original_root_cause = incident.root_cause.model_dump(mode="json")
 
-    suggestion = DiagnosticAgentService().suggest_for_incident(incident, persist=False)
+    suggestion = DiagnosticAgentService(client=TemplateSuggestionClient()).suggest_for_incident(
+        incident, persist=False
+    )
 
     assert suggestion.status == "SUGGESTED"
     assert suggestion.suggested_category == incident.root_cause.category
@@ -44,7 +46,7 @@ def test_agent_rejects_a_model_action_that_would_reroute_payment_traffic():
 
 def test_unchanged_incident_reuses_one_persisted_suggestion():
     incident = _incident()
-    service = DiagnosticAgentService()
+    service = DiagnosticAgentService(client=TemplateSuggestionClient())
 
     first = service.suggest_for_incident(incident)
     second = service.suggest_for_incident(incident)

@@ -10,7 +10,7 @@ Contracts: ``CTR-AGT-001`` EvidencePack, ``CTR-AGT-002`` RetrievalTrace,
 """
 
 from .evidence import build_evidence_pack
-from .llm import OpenAISuggestionClient, SuggestionClient, TemplateSuggestionClient
+from .llm import OpenAISuggestionClient, SuggestionClient, TemplateSuggestionClient, configured_suggestion_client
 from .models import (
     AgentRetrievalTrace,
     CausalAlternative,
@@ -51,6 +51,7 @@ __all__ = [
     "SuggestionReason",
     "TemplateSuggestionClient",
     "build_evidence_pack",
+    "configured_suggestion_client",
     "evidence_fingerprint_for",
     "parse_and_validate",
     "retrieve_precedents",

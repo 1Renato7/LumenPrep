@@ -5,6 +5,15 @@
 .header h1 span { color: #7990ff; font-weight: 500; }
 .offline { padding: .5rem .72rem; border: 1px solid rgba(126, 151, 255, .6); border-radius: 999px; background: rgba(10, 17, 49, .82); color: #edf1ff; font-size: .72rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .filters { display: flex; flex-wrap: wrap; gap: .5rem; }
+.resetCard { display: grid; gap: .8rem; border-color: rgba(255, 143, 143, .48); }
+.resetCard > .dangerButton { justify-self: start; }
+.dangerButton { border-color: rgba(255, 143, 143, .8); background: rgba(116, 34, 45, .72); color: #ffe8e8; }
+.dangerButton:hover { border-color: #ffc4c4; background: rgba(153, 42, 59, .84); }
+.resetForm { display: grid; gap: .65rem; max-width: 31rem; padding-top: .8rem; border-top: 1px solid rgba(255, 143, 143, .28); }
+.resetForm label { color: #f4d5d5; font-size: .82rem; font-weight: 800; }
+.resetForm input { min-height: 44px; padding: .55rem .7rem; border: 1px solid rgba(153, 172, 255, .58); border-radius: .65rem; background: rgba(5, 10, 29, .92); color: #f7f9ff; font: inherit; }
+.resetForm input:focus-visible { outline: 3px solid #b3c0ff; outline-offset: 3px; }
+.resetActions { display: flex; flex-wrap: wrap; gap: .6rem; }
 .button, .filter { min-height: 44px; padding: .55rem .8rem; border: 1px solid rgba(153, 172, 255, .58); border-radius: .65rem; background: rgba(15, 28, 78, .86); color: #eff2ff; cursor: pointer; font: inherit; transition: background 160ms ease, border-color 160ms ease; }
 .filter[aria-pressed="true"] { border-color: #9aaaff; background: linear-gradient(135deg, #6179eb, #4457c6); color: #fff; }
 .button:hover, .filter:hover { border-color: #c2ccff; background: rgba(39, 57, 139, .75); }

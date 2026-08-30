@@ -150,3 +150,34 @@ def test_candidate_identity_separates_currencies_in_same_correlation_and_window(
     assert len(candidates) == 6
     assert len({candidate.candidate_id for candidate in candidates}) == 6
     assert {candidate.slice["currency"] for candidate in candidates} == {"BRL", "MXN"}
+
+
+def test_flat_zero_timeout_series_raises_no_candidate() -> None:
+    """A slice with no timeouts against a baseline of no timeouts is not an anomaly.
+
+    ``_wilson_bound`` returns ~1e-17 instead of 0 for most sample sizes, which
+    used to clear the strict comparison in ``timeout_rate_signal`` and produce a
+    candidate with zero effect on a perfectly steady series.
+    """
+    start = datetime(2026, 7, 6, 10, tzinfo=timezone.utc)
+    series = [
+        _window(
+            start + timedelta(weeks=index),
+            attempts=24,
+            timeout_rate=0.0,
+            correlation_id=f"corr-flat-{index}",
+        )
+        for index in range(5)
+    ]
+
+    candidates = detect_candidates(series, low_sample_attempts=LOW_SAMPLE_ATTEMPTS)
+
+    assert candidates == []
+
+
+def test_wilson_bound_is_exact_at_the_degenerate_ends() -> None:
+    from app.detection.detector import _wilson_bound
+
+    for sample_size in (24, 35, 40, 100):
+        assert _wilson_bound(0.0, sample_size, upper=False) == 0.0
+        assert _wilson_bound(1.0, sample_size, upper=True) == 1.0

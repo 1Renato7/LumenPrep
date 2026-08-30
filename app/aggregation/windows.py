@@ -1,4 +1,4 @@
-"""TASK-AGG-001. SQL/Python sobre DuckDB, janelas de 5min, dois denominadores (attempt/payment)."""
+"""TASK-AGG-001. SQL/Python sobre DuckDB, buckets de 1min e dois denominadores."""
 
 import json
 from collections import defaultdict
@@ -7,7 +7,7 @@ from itertools import combinations
 
 from . import WindowMetrics
 
-WINDOW_SECONDS = 300
+WINDOW_SECONDS = 60
 TERMINAL_STATUSES = {"SUCCEEDED", "DECLINED", "ERROR", "TIMEOUT", "CANCELLED"}
 # The causal cube is intentionally built from attributes known before the
 # payment outcome. A decline code describes an outcome, so it is retained as
@@ -109,6 +109,55 @@ def compute_windows(con) -> list[WindowMetrics]:
             )
         )
     return windows
+
+
+def compute_payment_conversion_observations(con, *, observation_seconds: int = 3600) -> list[WindowMetrics]:
+    """Return closed, rolling conversion observations derived from canonical attempts.
+
+    The denominator is the set of payment IDs in the preceding interval, not the
+    number of attempts.  Therefore a retry can change the payment's terminal
+    result but can never inflate the sample.  Each endpoint is a five-minute
+    bucket boundary and only prior event times are read.
+    """
+    base = compute_windows(con)
+    closed_through = _window_bucket(datetime.now(timezone.utc))
+    endpoints = sorted({end for window in base if (end := _parse_window_end(window.window_end)) <= closed_through})
+    current_rows = [json.loads(row[0]) for row in con.execute("SELECT canonical_json FROM canonical_attempts").fetchall()]
+    observations: list[WindowMetrics] = []
+    for end in endpoints:
+        start = end - timedelta(seconds=observation_seconds)
+        groups: dict[tuple[tuple[tuple[str, str], ...], str, str], list[dict]] = defaultdict(list)
+        for attempt in current_rows:
+            event_time = datetime.fromisoformat(attempt["event_time"].replace("Z", "+00:00"))
+            if not start <= event_time < end or attempt["status"] not in TERMINAL_STATUSES:
+                continue
+            values = _diagnosis_values(attempt)
+            correlation_id = attempt.get("correlation_id") or "corr_unknown"
+            currency = attempt.get("currency") or "USD"
+            for size in range(0, len(DIAGNOSIS_DIMENSIONS) + 1):
+                for names in combinations(DIAGNOSIS_DIMENSIONS, size):
+                    dims = tuple((name, values[name]) for name in names)
+                    groups[(dims, correlation_id, currency)].append(attempt)
+        for (dims, correlation_id, currency), attempts in groups.items():
+            payments = {attempt["payment_id"] for attempt in attempts}
+            approved_payments = {attempt["payment_id"] for attempt in attempts if attempt["status"] == "SUCCEEDED"}
+            if not payments:
+                continue
+            observations.append(WindowMetrics(
+                window_start=_iso_z(start), window_end=_iso_z(end), dimensions={**dict(dims), "currency": currency},
+                eligible_attempts=len(attempts), approved_attempts=sum(a["status"] == "SUCCEEDED" for a in attempts),
+                unique_payments=len(payments), approved_payments=len(approved_payments),
+                amount_minor=sum(a["amount_minor"] for a in attempts if a["status"] == "SUCCEEDED"), currency=currency,
+                approval_rate=sum(a["status"] == "SUCCEEDED" for a in attempts) / len(attempts),
+                payment_conversion=len(approved_payments) / len(payments), latency_p50_ms=0.0, latency_p95_ms=0.0,
+                timeout_rate=sum(a["status"] == "TIMEOUT" for a in attempts) / len(attempts), decline_counts={}, decline_profile={},
+                data_quality=1.0, window_revision=1, correlation_id=correlation_id,
+            ))
+    return observations
+
+
+def _parse_window_end(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def _diagnosis_values(attempt: dict) -> dict[str, str]:

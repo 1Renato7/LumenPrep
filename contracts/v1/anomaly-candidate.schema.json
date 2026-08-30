@@ -18,6 +18,7 @@
     "effect_relative": {"type": "number"},
     "statistical_strength": {"type": "number", "minimum": 0, "maximum": 1},
     "lost_approvals": {"type": "number", "minimum": 0},
+    "estimated_lost_conversions": {"type": "number", "minimum": 0},
     "loss_coverage": {"type": "number", "minimum": 0, "maximum": 1},
     "temporal_consistency": {"type": "number", "minimum": 0, "maximum": 1},
     "data_quality": {"type": "number", "minimum": 0, "maximum": 1},

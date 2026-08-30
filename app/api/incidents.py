@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.agent import DiagnosticSuggestionRepository
 from app.config import settings
@@ -21,16 +21,15 @@ from app.explanation import (
     TransactionGrounding,
     resolve_transaction_grounding_from_api_responses,
 )
-from app.incidents import DuckDBIncidentRepository
+from app.incidents import DuckDBIncidentRepository, ReviewIdConflictError
 from app.ingestion.storage import transaction_record_for_grounding
 from app.memory import (
     Incident,
-    IncidentPromoter,
     IncidentMemoryService,
     InMemoryIncidentRepository,
     Neo4jIncidentRepository,
-    PromotionReview,
 )
+from app.memory.promotion import IncidentPromoter, PromotionReview
 from app.memory.repository import IncidentMemoryRepository
 from app.memory.seed import seed_mastercard_d2
 
@@ -40,13 +39,28 @@ _neo4j_driver: Any | None = None
 _neo4j_driver_failed = False
 
 
-class IncidentConfirmationRequest(BaseModel):
-    """A human review that may promote an observed Incident into graph memory.
+class HumanReviewRequest(BaseModel):
+    """CTR-HRV-001 v1 — a reviewer, not an agent, owns this decision."""
 
-    ``reviewer_id`` is audit attribution supplied by the authenticated caller in a
-    production deployment. This API does not itself implement authentication, so
-    it deliberately does not claim that the identifier proves an identity.
-    """
+    schema_version: Literal["1.0"] = "1.0"
+    review_id: str = Field(min_length=8, max_length=120)
+    reviewer_id: str = Field(min_length=1, max_length=120)
+    decision: Literal["APPROVED", "REJECTED"]
+    reason: str = Field(min_length=3, max_length=4_000)
+    confirmed_cause: str | None = Field(default=None, max_length=160)
+    playbook_id: str | None = Field(default=None, max_length=160)
+
+    @model_validator(mode="after")
+    def approved_reviews_require_a_cause_and_playbook(self) -> "HumanReviewRequest":
+        if self.decision == "APPROVED" and (not self.confirmed_cause or not self.playbook_id):
+            raise ValueError("APPROVED requires confirmed_cause and playbook_id")
+        if self.decision == "REJECTED" and (self.confirmed_cause is not None or self.playbook_id is not None):
+            raise ValueError("REJECTED must not include confirmed_cause or playbook_id")
+        return self
+
+
+class IncidentConfirmationRequest(BaseModel):
+    """Compatibility request for the explicit confirmation contract."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -86,7 +100,7 @@ def _memory_repository() -> IncidentMemoryRepository | None:
     return Neo4jIncidentRepository(
         driver,
         database=settings.neo4j_database,
-        include_evaluation=settings.demo_mode or settings.graphrag_evaluation_mode,
+        include_evaluation=False,
     )
 
 
@@ -98,6 +112,30 @@ def _with_incident_id(payload: dict[str, Any], incident_id: str) -> dict[str, An
     result = deepcopy(payload)
     result["incident_id"] = incident_id
     return result
+
+
+def _confirmation_contract(historical: Any, *, correlation_id: str) -> dict[str, Any]:
+    promotion = historical.metrics.get("promotion", {})
+    return {
+        "schema_version": "1.0", "incident_id": historical.incident_id, "correlation_id": correlation_id,
+        "review_id": promotion.get("review_id"), "reviewer_id": promotion.get("reviewer_id"),
+        "confirmation": historical.confirmation, "confirmed_cause": historical.confirmed_cause,
+        "prior_playbook_id": historical.prior_playbook_id, "evidence_ids": list(historical.evidence_ids),
+        "provenance": historical.provenance, "occurred_at": historical.occurred_at.isoformat(),
+    }
+
+
+def _same_confirmation_review(historical: Any, review: IncidentConfirmationRequest) -> bool:
+    promotion = historical.metrics.get("promotion", {})
+    return (
+        promotion.get("review_id") == review.review_id
+        and promotion.get("reviewer_id") == review.reviewer_id
+        and historical.confirmed_cause == review.confirmed_cause
+        and historical.prior_playbook_id == review.playbook_id
+        and historical.provenance == review.provenance
+        and set(historical.metrics.get("decline_codes", ())) == set(review.decline_codes)
+        and historical.metrics.get("temporal_shape") == review.temporal_shape
+    )
 
 
 def _fixture_records() -> dict[str, dict[str, Any]]:
@@ -178,37 +216,6 @@ def _incident_records() -> dict[str, dict[str, Any]]:
         incident.incident_id: incident.model_dump(mode="json")
         for incident in DuckDBIncidentRepository().list()
     }
-
-
-def _confirmation_contract(historical: Any, *, correlation_id: str) -> dict[str, Any]:
-    """Serialize the graph-memory write without extending frozen CTR-INC-001."""
-    promotion = historical.metrics.get("promotion", {})
-    return {
-        "schema_version": "1.0",
-        "incident_id": historical.incident_id,
-        "correlation_id": correlation_id,
-        "review_id": promotion.get("review_id"),
-        "reviewer_id": promotion.get("reviewer_id"),
-        "confirmation": historical.confirmation,
-        "confirmed_cause": historical.confirmed_cause,
-        "prior_playbook_id": historical.prior_playbook_id,
-        "evidence_ids": list(historical.evidence_ids),
-        "provenance": historical.provenance,
-        "occurred_at": historical.occurred_at.isoformat(),
-    }
-
-
-def _same_review(historical: Any, review: IncidentConfirmationRequest) -> bool:
-    promotion = historical.metrics.get("promotion", {})
-    return (
-        promotion.get("review_id") == review.review_id
-        and promotion.get("reviewer_id") == review.reviewer_id
-        and historical.confirmed_cause == review.confirmed_cause
-        and historical.prior_playbook_id == review.playbook_id
-        and historical.provenance == review.provenance
-        and set(historical.metrics.get("decline_codes", ())) == set(review.decline_codes)
-        and historical.metrics.get("temporal_shape") == review.temporal_shape
-    )
 
 
 def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], explanation: dict[str, Any]) -> dict[str, Any]:
@@ -327,52 +334,25 @@ def get_incident_suggestion(incident_id: str) -> dict[str, Any]:
     return suggestion.model_dump(mode="json")
 
 
-@router.post("/incidents/{incident_id}/confirmation")
-def confirm_incident(incident_id: str, review: IncidentConfirmationRequest) -> dict[str, Any]:
-    """Persist a reviewed Incident in Neo4j, never a detector result by itself.
+@router.get("/notifications")
+def list_notifications() -> dict[str, Any]:
+    """Return persistent in-app notifications; the browser never derives unread state."""
+    repository = DuckDBIncidentRepository()
+    notifications = repository.notifications()
+    records = _incident_records()
+    values = [
+        {**notification, "incident": records.get(notification["incident_id"])}
+        for notification in notifications
+        if notification["incident_id"] in records
+    ]
+    return {"notifications": values, "unread_count": sum(item["read_at"] is None for item in values)}
 
-    The current Incident remains an RCA-owned DuckDB record. A promotion failure
-    returns a typed service error instead of falling back to ephemeral memory,
-    because callers need proof that the historical precedent reached Neo4j.
-    """
-    current = DuckDBIncidentRepository().get(incident_id)
-    if current is None:
-        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
 
-    primary = _memory_repository()
-    if primary is None or not primary.health():
-        raise HTTPException(status_code=503, detail="MEMORY_UNAVAILABLE")
-
-    try:
-        existing = next(
-            (candidate for candidate in primary.confirmed_incidents() if candidate.incident_id == incident_id),
-            None,
-        )
-    except Exception:
-        raise HTTPException(status_code=503, detail="MEMORY_UNAVAILABLE") from None
-
-    if existing is not None:
-        if _same_review(existing, review):
-            return _confirmation_contract(existing, correlation_id=current.correlation_id)
-        raise HTTPException(status_code=409, detail="INCIDENT_ALREADY_CONFIRMED")
-
-    try:
-        historical = IncidentPromoter(primary).promote(
-            Incident.from_contract(current.model_dump(mode="json")),
-            PromotionReview(
-                review_id=review.review_id,
-                incident_id=incident_id,
-                reviewer_id=review.reviewer_id,
-                confirmed_cause=review.confirmed_cause,
-                playbook_id=review.playbook_id,
-                decline_codes=tuple(review.decline_codes),
-                temporal_shape=review.temporal_shape,
-                provenance=review.provenance,
-            ),
-        )
-    except Exception:
-        raise HTTPException(status_code=503, detail="MEMORY_PERSISTENCE_FAILED") from None
-    return _confirmation_contract(historical, correlation_id=current.correlation_id)
+@router.post("/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: str) -> dict[str, Any]:
+    if not DuckDBIncidentRepository().mark_notification_read(notification_id):
+        raise HTTPException(status_code=404, detail="NOTIFICATION_NOT_FOUND")
+    return {"notification_id": notification_id, "read": True}
 
 
 @router.get("/incidents/{incident_id}")
@@ -382,3 +362,74 @@ def get_incident(incident_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
     memory, explanation = _memory_and_explanation(incident)
     return build_incident_response(incident, memory, explanation)
+
+
+@router.post("/incidents/{incident_id}/confirmation")
+def confirm_incident(incident_id: str, review: IncidentConfirmationRequest) -> dict[str, Any]:
+    """Persist a reviewed Incident as historical memory without changing its RCA."""
+    current = DuckDBIncidentRepository().get(incident_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+    primary = _memory_repository()
+    if primary is None or not primary.health():
+        raise HTTPException(status_code=503, detail="MEMORY_UNAVAILABLE")
+    try:
+        existing = next((item for item in primary.confirmed_incidents() if item.incident_id == incident_id), None)
+    except Exception:
+        raise HTTPException(status_code=503, detail="MEMORY_UNAVAILABLE") from None
+    if existing is not None:
+        if _same_confirmation_review(existing, review):
+            return _confirmation_contract(existing, correlation_id=current.correlation_id)
+        raise HTTPException(status_code=409, detail="INCIDENT_ALREADY_CONFIRMED")
+    try:
+        historical = IncidentPromoter(primary).promote(
+            Incident.from_contract(current.model_dump(mode="json")),
+            PromotionReview(
+                review_id=review.review_id, incident_id=incident_id, reviewer_id=review.reviewer_id,
+                confirmed_cause=review.confirmed_cause, playbook_id=review.playbook_id,
+                decline_codes=tuple(review.decline_codes), temporal_shape=review.temporal_shape,
+                provenance=review.provenance,
+            ),
+        )
+    except Exception:
+        raise HTTPException(status_code=503, detail="MEMORY_PERSISTENCE_FAILED") from None
+    return _confirmation_contract(historical, correlation_id=current.correlation_id)
+
+
+@router.post("/incidents/{incident_id}/review", status_code=201)
+def review_incident(incident_id: str, request: HumanReviewRequest) -> dict[str, Any]:
+    """Persist and mirror a human approval/rejection without agent authority."""
+    repository = DuckDBIncidentRepository()
+    current_contract = repository.get(incident_id)
+    if current_contract is None:
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+    try:
+        review = repository.record_review(
+            review_id=request.review_id, incident_id=incident_id, decision=request.decision,
+            reviewer_id=request.reviewer_id, reason=request.reason,
+            confirmed_cause=request.confirmed_cause, playbook_id=request.playbook_id,
+        )
+    except ReviewIdConflictError as error:
+        raise HTTPException(status_code=409, detail="REVIEW_ID_CONFLICT") from error
+
+    graph = _memory_repository()
+    if graph is None:
+        raise HTTPException(status_code=503, detail="GRAPH_MEMORY_UNAVAILABLE")
+    current = Incident.from_contract(current_contract.model_dump(mode="json"))
+    try:
+        # Mirror the human rationale first. If promotion subsequently fails, a
+        # retry has an audit trail but no unqualified historical precedent.
+        graph.record_human_review(current, review)
+        if request.decision == "APPROVED":
+            decline_values = current_contract.metrics.get("decline_codes", [])
+            decline_codes = tuple(str(value) for value in decline_values) if isinstance(decline_values, list) else ()
+            temporal_shape = str(current_contract.metrics.get("temporal_shape") or current_contract.metrics.get("metric") or "OBSERVED_WINDOW")
+            IncidentPromoter(graph).promote(current, PromotionReview(
+                review_id=request.review_id, incident_id=incident_id, reviewer_id=request.reviewer_id,
+                confirmed_cause=request.confirmed_cause or "", playbook_id=request.playbook_id or "",
+                decline_codes=decline_codes, temporal_shape=temporal_shape,
+                provenance="REAL_HUMAN_REVIEW",
+            ))
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="GRAPH_MEMORY_UNAVAILABLE") from error
+    return {"schema_version": "1.0", "review": review, "promoted_to_memory": request.decision == "APPROVED"}

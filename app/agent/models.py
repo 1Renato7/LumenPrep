@@ -74,6 +74,23 @@ class ImpactSummary(BaseModel):
     currency: str = Field(pattern=r"^[A-Z]{3}$")
 
 
+class RefusalCodeSummary(BaseModel):
+    """CTR-RFC-002: a persisted, scope-limited reason aggregate."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_id: str = Field(min_length=1)
+    issuer_bank: str = Field(min_length=1)
+    card_brand: str = Field(min_length=1)
+    response_code: str = Field(min_length=1)
+    normalized_code: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    mapping_version: str = Field(min_length=1)
+    transaction_count: int = Field(ge=1)
+    evidence_id: str = Field(min_length=1)
+
+
 class EvidencePack(BaseModel):
     """CTR-AGT-001 v1 — immutable fact bundle handed to the agent."""
 
@@ -93,6 +110,7 @@ class EvidencePack(BaseModel):
     detector_evidence: list[EvidenceItem] = Field(default_factory=list)
     rca_alternatives: list[CausalAlternative] = Field(default_factory=list)
     decline_profile: dict[str, int] = Field(default_factory=dict)
+    refusal_code_summaries: list[RefusalCodeSummary] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     authorized_evidence_ids: list[str] = Field(default_factory=list)
     root_cause: EngineRootCause

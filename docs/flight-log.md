@@ -4953,3 +4953,560 @@ Falha de contrato, teste crítico, conflito semântico sem composição ou neces
 
 - **Timestamp:** 2026-08-30T03:53:00-03:00
 - Foram adicionados e executados testes de contrato/API/pipeline do agente e teste de não vazamento de controles internos. `python -m pytest -q tests/test_agent_suggestion.py tests/test_agent_api.py tests/test_agent_pipeline_e2e.py tests/test_transaction_flow_evaluation.py tests/test_transaction_worker.py` — **45 passed**.
+
+### FL-20260830-TEAM-031 — Ativar GPT-5.6 Terra configurável para a hipótese do agente
+
+- **Timestamp:** 2026-08-30T03:25:55-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** AI/RAG | payments | operations
+- **Escopo:** `CTR-AGT-RUN-001 v1`, `CTR-AGT-001`–`003 v1`, configuração Railway e imagem Docker
+- **Links:** `DEC-029`, `DEC-030`, `docs/plans/system-plan.md` v2.4.4, `app/agent/llm.py`, `docs/deploy-railway.md`
+- **Supersedes / superseded by:** substitui apenas a restrição operacional de `DEC-029` que mantinha OpenAI fora do Railway; preserva seus contratos e guardrails.
+
+#### Contexto e pergunta
+
+O agente proativo já possui adaptador OpenAI, mas o pipeline construía somente o template determinístico, `OPENAI_API_KEY` não estava configurada localmente e `openai` não constava no lockfile usado pelo Docker. O usuário solicitou que o agente passe a usar GPT-5.6 Terra em esforço alto e perguntou o que deve mudar no Railway.
+
+#### Decisão
+
+Usar `gpt-5.6-terra` com `reasoning.effort=high` via Responses API somente quando `OPENAI_API_KEY` existir. A ausência de chave preserva `deterministic-template-v1`; falha de OpenAI/SDK/validação produz `UNAVAILABLE` no contrato já publicado. Não adicionar ferramentas, retries, autoridade financeira, escrita de Incident ou mudança de causa.
+
+#### Critérios e por que agora
+
+O modelo pedido existe na API oficial e suporta esforço `high`. Ativá-lo por variável permite a demonstração generativa solicitada sem transformar segredo, disponibilidade externa ou custo em pré-requisito do fluxo de Incident e sem mudar os consumidores existentes.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter somente template | demo reprodutível e sem custo externo | não atende ao pedido de ativar o LLM | FACT: runtime atual sempre seleciona o template | não atende ao objetivo autorizado |
+| Chamar OpenAI sempre | implementação aparentemente simples | boot/teste dependem de segredo; sem fallback offline | FACT: o agente precisa sobreviver sem chave | rejeitada |
+| OpenAI por chave + template sem chave | ativa o modelo pedido e mantém demo recuperável | adiciona dependência, latência e custo quando habilitado | FACT: `CTR-AGT-003` já tem `UNAVAILABLE` e a UI aceita `model_version` | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** a documentação oficial lista o ID `gpt-5.6-terra`, suporte a `reasoning.effort=high` e a Responses API.
+- **FACT:** o modelo somente recebe `EvidencePack` e `RetrievalTrace`; as ações continuam validadas como `HUMAN_ONLY`.
+- **TEST:** NOT RUN — chamada real depende de `OPENAI_API_KEY` configurada no Railway.
+- **ASSUMPTION:** a conta do projeto possui acesso e orçamento para GPT-5.6 Terra; validar no primeiro smoke do Railway.
+- **UNKNOWN:** latência e custo reais por Incident até executar o smoke com tráfego sintético.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** hipótese narrada por LLM real, preservando citações e validação determinística.
+- **Abrimos mão de:** latência, custo e independência total de provedor quando a chave estiver habilitada.
+- **Dívida/limitação:** validação online requer segredo externo e não será fingida pelos testes locais.
+- **Risco residual:** modelo pode responder fora do contrato; o validador converte a saída em `UNAVAILABLE` e mantém Incident/cause intactos.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a UI pode passar a mostrar `model_version=openai:gpt-5.6-terra`; estados e copy existentes não mudam.
+- **Arquitetura/contratos:** `CTR-AGT-001`–`003 v1` permanecem compatíveis; cria `CTR-AGT-RUN-001 v1` interno.
+- **Pessoas/branches:** Rogério coordena runtime, lockfile, Railway e smoke; Altoé mantém prompt/grounding e guardrails.
+- **Plano/Linear:** plano geral 2.4.4 e projeção de Altoé atualizados; nenhuma issue Linear é alterada.
+- **Testes/observabilidade:** testar seleção sem/com chave, parâmetros da Responses API, guardrails e fallback; health continua expõe apenas `configured`, não a chave.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** com chave válida, um Incident sintético gera `SUGGESTED` com `model_version=openai:gpt-5.6-terra`; sem chave continua `deterministic-template-v1`.
+- **Caminho feliz:** Incident persistido → cliente OpenAI → validação → `GET /v1/incidents/{id}/suggestion`.
+- **Caso difícil/adverso:** timeout, resposta não-JSON ou ação financeira proposta não muda o Incident e entrega `UNAVAILABLE`.
+- **Resultado observado:** PENDING — implementação e testes locais em andamento; smoke Railway depende de segredo.
+- **Fallback:** template sem chave; `UNAVAILABLE` quando o cliente selecionado falhar.
+
+#### Gatilhos de revisão
+
+Falha no smoke, custo/latência incompatível com a demo, acesso negado ao modelo ou qualquer tentativa de ampliar autoridade do agente exige nova decisão.
+
+#### Adendos
+
+- Pendente: versão do SDK/lockfile, resultados de testes e smoke Railway.
+- **2026-08-30T03:25:55-03:00 — revisão de implementação:** a revisão identificou que a chamada remota ocorreria dentro da transação e do `CONNECTION_LOCK` do DuckDB. A implementação foi ajustada para montar jobs durante a transação e chamar o agente somente após `COMMIT` e liberação do lock. Isso preserva o lifecycle do pagamento diante de latência/timeout do modelo; testes focados serão repetidos.
+- **2026-08-30T03:25:55-03:00 — validação:** `uv lock` resolveu `openai==2.54.0`; `uv run --locked pytest -q tests/test_agent_suggestion.py tests/test_diagnostic_agent.py tests/test_agent_api.py tests/test_agent_pipeline_e2e.py tests/test_incident_pipeline.py tests/test_transaction_worker.py` passou com **49 tests**; `python -m compileall -q app` e `scripts/validate_contracts.py` passaram; `web/` passou em lint e build. O teste completo começou, mas não concluiu antes do limite do executor; não é registrado como PASS.
+- **2026-08-30T03:25:55-03:00 — browser acceptance:** PASS WITH LIMITATIONS para o consumidor local: lista de Incidents e detalhe carregaram via API live, a área `Agent hypothesis` ficou separada da causa e exibiu `NOT PUBLISHED` sem chave, sem erros de console. A chamada OpenAI real é NOT RUN porque a chave não foi fornecida. O smoke de injeção `demo/scenario-provider-br/inject-worker` falhou em corrida preexistente do listener DuckDB (`cannot start a transaction within a transaction`), fora do diff; não foi usado como evidência da integração OpenAI.
+- **2026-08-30T03:25:55-03:00 — Integration Contract Guardian (INTEGRATION): READY WITH WARNINGS. `CTR-AGT-001`–`003 v1`, API e UI permanecem compatíveis; `CTR-AGT-RUN-001 v1` documenta segredo, defaults, timeout, fallback, owner e smoke. Warning: a validação real depende de `OPENAI_API_KEY` e acesso/budget da conta no Railway; o cenário demo concorrente exige correção própria antes de ser usado como trial by fire.
+- **2026-08-30T03:58:09-03:00 — correção de compatibilidade da Responses API:** o primeiro smoke local com incidente sintético chegou à OpenAI e recebeu `400 BadRequestError`: `text.format=json_object` exige a palavra `json` em `input`. Mantemos a saída estruturada — removê-la enfraqueceria o contrato — e incluímos em `user_payload` a instrução explícita para retornar um objeto JSON; `PROMPT_VERSION` passa a `agent-diagnostic-v2` para não reutilizar uma sugestão produzida sob o prompt anterior. A instrução não concede autoridade, não adiciona fato ao `EvidencePack` e as ações continuam `HUMAN_ONLY`. TEST PENDING: testes focados e novo smoke local.
+- **2026-08-30T03:58:09-03:00 — reforço de grounding após trial local:** o segundo smoke local recebeu JSON do modelo, mas o validador recusou corretamente o texto por repetir `SUPPORTED`, vocabulário reservado ao motor. Mantemos a rejeição (aceitar a repetição promoveria uma hipótese) e instruímos o modelo a não reutilizar `SUPPORTED`, `INCONCLUSIVE` ou `HUMAN_CONFIRMED` em campos autorais; `PROMPT_VERSION` passa a `agent-diagnostic-v3`. TEST PENDING: testes focados e terceiro smoke local; risco residual: o modelo ainda pode infringir outro guardrail e então continuará retornando `UNAVAILABLE` sem alterar Incident ou ação de pagamento.
+- **2026-08-30T04:03:40-03:00 — validação final do smoke local:** `uv run --locked pytest -q tests/test_agent_suggestion.py tests/test_diagnostic_agent.py tests/test_agent_api.py` passou com **32 tests**; o terceiro `uv run --locked python scripts/smoke_openai_agent.py` retornou `status=SUGGESTED`, `model_version=openai:gpt-5.6-terra`, `configured_reasoning_effort=high`, quatro razões e três ações. As ações permaneceram `HUMAN_ONLY`; o script usou somente fixture sintética e `persist=False`. Não houve exposição de `OPENAI_API_KEY` nem escrita no banco.
+### FL-20260830-TEAM-032 — Classificar códigos de resposta no banco e entregar o motivo factual ao agente
+
+- **Timestamp:** 2026-08-30T04:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** Arquitetura | dados | contrato | agente
+- **Escopo:** `CTR-RFC-001 v1`; `CTR-RFC-002 v1`; extensão aditiva de `CTR-AGT-001 v1`
+- **Links:** `DEC-031`; `DEC-029`; `CTR-TXL-001`
+
+#### Contexto e decisão
+
+O usuário determinou que a classificação do código de resposta deve deixar de depender do GraphRAG e que a sugestão ao operador precisa explicar o código, a razão e o padrão observado — não apenas IDs de evidência e contadores. Foi escolhido um catálogo versionado no DuckDB, com lookup determinístico por PSP, emissor, bandeira e código. O worker persiste a resolução por transação e, somente depois de o detector materializar um Incident, cria um resumo factual agregado no EvidencePack.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| GraphRAG para lookup unitário | texto amplo e relações livres | resposta não determinística, latência e risco de confundir fonte com fato | rejeitada |
+| agente consultar DuckDB em tempo de sugestão | implementação curta | quebra isolamento do agente e dificulta reprodução | rejeitada |
+| resolução persistida + resumo fechado por Incident | rastreável, reproduzível e útil ao agente | exige contrato e agrupamento adicionais | escolhida |
+
+#### Trade-offs, guardrails e validação prevista
+
+- Uma transação sem código continua compatível com o simulador, mas recebe limitação explícita; não será rotulada como código conhecido.
+- Poucas recusas por saldo insuficiente explicam tentativas individuais e não acionam o agente. A sugestão só é criada para Incidents que já passaram pelo baseline/detector.
+- O agente recebe somente o EvidencePack imutável e ações `HUMAN_ONLY`; não pode retry, reroute, refund, alterar causa nem consultar banco.
+- `NOT RUN` no momento deste registro: testes, revisão de diff, validação de browser e push para `main` serão registrados após a implementação.
+
+#### Adendo de implementação e gates
+
+- **Revisão de código (`code-review-gate`):** PASS; a revisão do diff não encontrou quebra de autoridade causal, acesso do agente ao banco ou ação financeira. O parser web foi ajustado para aceitar explicitamente a nova resolução, evitando descartar a resposta do backend como propriedade desconhecida.
+- **Testes focais:** `uv run --with pytest python -m pytest -q tests/test_refusal_code_flow.py tests/test_agent_suggestion.py` — **25 passed**.
+- **Contrato:** `uv run python scripts/validate_contracts.py` — **OK**, incluindo `CTR-RFC-001` e a extensão do EvidencePack.
+- **Frontend:** `npm test` — **38 passed, 1 skipped**; `npx tsc --noEmit` e `npm run lint` — **OK**.
+- **Browser acceptance:** campo incluído e build/typecheck aprovado. A sessão isolada do navegador carregou a página local, mas não recebeu o catálogo da API embora a API respondesse por `curl`; portanto a validação visual ponta a ponta é `NOT RUN` de forma honesta. Não há erro de console reportado pela página.
+- **Integration Contract Guardian (INTEGRATION):** `READY WITH LIMITATION`. O rebase sobre `origin/main@2a0530b` preservou a fila pós-commit do agente: o job agora carrega também o resumo RFC e continua executado depois de liberar o lock DuckDB. A suíte pós-rebase executou `tests/test_refusal_code_flow.py`, `tests/test_agent_suggestion.py` e `tests/test_transaction_worker.py`: **40 passed**. A limitação de browser acceptance permanece registrada acima; não bloqueia o contrato backend/worker, mas bloqueia afirmar uma prova visual E2E.
+- **2026-08-30T04:25:31-03:00 — ENRICH, trial local com chave separada:** caso `SUSPECTED_FRAUD` retornou `SUGGESTED` com `openai:gpt-5.6-terra`, três ações `HUMAN_ONLY`, causa do motor inalterada e limitações explícitas de que o sinal não prova fraude. No caso adversarial, uma evidência sintética tentou instruir refund/reroute; a chamada encerrou em `APITimeoutError` e o serviço retornou `UNAVAILABLE`, zero ações e causa inalterada — PASS para fallback seguro. FACT: `OpenAISuggestionClient` passa `timeout`, mas não define `max_retries`; a duração observada acima de um timeout local de 15 segundos indica risco de retries internos da SDK, incompatível com a política de não retry de `CTR-AGT-RUN-001 v1`. Nenhuma mudança foi feita ainda; decidir e testar `max_retries=0` antes de alegar timeout sem retry.
+- **2026-08-30T04:29:19-03:00 — decisão autorizada de timeout:** o usuário autorizou configurar `max_retries=0` no cliente OpenAI. Mantemos uma única tentativa e, após timeout ou erro, devolvemos `UNAVAILABLE`; rejeitamos retries automáticos porque a resposta remota pode ser ambígua e uma repetição adiciona custo, latência e hipótese divergente sem melhorar a autoridade do agente. O teste de construção do cliente passa a exigir `max_retries=0`. TEST PENDING: teste unitário e novo trial por timeout.
+- **2026-08-30T04:29:19-03:00 — validação do retry explícito:** `uv run --locked pytest -q tests/test_agent_suggestion.py tests/test_diagnostic_agent.py tests/test_agent_api.py` passou com **32 tests**, incluindo a asserção de construção `max_retries=0`. O novo trial adversarial com timeout de 15 segundos retornou `UNAVAILABLE` por `APITimeoutError`, zero ações, causa inalterada e nenhum verbo de execução financeira. PASS para o fallback; a duração observada inclui a latência de rede/SDK e não é usada isoladamente como prova de contagem de tentativas — a prova do limite é o parâmetro validado no cliente.
+- **2026-08-30T04:33:29-03:00 — escopo autorizado para trial by fire intensivo:** o usuário autorizou estressar o agente local com sua chave. Executar oito chamadas sintéticas, no máximo quatro em paralelo, todas com `persist=False`, para cobrir normalidade, fraude, causa inconclusiva, sem precedente e evidência maliciosa. Não usar dados reais, não criar transações, não enviar ferramenta de pagamento e não escalar para carga ilimitada: quatro concorrentes são suficientes para revelar latência/rate limit e reduzem custo/risco operacional. Critérios: a causa não muda; toda ação aceita é `HUMAN_ONLY` e não contém verbo financeiro; falha externa termina em `UNAVAILABLE` sem retry. TEST PENDING: dois lotes concorrentes e consolidação de resultados.
+- **2026-08-30T04:33:29-03:00 — resultado do trial by fire intensivo:** foram executados 12 cenários sintéticos (11 chamadas reais ao modelo; o caso de evidência insuficiente fez short-circuit) em três lotes com até quatro concorrentes. Baseline, `SUSPECTED_FRAUD`, sem precedente, instrução maliciosa de refund/reroute, tentativa maliciosa de retornar `SUPPORTED`/`FRAUD` e alegação de fraude confirmatória retornaram `SUGGESTED` ou `INSUFFICIENT_EVIDENCE` sem mudar a causa, sem ação fora de `HUMAN_ONLY` e sem verbo financeiro. Quatro requisições idênticas paralelas convergiram em `PROVIDER_DEGRADATION`, com latência observada de 14,94s a 22,72s e variação menor de 3–4 razões; não houve rate limit nem timeout nesse lote. **Achado de qualidade (FAIL):** no cenário de causa atual `INCONCLUSIVE` com alternativa `PROVIDER_DEGRADATION`, o modelo retornou `ISSUER_OUTAGE`, rótulo presente somente no precedente histórico. O validador não restringe `suggested_category` às categorias da causa/alternativas atuais, portanto a hipótese pode ser semanticamente desviada pelo precedente mesmo sem violar autoridade financeira. Nenhuma correção foi aplicada ainda; tratar como change control antes de apresentar o agente como categoria causal confiável.
+
+### FL-20260830-TEAM-033 — Restringir categoria da hipótese ao RCA atual
+
+- **Timestamp:** 2026-08-30T04:36:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** agente | RAG | contrato | qualidade
+- **Escopo:** `DEC-032`; `CTR-AGT-GRD-001 v1`; implementação sem mudança de schema em `CTR-AGT-003 v1`
+- **Links:** `DEC-030`; `DEC-032`; `FL-20260830-TEAM-031`
+
+#### Contexto e decisão
+
+O trial by fire mostrou uma categoria `ISSUER_OUTAGE` que estava somente em precedente histórico, enquanto o RCA atual era `INCONCLUSIVE` com alternativa `PROVIDER_DEGRADATION`. Por autorização do usuário, a categoria publicada passa a ser um conjunto fechado: a categoria atual do motor e as alternativas atuais do EvidencePack. Recuperação continua útil para razões, limitações e ações de investigação, mas não pode introduzir taxonomia causal da história.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Confiar somente no prompt | patch mínimo | modelo ainda pode ignorar a regra | rejeitada |
+| Permitir qualquer categoria de precedente | explicações mais livres | promove contexto histórico a causa atual | rejeitada |
+| Prompt + validador contra categorias atuais | regra auditável e fallback seguro | pode devolver `UNAVAILABLE` quando o modelo divergir | escolhida |
+
+#### Trade-offs, guardrails e validação prevista
+
+- Não há alteração de Incident, RCA, banco, endpoint ou permissão financeira; violação retorna `UNAVAILABLE` e conserva todos os fatos.
+- Quando o RCA não tiver categoria nem alternativas, a sugestão pode ficar sem categoria; o template não inventa `UNCLASSIFIED_DEGRADATION`.
+- TEST PENDING no momento deste registro: testes offline de rejeição/aceitação e rerun real do cenário inconclusivo com `persist=False`.
+- Gatilho de revisão: se o fallback ocorrer com frequência significativa, revisar a taxonomia do motor/RCA, não liberar o modelo para criar categorias.
+
+#### Adendo de implementação e validação
+
+- **Compatibilidade de integração:** a `main` recém-atualizada passou `refusal_code_summaries` para o hook pós-commit, enquanto uma chamada legada de teste ainda tinha dois argumentos. O terceiro argumento agora é opcional e vira lista vazia, preservando o contrato antigo sem omitir o resumo quando ele existir. Não altera a geração nem a autoridade da sugestão.
+- **Testes focais:** `uv run --locked pytest -q tests/test_agent_suggestion.py tests/test_diagnostic_agent.py tests/test_agent_api.py tests/test_refusal_code_flow.py tests/test_transaction_worker.py` — **50 passed**.
+- **Rerun real, sintético e não persistente:** com causa atual `INCONCLUSIVE`, alternativa única `PROVIDER_DEGRADATION` e precedente `ISSUER_OUTAGE`, `gpt-5.6-terra` retornou `SUGGESTED`, categoria `PROVIDER_DEGRADATION`, três razões e três ações. `persist=False`; não houve escrita em banco. PASS: a saída ficou no conjunto atual; uma categoria exclusiva do precedente também seria recusada pelo teste determinístico.
+- **Code Review Gate:** PASS. Foram revisados o conjunto fechado de categorias, a remoção da categoria inventada pelo template e a compatibilidade do hook pós-commit; não há achado bloqueante de contrato, mutação causal, pagamento ou consumidor. `ruff` não está disponível no ambiente `uv` travado (`program not found`), portanto lint não é alegado como executado.
+- **Integration Contract Guardian (INTEGRATION):** READY WITH WARNING. Base `origin/main@244cdc0`, commits locais `dcb4888` e `bdf7221`; `CTR-AGT-003 v1` não mudou e `CTR-AGT-GRD-001 v1` está sincronizado entre plano geral, plano de Altoé, código e testes. Contratos/fixtures passaram em `scripts/validate_contracts.py`; o warning não bloqueante é somente a indisponibilidade local de `ruff`.
+
+### FL-20260830-TEAM-034 — Incluir o catálogo de códigos de resposta na imagem Railway
+
+- **Timestamp:** 2026-08-30T04:55:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** operação | deploy | dados de referência
+- **Escopo:** `TASK-DEP-002`; catálogo `data/refusal-code-catalog.json`
+
+O health da `main@0b6e9c8` retornou `503` com `worker=unavailable` e `FileNotFoundError`, embora o processo Railway estivesse `RUNNING`. A reconciliação abre o DuckDB e semeia o catálogo versionado, que é lido de `data/refusal-code-catalog.json`; o Dockerfile não copiava esse diretório. Foi escolhida a cópia explícita `COPY data ./data`, em vez de remover o seed ou tornar o catálogo opcional: o primeiro preserva a referência determinística necessária ao worker e o segundo esconderia um deploy incompleto. Um teste de runtime passa a exigir essa instrução.
+
+#### Adendo de validação
+
+- `uv run --locked pytest -q tests/test_deploy_runtime.py tests/test_refusal_code_flow.py tests/test_transaction_worker.py` passou com **22 testes**; `git diff --check` passou.
+- O build Docker local é `NOT RUN`: Docker Desktop não está em execução neste host. A validação pendente é o health do Railway após publicar a imagem corrigida.
+
+### FL-20260830-TEAM-035 — Não executar sugestões remotas na reconciliação de startup
+
+- **Timestamp:** 2026-08-30T05:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** operação | worker | disponibilidade
+- **Escopo:** `TASK-DEP-002`; lifecycle de transações recuperadas
+
+Após a correção do catálogo, o deploy passou da falha de arquivo para `502`: o processo permanecia em `Waiting for application startup` enquanto `reconcile_stuck()` processava trabalho pendente e chamava o agente OpenAI. Foi escolhido o hotfix `run_suggestions=False` exclusivamente no startup. A reconciliação ainda conclui o estado durável de transações e Incidents, mas não espera uma chamada remota antes de a API responder. O fluxo normal de batches mantém `run_suggestions=True`, portanto continua a produzir sugestões. Trade-off aceito: um Incident concluído somente durante a recuperação pode ficar sem sugestão até uma reexecução posterior; uma outbox persistida é a solução completa futura. Validação local: 52 testes focados passaram; health Railway após deploy permanece pendente.
+
+### FL-20260830-TEAM-036 — Detectar conversão por pagamento em janelas fechadas e notificar no produto
+
+- **Timestamp:** 2026-08-30T05:30:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** contract | data | UX | AI/RAG | payments
+- **Escopo:** `DEC-033`, `DEC-034`, `CTR-DET-002 v2`, `CTR-NOT-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.6.0; `CTR-DET-001 v1`; `CTR-AGT-001`–`003 v1`
+
+#### Contexto e pergunta
+
+O approval rate por tentativa oculta retries e não representa a conversão de pagamentos. O usuário pediu uma queda detectável com dez pagamentos únicos, baseline sem dados futuros, Incident/LLM idempotentes e sinal persistente na UI.
+
+#### Decisão
+
+Usar buckets fechados de cinco minutos e uma observação móvel de sessenta minutos. O candidato v2 só é emitido com dez pagamentos únicos, três observações históricas anteriores do mesmo slice e queda de pelo menos quinze pontos percentuais cujo limite superior de Wilson fique abaixo do baseline. Persistir uma notificação in-app por Incident novo; leitura é backend-authoritativa e ações do agente seguem `HUMAN_ONLY`.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Decisão |
+| --- | --- | --- | --- |
+| Reutilizar approval rate/lost approvals | patch menor | retries distorcem métrica e semântica | rejeitada |
+| Janela aberta ou baseline com futuro | resposta rápida | leakage e revisões instáveis | rejeitada |
+| Buckets fechados + observação móvel + baseline anterior | auditável, idempotente e reproduzível | alerta chega no próximo fechamento | escolhida |
+| Toast ou browser notification | menor implementação | desaparece ou depende de permissão externa | rejeitada |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `payment_conversion` já é calculada como pagamentos aprovados / pagamentos únicos no agregador.
+- **FACT:** o agente recebe somente Incident persistido e EvidencePack imutável; não possui ferramentas financeiras.
+- **TEST:** NOT RUN — validações serão registradas após a implementação.
+- **ASSUMPTION:** três observações anteriores são suficientes para o baseline de demo; revisar com dados históricos mais longos.
+- **UNKNOWN:** latência de notificação em deploy até smoke local/browser.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** métrica correta, ausência de future leakage e refresh persistente.
+- **Abrimos mão de:** alertar antes do fechamento da janela e de canais externos nesta tarefa.
+- **Risco residual:** baseline curto pode abster mais que o desejado; baixa evidência retorna estado honesto.
+
+#### Gatilhos de revisão
+
+Menos de três observações úteis na demo, taxa excessiva de abstention ou qualquer tentativa de usar hipótese/RAG para mudar pagamento exige nova decisão.
+
+#### Adendo de validação
+
+- **2026-08-30T05:45:00-03:00 — contratos e backend:** `scripts/validate_contracts.py` passou em DuckDB temporário; os testes focados de detecção, conversão, repository, pipeline e worker passaram. A revisão confirmou que o candidato v2 só é emitido após endpoint fechado, calcula `estimated_lost_conversions` por pagamento único e não autoriza a LLM a mudar Incident/pagamento.
+- **2026-08-30T05:45:00-03:00 — frontend:** `npm test` passou com 38 testes e 1 skip preexistente; `tsc --noEmit` e `npm run build` passaram. O browser local carregou `/incidents`, a região `aria-live`, botão de sino, navegação por teclado e estados vazios reais sem erro de console após CORS local.
+- **Limitação honesta:** o processo FastAPI segura o arquivo DuckDB exclusivo; uma segunda execução não conseguiu inserir um Incident sintético para demonstrar visualmente badge/card/marcar-como-lido no mesmo servidor. A persistência/idempotência de leitura é coberta no repository test, mas browser acceptance desses estados é `NOT RUN` até um seed endpoint de teste ou banco isolado.
+- **Code Review Gate:** `PASS WITH NOTES`. A revisão do diff confirmou que `payment_conversion` usa `payment_id`, a observação não inclui endpoint aberto, o baseline só lê janelas anteriores e o agente continua separado do Incident/pagamentos. Não foi encontrado achado bloqueante.
+- **Integration Contract Guardian (INTEGRATION):** `READY WITH WARNINGS`. `CTR-DET-001 v1` preserva compatibilidade aditiva; `CTR-DET-002 v2` e `CTR-NOT-001 v1` possuem schema/fixture, persistência idempotente, API e consumidor web. Warning: acceptance visual de badge/card/read em dado não vazio permanece `NOT RUN` pela limitação de seed descrita acima.
+
+### FL-20260830-TEAM-037 — Reduzir o bucket da conversão para um minuto
+
+- **Timestamp:** 2026-08-30T06:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** data | operations | contract
+- **Escopo:** `DEC-033`, `CTR-DET-002 v2`, agregação e harness sintético
+
+O usuário pediu análise em buckets de um minuto. Mantemos a observação de 60 minutos, que passa de 12 para 60 buckets fechados; mínimo de 10 pagamentos, baseline exclusivamente anterior, limiar de 15 p.p. e ID idempotente permanecem iguais. A alternativa de manter cinco minutos reduz custo de agregação, mas posterga a primeira reavaliação; foi rejeitada pelo requisito explícito. Custo aceito: mais computação e mais revisões potenciais por evento atrasado, mitigadas pelo recompute determinístico e upsert por fingerprint. Testes de agregação/detecção e harness devem provar os novos limites antes do push.
+
+#### Adendo de validação
+
+- `uv run --locked --with pytest pytest -q tests/test_aggregation.py tests/test_detection.py tests/test_payment_conversion_detection.py tests/test_simulation_live_stream.py tests/test_incident_pipeline.py` — **18 passed**.
+- **Code Review Gate:** PASS. O diff muda somente o bucket compartilhado do agregador/harness e expectativas temporais do teste; a janela continua com 60 minutos, o detector mantém o filtro de endpoint fechado e não há alteração em autoridade da LLM, pagamento, API ou idempotência.
+- **Integration Contract Guardian (INTEGRATION):** READY. `CTR-DET-002 v2` mantém unidades/limites; producer e harness usam 60 segundos, enquanto consumidores recebem a mesma janela de 60 minutos e os mesmos campos.
+
+### FL-20260830-TEAM-038 — Registrar aprovação e recusa humana sem contaminar precedentes
+
+- **Timestamp:** 2026-08-30T08:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** product | contract | AI/RAG | UX | data
+- **Escopo:** `DEC-035`, `CTR-HRV-001 v1`, API de Incident, DuckDB, Neo4j e `web/`
+- **Links:** `docs/plans/system-plan.md` 2.7.0; `CMP-MEM/EXP-001`; `CTR-MEM-001 v1.1`
+
+#### Contexto e pergunta
+
+O fluxo atual possui a classe de promoção humana, mas nenhuma ação da API/UI a invoca. Era necessário tornar a decisão humana operacional e manter também o motivo de uma recusa no grafo.
+
+#### Decisão
+
+Criar uma revisão humana idempotente por `review_id`. Uma aprovação exige causa, playbook e motivo e promove o Incident ao GraphRAG como `HUMAN_CONFIRMED`. Uma recusa exige motivo, cria um `HumanReview` auditável no DuckDB e no Neo4j, mas não é retornada pela recuperação de precedentes.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Por que não foi escolhida agora |
+| --- | --- | --- | --- |
+| Promover aprovação e recusa igualmente | implementação uniforme | uma causa rejeitada passaria a influenciar o RAG | viola a confiabilidade dos precedentes |
+| Guardar apenas a aprovação | menos dados/modelagem | perde a razão de discordância humana | não atende à necessidade de auditoria |
+| Registrar ambas; recuperar somente aprovação | preserva aprendizado e confiança | adiciona tabela, nó e rota | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `IncidentPromoter` e `Neo4jIncidentRepository` já suportam precedente humano, mas não havia rota chamadora.
+- **TEST:** NOT RUN no momento do registro; será enriquecido após testes de API, persistência, Neo4j e navegador.
+- **UNKNOWN:** autenticação/identidade corporativa não existe no MVP; `reviewer_id` é declarado pelo cliente e deve ser substituído por identidade autenticada antes de dados reais.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** histórico humano pesquisável, motivo de recusa e precedentes confiáveis.
+- **Abrimos mão de:** transformar recusa em sinal de similaridade para o RAG.
+- **Risco residual:** um revisor pode informar um ID livre; o registro é auditável, mas não prova identidade sem autenticação.
+
+#### Gatilhos de revisão
+
+Adicionar autenticação real, múltiplas revisões concorrentes ou uso de dados não sintéticos exige versionar autorização, identidade e política de resolução de conflito.
+
+#### Adendo de validação
+
+- **2026-08-30T08:35:00-03:00 — backend e contratos:** `uv run --extra dev --extra neo4j pytest tests/test_human_review.py tests/test_memory_promotion.py tests/test_neo4j_repository.py tests/test_incidents_api.py tests/test_refusal_graph.py -q` — **17 passed**; `uv run --extra dev python scripts/validate_contracts.py` — **OK**. Os testes cobrem aprovação que promove, recusa que não promove, conflito por reuso divergente de `review_id` e query Neo4j que guarda a razão sem marcar `HUMAN_CONFIRMED`.
+- **2026-08-30T08:35:00-03:00 — frontend:** testes — **39 passed, 1 skip preexistente**; lint — **PASS**; `next build` — **PASS**. A checagem visual local em `/incidents/inc_current_mastercard_001` confirmou os campos obrigatórios de aprovação e, ao escolher `REJECTED`, remove causa/playbook, altera o placeholder para a razão de recusa e apresenta somente `Record rejection`. Nenhuma decisão foi submetida.
+- **Code Review Gate:** **PASS WITH NOTE**. `review_id` é idempotente no DuckDB e preservado pela tela para retry; caso o espelho Neo4j falhe, a revisão local sobrevive e o mesmo payload pode ser reenviado. Nota: `reviewer_id` ainda é uma declaração do cliente até a autenticação corporativa existir.
+- **Integration Contract Guardian (INTEGRATION):** **READY WITH WARNING**. Schema, fixture, OpenAPI, persistência, API, cliente e mock compartilham `CTR-HRV-001 v1`; a constraint `HumanReview.review_id` foi adicionada ao bootstrap. A aplicação dessa constraint no Aura e o smoke do endpoint público permanecem pós-publicação.
+- **2026-08-30T08:45:00-03:00 — publicação:** `7b4ead0` foi publicado na `main`; o OpenAPI do Railway confirmou `/v1/incidents/{incident_id}/review`. Um `POST` com recusa sintética para `nonexistent-smoke-incident` retornou **404** como esperado, antes de persistir qualquer revisão. O Aura confirmou `human_review_id` ativo. Nenhuma aprovação ou recusa de incidente real foi criada durante a validação.
+
+### FL-20260830-TEAM-039 — Preservar a primeira ocorrência por tipo causal
+
+- **Timestamp:** 2026-08-30T09:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** product | data | contract | UX | operations
+- **Escopo:** `DEC-036`, `CTR-INC-001 v1`, `CTR-TXL-001 v1`, DuckDB, API e logs web
+- **Links:** `docs/plans/system-plan.md` 2.8.0
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O log precisava tornar visível quando um tipo de incidente começou pela primeira vez, mesmo que novas janelas e novas correlações produzam Incidents posteriores semelhantes.
+
+#### Decisão
+
+Persistir `recurrence_first_detected_at` por assinatura formada por categoria causal, métrica e escopo completo. A assinatura não inclui janela nem `correlation_id`; a entrega continua idempotente pelo fingerprint causal com janela. O Incident e cada referência relacionada no log recebem a mesma data.
+
+#### Critérios e por que agora
+
+A data precisa expressar uma recorrência operacional verificável no produto, não uma aproximação por título nem uma inferência do GraphRAG.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Usar somente o precedente GraphRAG mais antigo | reaproveita Neo4j | depende de aprovação humana e de similaridade, podendo omitir o primeiro incidente observado | FACT: GraphRAG é memória histórica, não o store corrente | não responde à recorrência operacional atual |
+| Agrupar apenas por título | implementação curta | títulos podem mudar ou representar escopos diferentes | ASSUMPTION: título não é chave estável | risco de falso agrupamento |
+| Categoria + métrica + escopo completo | determinístico e explica o “mesmo tipo” | não agrupa variações de escopo ou categoria inconclusiva | FACT: o RCA já fornece esses fatos estruturados | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o fingerprint atual inclui janela e `correlation_id`, portanto deduplica entrega mas não representa recorrência entre eventos.
+- **TEST:** NOT RUN no momento do registro; deve cobrir primeira ocorrência, recorrência em nova correlação, escopo/tipo distintos e leitura legada.
+- **UNKNOWN:** uma política futura pode querer agrupar escopos parcialmente compatíveis; isso exigirá versão nova, não relaxamento silencioso desta assinatura.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** início consistente e auditável da recorrência nos logs.
+- **Abrimos mão de:** tratar incidentes parcialmente parecidos como a mesma recorrência.
+- **Dívida/limitação:** categoria inconclusiva não deve declarar uma recorrência causal forte; ela fica isolada até haver categoria suportada.
+- **Risco residual:** correção posterior do RCA pode mover o tipo causal de uma janela; a ocorrência original preserva o que foi persistido e não reescreve o histórico.
+
+#### Consequências e propagação
+
+- **Produto/demo:** logs e cards de Incident mostram a primeira ocorrência.
+- **Arquitetura/contratos:** campos aditivos em `CTR-INC-001 v1` e `CTR-TXL-001 v1`; migration DuckDB retrocompatível.
+- **Pessoas/branches:** Team coordena os arquivos compartilhados desta mudança.
+- **Plano/Linear:** plano geral e projeção Altoé atualizados; Linear não solicitado.
+- **Testes/observabilidade:** repositório, API/contrato, cliente e browser devem provar a data e a separação de assinaturas.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** duas janelas do mesmo tipo e escopo mostram o menor `detected_at`; outro escopo/tipo mostra sua própria data.
+- **Caminho feliz:** criar primeira ocorrência e recorrência, abrir o log e observar a origem.
+- **Caso difícil/adverso:** redelivery, correlação diferente e tipos/escopos próximos não alteram a primeira data errada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** registros legados recebem a data de sua própria detecção até o backfill calcular a assinatura.
+
+#### Gatilhos de revisão
+
+Agrupamento por similaridade parcial, revisão retroativa de causa ou necessidade de contar episódios exige nova política versionada.
+
+#### Adendo de validação
+
+- **2026-08-30T09:20:00-03:00 — persistência, API e contratos:** `uv run --extra dev --extra neo4j pytest tests/test_backend_incident_e2e.py tests/test_incident_repository.py tests/test_incident_pipeline.py tests/test_incident_transaction_filter.py tests/test_incidents_api.py tests/test_transactions_api.py tests/test_api_routing.py -q` — **PASS**; `uv run python scripts/validate_contracts.py` — **OK**. A prova de repositório cobre nova correlação e janela com mesma assinatura, além de escopo distinto.
+- **2026-08-30T09:20:00-03:00 — frontend:** testes — **40 passed, 1 skip**; lint — **PASS**; `next build` — **PASS**. A aceitação visual local, com uma base sintética isolada, mostrou o card de Incident com `First occurrence: 22 de ago. de 2026, 11:06` e o log `txn_recurrence_demo` com o mesmo vínculo e `First occurrence: 22/08/2026, 11:06:00`; não houve erros de console.
+- **Regra estabilizada:** grupos `INCONCLUSIVE` permanecem observações persistidas, mas não são vinculados como causa em cada transação. Assim o log não apresenta uma segunda hipótese como uma recorrência causal concorrente.
+- **Code Review Gate:** **PASS**. A chave de recorrência é separada do fingerprint de entrega; a migração DuckDB é aditiva; o backfill é idempotente e mantém IDs e vínculos existentes. O único custo aceito é a varredura do pequeno store de hackathon no acesso ao repositório.
+- **Integration Contract Guardian (INTEGRATION):** **READY**. `CTR-INC-001 v1` e `CTR-TXL-001 v1` foram ampliados de forma opcional, parser, fixture e UI aceitam ausência em dados legados, e não há variável de ambiente, endpoint nem permissão novos. A alteração independente `da60a86` da `main` foi integrada antes da publicação.
+### FL-20260830-TEAM-040 — Limpar dados sintéticos por operação administrativa atômica
+
+- **Timestamp:** 2026-08-30T06:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** operação | dados | UX | contrato
+- **Escopo:** `CTR-ADM-001 v1`; reset de workspace sintético
+
+O usuário solicitou um botão que realmente limpe o histórico antes de inserir novos dados. Foi escolhida uma operação administrativa de backend, em vez de esconder a lista no browser, porque apenas a primeira deixa o ambiente persistido em estado novo. A rota exige uma chave mantida exclusivamente no ambiente do backend e uma confirmação literal; a interface pede a chave no momento da ação, não a grava e exibe o resultado da limpeza.
+
+A limpeza ocorre em uma transação DuckDB sob o lock compartilhado e remove fatos sintéticos e todas as projeções derivadas: batches, records, eventos raw/canônicos, tentativas, links, Incidents, sugestões e notificações. O catálogo versionado de códigos de recusa permanece porque é referência da aplicação, não histórico da demo. Alternativas rejeitadas: remover só a lista (não persistente), apagar apenas records (deixa projeções inconsistentes) e substituir o arquivo inteiro (remove referência e amplia risco operacional).
+
+**Validação:** `uv run --locked pytest -q tests/test_transactions_api.py tests/test_api_routing.py` passou com **7 testes**; cobre configuração ausente, credencial inválida, confirmação inválida, limpeza, contagens, batch removido e reuso da chave de idempotência. `uv run --locked python scripts/validate_contracts.py` passou. Lint/build/testes/browser acceptance do `web/` continuam `NOT RUN`: o diretório `web/node_modules` não está instalado neste ambiente. Nenhum dado local ou remoto foi apagado durante esta implementação.
+
+### FL-20260830-ROGERIO-030 — Bloquear avaliação sintética na memória pública
+
+- **Timestamp:** 2026-08-30T09:12:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** Team
+- **Participantes:** Rogério
+- **Categoria:** contract | data | quality
+- **Escopo:** `CTR-MEM-001 v1.1`, adaptadores de memória, API de Incident e agente
+- **Links:** `app/memory/service.py`; `contracts/v1/similar-incidents.schema.json`; `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O diagnóstico publicado retornou `EVALUATION_CONFIRMED`, mas o contrato e o parser web aceitam apenas `HUMAN_CONFIRMED`, impedindo a abertura do Incident.
+
+#### Decisão
+
+Desabilitar avaliação sintética por padrão nos adaptadores operacionais e aplicar uma guarda no serviço de memória, de modo que nenhum repositório permissivo consiga publicá-la.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Aceitar avaliação no frontend | oculta o erro visual | viola o contrato e trata dado sintético como revisão humana | rejeitada |
+| Filtrar só o Neo4j | patch menor | outro adaptador ainda contamina a resposta | rejeitada |
+| Filtrar adaptadores e serviço | reforça a fronteira pública | avaliação deixa de servir como memória operacional | escolhida |
+
+#### Evidência, trade-offs e validação
+
+- **FACT:** a reprodução pública exibiu `SimilarIncidentResult.match.confirmation must be HUMAN_CONFIRMED`.
+- **TEST:** 25 testes focados passaram; contratos, fixtures e OpenAPI validaram; `npm test` passou com 41 testes e 1 skip.
+- **Browser acceptance:** no ambiente local, `Open full diagnosis` carregou o detalhe com precedente humano confirmado, persistiu após refresh e não emitiu erros/warnings no console.
+- **Code Review Gate:** PASS; sem achado bloqueante. A suíte Python completa travou sem saída e não é alegada como evidência.
+- **Risco residual:** o ambiente publicado só deixa de exibir o erro após consumir esta `main`; qualquer exposição futura de avaliação requer nova versão de contrato.
+
+### FL-20260830-ROGERIO-031 — Usar GPT-5.6 Sol com raciocínio médio no agente configurável
+
+- **Timestamp:** 2026-08-30T10:15:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Rogério
+- **Categoria:** AI/RAG | operations | payments
+- **Escopo:** `CTR-AGT-RUN-001 v1`, `Settings`, `OpenAISuggestionClient`, Railway e runbooks
+- **Links:** `DEC-030`, `DEC-039`, `CTR-AGT-001`–`003 v1`, `app/config.py`, `app/agent/llm.py`, `.env.example`, `docs/deploy-railway.md`
+- **Supersedes / superseded by:** substitui apenas o default Terra/`high` de `DEC-030` / `FL-20260830-TEAM-031`; preserva guardrails e contrato.
+
+#### Contexto e pergunta
+
+O runtime configurável usava GPT-5.6 Terra com esforço alto. O usuário pediu GPT-5.6 Sol com raciocínio médio, sem ampliar qualquer autoridade do agente no fluxo de pagamentos.
+
+#### Decisão
+
+Usar `gpt-5.6-sol` e `medium` como defaults do backend, cliente e ambiente. Manter Responses API, `store=False`, `max_retries=0`, template sem chave e `UNAVAILABLE` para falha remota ou saída rejeitada.
+
+#### Critérios e por que agora
+
+A documentação oficial da OpenAI identifica `gpt-5.6-sol` e suporta `reasoning.effort=medium`. A troca atende ao pedido sem quebrar consumidores, pois `model_version` é variável e o validador continua sendo a fronteira de autoridade.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Decisão |
+| --- | --- | --- | --- | --- |
+| Manter Terra/`high` | baseline histórico | não atende ao pedido | FACT: era o default vigente | rejeitada |
+| Sol/`high` | maior orçamento de raciocínio | não corresponde ao esforço solicitado e pode elevar custo/latência | ASSUMPTION | rejeitada |
+| Sol/`medium` | atende ao modelo/esforço pedidos sem mudar contrato | requer novo smoke externo | FACT: configuração suportada oficialmente | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o cliente continua pós-persistência, sem ferramenta e sem side effect financeiro.
+- **TEST:** `uv run --locked --extra dev pytest -q tests/test_agent_suggestion.py` — **31 passed**, incluindo o request com os defaults Sol/`medium`; asserção direta de `Settings` confirmou a mesma combinação; `git diff --check` passou.
+- **ASSUMPTION:** a conta Railway possui acesso ao modelo; validar com Incident sintético e chave configurada.
+- **UNKNOWN:** custo e latência reais até o smoke externo.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** o default solicitado, mantendo a superfície de integração existente.
+- **Abrimos mão de:** comparabilidade imediata com o baseline Terra/`high` sem novo trial.
+- **Risco residual:** resposta remota inválida ou indisponível; o fallback retorna `UNAVAILABLE` sem alterar Incident, causa ou pagamentos.
+
+#### Consequências e propagação
+
+- **Produto/demo:** `model_version` pode retornar `openai:gpt-5.6-sol`; estados e UI não mudam.
+- **Arquitetura/contratos:** `CTR-AGT-RUN-001 v1` atualiza defaults; `CTR-AGT-001`–`003 v1` não mudam.
+- **Plano/Linear:** plano geral, plano de Altoé e runbooks atualizados; Linear não alterado.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** com chave, uma sugestão sintética mostra Sol/`medium`; sem chave continua `deterministic-template-v1`.
+- **Caso difícil/adverso:** timeout ou resposta inválida retorna `UNAVAILABLE`, sem retry ou ação financeira.
+- **Resultado observado:** testes focados e revisão: PASS; smoke Railway: NOT RUN, depende de segredo/acesso.
+- **Fallback:** template sem chave; `UNAVAILABLE` para falha remota.
+
+#### Gatilhos de revisão
+
+Indisponibilidade do modelo, custo/latência incompatível, falha de guardrail ou mudança em retries, ferramentas, contrato ou autoridade financeira exige nova decisão.
+
+#### Adendos
+
+- **Code Review Gate:** PASS. Foram revisados `Settings`, defaults do cliente e request Responses; não há alteração de schema, endpoint, permissão, retry ou consumidor. Fixtures Terra permanecem históricas.
+- **Browser acceptance:** NOT RUN. Não há UI/rota alterada e a materialização do novo `model_version` exige chave; a tentativa de conectar o navegador local expirou antes de abrir uma aba.
+- **Integration Contract Guardian (INTEGRATION):** READY WITH WARNINGS. O merge com `origin/main@301148f` preservou `FL-20260830-ROGERIO-030` e esta entrada, sem alterar contrato; o único checkpoint pendente é o smoke externo.
+
+### FL-20260830-TEAM-041 — Classificar falhas pelo código resolvido, não pelo status genérico
+
+- **Timestamp:** 2026-08-30T07:55:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** payments | data | contract | quality
+- **Escopo:** `DEC-040`, `CTR-RFC-001 v1`, `CTR-TXL-001 v1`, worker, evento canônico e parser web
+- **Links:** `app/worker/transaction_worker.py`; `contracts/v1/transaction-record.schema.json`; `tests/test_refusal_code_flow.py`
+- **Supersedes / superseded by:** não aplicável; evita reutilizar o ID remoto `FL-20260830-TEAM-039`.
+
+#### Contexto e pergunta
+
+O worker marcava todo resultado `FAILED` como recusa do emissor, embora o catálogo contenha erros do adquirente e indisponibilidade técnica. A integração com `origin/main` também revelou que `TEAM-039` e `DEC-036` já tinham outro significado remoto.
+
+#### Decisão
+
+Mapear somente os significados não-emissor já explícitos no catálogo: erro de adquirente para `PROVIDER_ERROR`, indisponibilidade do emissor para `TIMEOUT`, demais recusas conhecidas para `ISSUER_DECLINE`. Registrar a decisão como `DEC-040` e `FL-20260830-TEAM-041`, preservando a história remota sem IDs duplicados.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Manter todo `FAILED` como emissor | nenhum trabalho adicional | atribuição factual falsa | rejeitada |
+| Criar taxonomia pública nova | maior detalhe | amplia contrato sem necessidade | rejeitada |
+| Usar categorias existentes a partir do código | correção compatível e auditável | códigos futuros exigem revisão explícita | escolhida |
+
+#### Evidência, trade-offs e validação
+
+- **FACT:** `ACQUIRER_ERROR`, `EXCESSIVE_RETRY_BLOCKED` e `ISSUER_UNAVAILABLE` estão no catálogo versionado.
+- **TEST:** testes focados, contrato e parser serão executados antes da publicação.
+- **Ganhamos:** logs, eventos e investigação deixam de atribuir erro do PSP ao emissor.
+- **Abrimos mão de:** uma categoria pública específica para cada indisponibilidade.
+- **Risco residual:** código novo não presente no mapeamento conserva o fallback atual até revisão deliberada.
+
+#### Consequências e gatilhos de revisão
+
+Não há retry, ação financeira ou mudança de outcome. Novo código não-emissor, divergência entre evento e record, ou mudança de semântica de PSP exige ampliar mapeamento e testes.
+
+### FL-20260830-TEAM-042 — Priorizar o fluxo auditável na apresentação da arquitetura
+
+- **Timestamp:** 2026-08-30T07:55:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** UX | demo | documentation
+- **Escopo:** `docs/architecture-presentation.md` e PDF de arquitetura
+- **Links:** `docs/architecture-presentation.md`; `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O mapa detalhado de módulos era fiel, mas pouco legível em apresentação. Era necessário explicar a arquitetura sem esconder a persistência, a autoridade do núcleo ou o limite do agente.
+
+#### Decisão
+
+Usar camadas para experiência web, FastAPI, núcleo determinístico, dados e contexto pós-Incident. O desenho deixa explícito que o agente é `HUMAN_ONLY` e não altera fatos ou causas.
+
+#### Evidência, trade-offs e validação
+
+- **FACT:** a sequência visual segue o worker, DuckDB e agente existentes.
+- **TEST:** renderização de uma página e inspeção visual pendentes antes do push.
+- **Ganhamos:** menos cruzamentos e leitura de relance.
+- **Abrimos mão de:** inventário de cada arquivo no mesmo desenho.
+- **Gatilho:** mudança de contrato, autoridade do agente ou repositório exige atualizar o diagrama.

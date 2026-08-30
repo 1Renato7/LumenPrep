@@ -26,7 +26,7 @@ class WindowMetrics(BaseModel):
     correlation_id: str
 
 
-from .windows import compute_windows  # noqa: E402  (depende de WindowMetrics acima)
+from .windows import compute_payment_conversion_observations, compute_windows  # noqa: E402  (depende de WindowMetrics acima)
 
 
 def get_current_metrics(dimensions: dict[str, str] | None = None) -> list[WindowMetrics]:

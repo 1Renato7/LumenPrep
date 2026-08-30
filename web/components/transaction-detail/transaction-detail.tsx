@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { createPollingController, LumenApiError, pollTransaction, type LumenApiClient } from "@/lib/api/client-interface";
@@ -17,7 +16,6 @@ export function TransactionDetail({ transactionId, api: suppliedApi }: { transac
 }
 
 function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: string; suppliedApi?: LumenApiClient }) {
-  const router = useRouter();
   const client = useMemo(() => resolveLumenClient(suppliedApi), [suppliedApi]);
   const api = client.api;
   const [record, setRecord] = useState<TransactionRecord | null>(null);
@@ -40,11 +38,6 @@ function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: 
     setLoading(true);
     setReloadKey((value) => value + 1);
   }, [api, client.error]);
-  const refresh = () => {
-    reload();
-    router.refresh();
-  };
-
   useEffect(() => {
     if (!api) return;
     let active = true;
@@ -97,10 +90,9 @@ function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: 
     <main className={styles.shell}>
       <div className={styles.top}>
         <div><Link className={styles.back} href="/transactions" aria-label="Back to transaction log"><BackIcon /></Link><div className={styles.titleRow}><h1>Transaction {record.transaction_id}</h1><span className={`${styles.status} ${record.status === "FAILED" ? styles.failedStatus : record.status === "UNKNOWN" ? styles.unknownStatus : styles.standardStatus}`}>{record.status}</span></div></div>
-        <button className={styles.button} type="button" onClick={refresh}>Refresh data</button>
       </div>
       {error && hasRecord ? <section className={`${styles.card} ${styles.notice}`} role="status">Showing stale transaction data. Refresh failed: {error}</section> : null}
-      {needsAttention ? <section className={`${styles.card} ${styles.diagnosticHero} ${isPipelineFailure ? styles.technicalHero : styles.failedHero}`} aria-labelledby="diagnostic-overview-title"><p className={styles.label}>{isPipelineFailure ? "Technical attention" : "Failure diagnosis"}</p><h2 id="diagnostic-overview-title">{isPipelineFailure ? "The processing pipeline did not produce a business outcome." : classification?.reason ?? "The backend returned a failed outcome without a diagnostic reason."}</h2><div className={styles.grid}><Value label="Category" value={classification?.category ?? "Not available"} /><Value label="Failure code" value={record.processing.failure_code ?? "None"} /><Value label="Normalized decline" value={record.outcome?.normalized_decline_code ?? "None"} /><Value label="Confidence" value={classification ? `${Math.round(classification.confidence * 100)}%` : "Not available"} /></div>{isPipelineFailure ? <div className={styles.actionPanel}><div><p className={styles.label}>Recommended next step</p><p className={styles.actionText}>Review the technical failure before retrying or changing payment routing.</p></div><Link className={styles.actionButton} href="/incidents#technical-attention">View technical attention <span aria-hidden="true">→</span></Link></div> : groundedIncident ? <div className={styles.actionPanel}><div><div className={styles.actionHeading}><p className={styles.label}>Recommended human action</p><span className={styles.actionMode}>{groundedIncident.explanation.execution.replaceAll("_", " ")}</span></div><p className={styles.actionText}>{groundedIncident.explanation.recommended_action}</p></div><Link className={styles.actionButton} href={`/incidents/${encodeURIComponent(groundedIncident.incident.incident_id)}`}>View incident analysis <span aria-hidden="true">→</span></Link></div> : relatedIncidentIds.length ? <div className={styles.actionPanel} role="status"><div><p className={styles.label}>Incident authorization</p><p className={styles.actionText}>{incidentActionLoading ? "Verifying the grounded incident…" : groundingError ?? (rejectedIncidentIds.length ? `The API rejected these Incident IDs for this transaction: ${rejectedIncidentIds.join(", ")}.` : "No Incident was authorized for this transaction.")}</p></div></div> : <div className={styles.actionPanel} role="status"><div><p className={styles.label}>Recommended human action</p><p className={styles.actionText}>No incident-level recommendation was returned for this isolated business failure.</p></div></div>}</section> : null}
+      {needsAttention ? <section className={`${styles.card} ${styles.diagnosticHero} ${isPipelineFailure ? styles.technicalHero : styles.failedHero}`} aria-labelledby="diagnostic-overview-title"><p className={styles.label}>{isPipelineFailure ? "Technical attention" : "Failure diagnosis"}</p><h2 id="diagnostic-overview-title">{isPipelineFailure ? "The processing pipeline did not produce a business outcome." : classification?.reason ?? "The backend returned a failed outcome without a diagnostic reason."}</h2><div className={styles.grid}><Value label="Category" value={classification?.category ?? "Not available"} /><Value label="Failure code" value={record.processing.failure_code ?? "None"} /><Value label="Normalized decline" value={record.outcome?.normalized_decline_code ?? "None"} /></div>{isPipelineFailure ? <div className={styles.actionPanel}><div><p className={styles.label}>Recommended next step</p><p className={styles.actionText}>Review the technical failure before retrying or changing payment routing.</p></div><Link className={styles.actionButton} href="/incidents#technical-attention">View technical attention <span aria-hidden="true">→</span></Link></div> : groundedIncident ? <div className={styles.actionPanel}><div><div className={styles.actionHeading}><p className={styles.label}>Recommended human action</p><span className={styles.actionMode}>{groundedIncident.explanation.execution.replaceAll("_", " ")}</span></div><p className={styles.actionText}>{groundedIncident.explanation.recommended_action}</p></div><Link className={styles.actionButton} href={`/incidents/${encodeURIComponent(groundedIncident.incident.incident_id)}`}>View incident analysis <span aria-hidden="true">→</span></Link></div> : relatedIncidentIds.length ? <div className={styles.actionPanel} role="status"><div><p className={styles.label}>Incident authorization</p><p className={styles.actionText}>{incidentActionLoading ? "Verifying the grounded incident…" : groundingError ?? (rejectedIncidentIds.length ? `The API rejected these Incident IDs for this transaction: ${rejectedIncidentIds.join(", ")}.` : "No Incident was authorized for this transaction.")}</p></div></div> : <div className={styles.actionPanel} role="status"><div><p className={styles.label}>Recommended human action</p><p className={styles.actionText}>No incident-level recommendation was returned for this isolated business failure.</p></div></div>}</section> : null}
       <section className={styles.card}><h2>Input</h2><div className={styles.grid}>
         <Value label="Merchant" value={record.input.merchant_id} /><Value label="Provider" value={record.input.provider_id} /><Value label="Issuer bank" value={record.input.issuer_bank} />
         <Value label="Amount" value={formatMoney(record.input.amount_minor, record.input.currency)} /><Value label="Country" value={record.input.country} /><Value label="Method" value={record.input.payment_method_category} />
@@ -116,7 +108,7 @@ function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: 
         </div> : <p className={styles.muted}>Outcome is not available while processing.</p>}
       </section>
       <section className={styles.card}><h2>Classification</h2>
-        {classification ? <><div className={styles.grid}><Value label="Category" value={classification.category} /><Value label="Reason" value={classification.reason} /><Value label="Confidence" value={`${Math.round(classification.confidence * 100)}%`} /></div>
+        {classification ? <><div className={styles.grid}><Value label="Category" value={classification.category} /><Value label="Reason" value={classification.reason} /></div>
           <h3>Evidence IDs</h3><IdList ids={classification.evidence_ids} empty="No evidence IDs were returned." />
           <h3>Related incidents</h3>{classification.related_incident_ids.length ? <ul className={styles.list}>{classification.related_incident_ids.map((id) => { const authorized = grounding?.incidents.some((link) => link.incident.incident_id === id); return <li key={id}>{authorized ? <Link className={styles.incidentLink} href={`/incidents/${encodeURIComponent(id)}`}>{id}</Link> : <><code>{id}</code> <span>· {isRejectedIncident(grounding, id) ? "rejected by grounding" : "not authorized"}</span></>}</li>; })}</ul> : <p role="status">No related incident. This is a normal transaction state.</p>}</>
           : <p className={styles.muted}>Classification is not available while processing or after a technical pipeline failure.</p>}

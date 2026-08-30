@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v2/payment-conversion-candidate.schema.json",
+  "title": "CTR-DET-002 Payment Conversion Candidate v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "candidate_id", "window", "slice", "metric", "observed", "expected", "sample_size", "estimated_lost_conversions", "evidence_refs", "detector_version", "correlation_id"],
+  "properties": {
+    "schema_version": {"const": "2.0"}, "candidate_id": {"type": "string"},
+    "window": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "string", "format": "date-time"}, "end": {"type": "string", "format": "date-time"}}},
+    "slice": {"type": "object", "additionalProperties": {"type": "string"}}, "metric": {"const": "PAYMENT_CONVERSION"},
+    "observed": {"type": "number", "minimum": 0, "maximum": 1}, "expected": {"type": "number", "minimum": 0, "maximum": 1},
+    "sample_size": {"type": "integer", "minimum": 10}, "estimated_lost_conversions": {"type": "number", "minimum": 0},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}}, "detector_version": {"type": "string"}, "correlation_id": {"type": "string"}
+  }
+}

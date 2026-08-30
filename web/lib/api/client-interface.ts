@@ -2,9 +2,12 @@ import {
   ApiPayloadError,
   parseDiagnosticSuggestion,
   parseIncidentDetail,
+  parseHumanReviewResponse,
   parseIncidentList,
+  parseNotificationFeed,
   parseTransactionIncidentDetail,
   parseTransactionBatchAccepted,
+  parseTransactionDataResetResponse,
   parseTransactionCatalog,
   parseTransactionList,
   parseTransactionRecord,
@@ -12,9 +15,11 @@ import {
 } from "./parse";
 import type {
   Incident,
+  NotificationFeed,
   IncidentDetail,
   DiagnosticSuggestion,
   TransactionBatchAccepted,
+  TransactionDataResetResponse,
   TransactionBatchRequest,
   TransactionCatalog,
   TransactionList,
@@ -23,6 +28,8 @@ import type {
   TransactionSampleResponse,
   TransactionStatus,
   TransactionIncidentDetail,
+  HumanReviewRequest,
+  HumanReviewResponse,
 } from "./types";
 
 export interface RequestOptions {
@@ -41,6 +48,7 @@ export interface LumenApiClient {
   getTransactionCatalog(options?: RequestOptions): Promise<TransactionCatalog>;
   generateTransactionSamples(request: TransactionSampleRequest, options?: RequestOptions): Promise<TransactionSampleResponse>;
   createTransactionBatch(request: TransactionBatchRequest, options?: RequestOptions): Promise<TransactionBatchAccepted>;
+  resetTransactionData(adminKey: string, options?: RequestOptions): Promise<TransactionDataResetResponse>;
   getTransactionBatch(batchId: string, options?: RequestOptions): Promise<TransactionList>;
   listTransactions(query?: ListTransactionsQuery, options?: RequestOptions): Promise<TransactionList>;
   getTransaction(transactionId: string, options?: RequestOptions): Promise<TransactionRecord>;
@@ -49,6 +57,9 @@ export interface LumenApiClient {
   getIncident(incidentId: string, options?: RequestOptions): Promise<IncidentDetail>;
   /** Additive CTR-AGT-003 read: never changes the engine-owned Incident. */
   getDiagnosticSuggestion(incidentId: string, options?: RequestOptions): Promise<DiagnosticSuggestion>;
+  submitHumanReview(incidentId: string, request: HumanReviewRequest, options?: RequestOptions): Promise<HumanReviewResponse>;
+  listNotifications(options?: RequestOptions): Promise<NotificationFeed>;
+  markNotificationRead(notificationId: string, options?: RequestOptions): Promise<void>;
 }
 
 export type LumenApiErrorCode =
@@ -198,6 +209,15 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
     getTransactionCatalog: (requestOptions) => request("/transaction-catalog", { method: "GET" }, parseTransactionCatalog, requestOptions),
     generateTransactionSamples: (body, requestOptions) => request("/transaction-samples", jsonPost(body), parseTransactionSampleResponse, requestOptions),
     createTransactionBatch: (body, requestOptions) => request("/transaction-batches", jsonPost(body, { "Idempotency-Key": body.idempotency_key }), parseTransactionBatchAccepted, requestOptions),
+    resetTransactionData: (adminKey, requestOptions) => {
+      if (!adminKey) throw new LumenApiError("VALIDATION", 422, null, "An administrator reset key is required.");
+      return request(
+        "/admin/transaction-data/reset",
+        jsonPost({ confirmation: "DELETE_SYNTHETIC_TRANSACTION_DATA" }, { "X-Lumen-Admin-Key": adminKey }),
+        parseTransactionDataResetResponse,
+        requestOptions,
+      );
+    },
     getTransactionBatch: (batchId, requestOptions) => request(`/transaction-batches/${encodeURIComponent(batchId)}`, { method: "GET" }, parseTransactionList, requestOptions),
     listTransactions: (query, requestOptions) => request(`/transactions${toQuery(query)}`, { method: "GET" }, parseTransactionList, requestOptions),
     getTransaction: (transactionId, requestOptions) => request(`/transactions/${encodeURIComponent(transactionId)}`, { method: "GET" }, parseTransactionRecord, requestOptions),
@@ -208,6 +228,11 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
     },
     getIncident: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}`, { method: "GET" }, parseIncidentDetail, requestOptions),
     getDiagnosticSuggestion: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}/suggestion`, { method: "GET" }, parseDiagnosticSuggestion, requestOptions),
+    submitHumanReview: (incidentId, body, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}/review`, jsonPost(body), parseHumanReviewResponse, requestOptions),
+    listNotifications: (requestOptions) => request("/notifications", { method: "GET" }, parseNotificationFeed, requestOptions),
+    markNotificationRead: async (notificationId, requestOptions) => {
+      await request(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: "POST" }, () => undefined, requestOptions);
+    },
   };
 }
 

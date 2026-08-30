@@ -26,6 +26,7 @@ def build_seasonal_baseline(
     current: WindowMetrics,
     *,
     low_sample_attempts: int,
+    sample_field: str = "eligible_attempts",
 ) -> SeasonalBaseline | None:
     """Pool a slice by weekday/hour, then hour, then globally.
 
@@ -52,9 +53,9 @@ def build_seasonal_baseline(
     ]
     hour = [window for window in same_slice if _parse_timestamp(window.window_start).hour == current_time.hour]
     for pooling_level, pool in (("weekday_hour", exact), ("hour", hour), ("global", same_slice)):
-        sample_size = sum(window.eligible_attempts for window in pool)
+        sample_size = sum(int(getattr(window, sample_field)) for window in pool)
         if sample_size >= low_sample_attempts:
-            return _baseline_from_pool(pool, sample_size, pooling_level)
+            return _baseline_from_pool(pool, sample_size, pooling_level, sample_field=sample_field)
     return None
 
 
@@ -62,6 +63,11 @@ def approval_rate_signal(current: WindowMetrics, baseline: SeasonalBaseline) -> 
     """Detect an approval drop when the 95% Wilson upper bound remains below expected."""
 
     observed = current.approval_rate
+    # A window at or above its baseline is not a drop, whatever the interval
+    # says. The direction is checked first so no rounding artefact of the bound
+    # can turn a healthy or flat window into a candidate.
+    if observed >= baseline.approval_rate:
+        return None
     if _wilson_bound(observed, current.eligible_attempts, upper=True) >= baseline.approval_rate:
         return None
     return DetectionSignal(
@@ -69,6 +75,26 @@ def approval_rate_signal(current: WindowMetrics, baseline: SeasonalBaseline) -> 
         observed=observed,
         expected=baseline.approval_rate,
         statistical_strength=_binomial_strength(observed, baseline.approval_rate, current.eligible_attempts),
+    )
+
+
+def payment_conversion_signal(current: WindowMetrics, baseline: SeasonalBaseline) -> DetectionSignal | None:
+    """Detect an operationally material conversion drop per unique payment.
+
+    A fifteen percentage point guard avoids escalating a statistically visible
+    but operationally irrelevant wobble.  The Wilson bound uses payment IDs as
+    Bernoulli observations, deliberately excluding retry inflation.
+    """
+    observed = current.payment_conversion
+    if baseline.payment_conversion - observed < 0.15:
+        return None
+    if _wilson_bound(observed, current.unique_payments, upper=True) >= baseline.payment_conversion:
+        return None
+    return DetectionSignal(
+        metric="PAYMENT_CONVERSION",
+        observed=observed,
+        expected=baseline.payment_conversion,
+        statistical_strength=_binomial_strength(observed, baseline.payment_conversion, current.unique_payments),
     )
 
 
@@ -91,6 +117,12 @@ def timeout_rate_signal(current: WindowMetrics, baseline: SeasonalBaseline) -> D
     """Detect a timeout-rate increase when the 95% Wilson lower bound exceeds expected."""
 
     observed = current.timeout_rate
+    # Same guard as the approval drop, and here it is load-bearing: a slice with
+    # no timeouts against a baseline of no timeouts used to raise a candidate
+    # with zero effect, because ``centre - margin`` lands on ~1e-17 instead of
+    # zero and cleared the strict comparison below.
+    if observed <= baseline.timeout_rate:
+        return None
     if _wilson_bound(observed, current.eligible_attempts, upper=False) <= baseline.timeout_rate:
         return None
     return DetectionSignal(
@@ -117,6 +149,11 @@ def to_anomaly_candidate(
         if signal.metric == "APPROVAL_RATE"
         else 0.0
     )
+    estimated_lost_conversions = (
+        max(signal.expected - signal.observed, 0.0) * current.unique_payments
+        if signal.metric == "PAYMENT_CONVERSION"
+        else 0.0
+    )
     expected_approvals = signal.expected * current.eligible_attempts
     loss_coverage = min(lost_approvals / expected_approvals, 1.0) if expected_approvals else 0.0
     candidate_key = json.dumps(
@@ -139,11 +176,12 @@ def to_anomaly_candidate(
         metric=signal.metric,
         observed=signal.observed,
         expected=signal.expected,
-        sample_size=current.eligible_attempts,
+        sample_size=current.unique_payments if signal.metric == "PAYMENT_CONVERSION" else current.eligible_attempts,
         effect_absolute=effect_absolute,
         effect_relative=effect_relative,
         statistical_strength=_unit_interval(signal.statistical_strength),
         lost_approvals=lost_approvals,
+        estimated_lost_conversions=estimated_lost_conversions,
         loss_coverage=_unit_interval(loss_coverage),
         temporal_consistency=_unit_interval(baseline.window_count / 3),
         data_quality=_unit_interval(current.data_quality),
@@ -153,6 +191,7 @@ def to_anomaly_candidate(
         ],
         detector_version=detector_version,
         correlation_id=current.correlation_id,
+        schema_version="2.0" if signal.metric == "PAYMENT_CONVERSION" else "1.0",
     )
 
 
@@ -190,16 +229,39 @@ def detect_candidates(
     return candidates
 
 
+def detect_payment_conversion_candidates(
+    windows: Iterable[WindowMetrics], *, minimum_unique_payments: int = 10,
+    detector_version: str = DETECTOR_VERSION,
+) -> list[AnomalyCandidate]:
+    """Run the conversion detector independently from attempt-rate signals."""
+    _require_positive_threshold(minimum_unique_payments)
+    ordered = sorted(windows, key=lambda window: _parse_timestamp(window.window_start))
+    history: list[WindowMetrics] = []
+    candidates: list[AnomalyCandidate] = []
+    for current in ordered:
+        if current.unique_payments >= minimum_unique_payments:
+            baseline = build_seasonal_baseline(
+                history, current, low_sample_attempts=minimum_unique_payments, sample_field="unique_payments"
+            )
+            if baseline is not None and baseline.window_count >= 3:
+                signal = payment_conversion_signal(current, baseline)
+                if signal is not None:
+                    candidates.append(to_anomaly_candidate(signal, current, baseline, detector_version=detector_version))
+        history.append(current)
+    return candidates
+
+
 def _baseline_from_pool(
-    pool: list[WindowMetrics], sample_size: int, pooling_level: str
+    pool: list[WindowMetrics], sample_size: int, pooling_level: str, *, sample_field: str = "eligible_attempts"
 ) -> SeasonalBaseline:
     def weighted_rate(name: str) -> float:
-        return sum(getattr(window, name) * window.eligible_attempts for window in pool) / sample_size
+        return sum(getattr(window, name) * int(getattr(window, sample_field)) for window in pool) / sample_size
 
     latencies = [window.latency_p95_ms for window in pool]
     latency_p95 = median(latencies)
     return SeasonalBaseline(
         approval_rate=weighted_rate("approval_rate"),
+        payment_conversion=weighted_rate("payment_conversion"),
         latency_p95_ms=latency_p95,
         latency_p95_mad=median([abs(value - latency_p95) for value in latencies]),
         timeout_rate=weighted_rate("timeout_rate"),
@@ -217,6 +279,12 @@ def _wilson_bound(rate: float, sample_size: int, *, upper: bool) -> float:
     if sample_size <= 0:
         return 1.0 if upper else 0.0
     successes = round(rate * sample_size)
+    # The degenerate ends are exact, so they are returned exactly. Computing
+    # them leaves a residue of ~1e-17 that reads as a positive rate downstream.
+    if successes == 0 and not upper:
+        return 0.0
+    if successes == sample_size and upper:
+        return 1.0
     proportion = successes / sample_size
     denominator = 1 + _Z_95**2 / sample_size
     centre = proportion + _Z_95**2 / (2 * sample_size)

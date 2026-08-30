@@ -118,3 +118,49 @@ def test_invalid_hypothesis_inputs_are_rejected(score: float, support: int):
         rank_hypotheses(
             [_hypothesis(candidate_id="invalid", slice={"provider_id": "stripe"}, score=score, support=support)]
         )
+
+
+def test_a_placeholder_issuer_does_not_make_the_slice_an_issuer_outage():
+    """The cube writes issuer_bank_id=NOT_APPLICABLE for methods with no issuer.
+
+    Testing for the key alone attributed wallet and bank-transfer degradations
+    to an issuer that does not exist, and because the issuer branch is checked
+    first it outranked every other explanation available for that slice.
+    """
+    result = rank_hypotheses(
+        [
+            _hypothesis(
+                candidate_id="wallet-br",
+                slice={
+                    "provider_id": "stripe",
+                    "payment_method_category": "WALLET",
+                    "issuer_bank_id": "NOT_APPLICABLE",
+                },
+                score=0.9,
+                support=80,
+            )
+        ]
+    )
+
+    assert result.winner is not None
+    assert result.winner.category == "PROVIDER_DEGRADATION"
+
+
+def test_a_real_issuer_still_names_an_issuer_outage():
+    result = rank_hypotheses(
+        [
+            _hypothesis(
+                candidate_id="card-br",
+                slice={
+                    "provider_id": "stripe",
+                    "payment_method_category": "CARD",
+                    "issuer_bank_id": "itau_br",
+                },
+                score=0.9,
+                support=80,
+            )
+        ]
+    )
+
+    assert result.winner is not None
+    assert result.winner.category == "ISSUER_OUTAGE"

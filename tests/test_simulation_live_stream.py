@@ -49,13 +49,13 @@ def test_baseline_history_spans_consecutive_windows_with_shared_window_correlati
 
     assert result.payments_requested == 36
     assert result.events_published == len(events)
-    assert result.first_window_start == "2026-08-29T14:00:00Z"
-    assert result.last_window_end == "2026-08-29T14:15:00Z"
+    assert result.first_window_start == "2026-08-29T14:02:00Z"
+    assert result.last_window_end == "2026-08-29T14:05:00Z"
     correlations = {str(event["correlation_id"]) for event in events}
     assert correlations == {
-        "demo:baseline:1788012000",
-        "demo:baseline:1788012300",
-        "demo:baseline:1788012600",
+        "demo:baseline:1788012120",
+        "demo:baseline:1788012180",
+        "demo:baseline:1788012240",
     }
     timestamps = [str(event["event_time"]) for event in events]
     assert min(timestamps) >= result.first_window_start
