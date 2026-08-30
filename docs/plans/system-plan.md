@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.3.0
+- **Versão:** 2.4.3
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `INTEGRATION`; preserva contratos públicos e consolida pipeline, persistência, frontend live e runtime de deploy sem alterar `CTR-API-001 v3`.
@@ -19,6 +19,10 @@
 - **Changelog 2.2.0:** replaneja a recuperação de integração a partir de `main@613df52`, depois de confirmar que os incrementos de Neo4j, RCA, grounding e Parquet já estão na base. A execução restante é concentrada em duas lanes: Rogério integra core/dados/backend; André integra produto/deploy web. Nenhum contrato público recebe nova versão nesta revisão; o objetivo é tornar real a cadeia já contratada.
 - **Changelog 2.2.1:** integra as duas lanes sobre `main@23b9061`: o frontend deixa de usar fixtures no runtime live e consome batch/log/detail/Incidents reais; o pipeline terminal passa a ser atômico no DuckDB, inclui a transação gatilho no vínculo de Incident e isola janelas por correlação/moeda; o Docker usa `uv.lock` congelado com o extra Neo4j e inclui a configuração do simulator. Contratos públicos permanecem congelados. Deploy e acceptance online continuam condicionados à evidência real.
 - **Changelog 2.3.0:** corrige a lacuna descoberta em `main@404c23b`: a análise atual só preserva provider, país e moeda. Esta revisão planeja a migração para diagnóstico real nas seis dimensões do enunciado, com catálogo maior de entradas sintéticas e mudança de contrato coordenada. Linear não foi alterado.
+- **Changelog 2.4.0:** inicia o desenho de um agente proativo de diagnóstico. O agente recebe fatos já calculados pelo motor, pode propor hipóteses para investigação mesmo sem precedente no RAG e nunca promove, executa ou altera uma causa/pagamento. A implementação permanece bloqueada até fechar taxonomia de fraude, corpus e critérios de evidência.
+- **Changelog 2.4.1:** diante de sete horas restantes de hackathon, congela o escopo de demo em uma fatia vertical: stream sintético contínuo, duas degradações simultâneas, diagnóstico causal/evidência, recomendação humana e trial by fire. Integração real Yuno e RAG/agente amplo saem do caminho crítico.
+- **Changelog 2.4.2:** torna a primeira etapa da demo reproduzível por `CTR-DEMO-001 v1`: um endpoint restrito a `DEMO_MODE` semeia janelas temporais de baseline pelo stream interno. Não recebe payload Yuno nem altera a entrada pública de transações.
+- **Changelog 2.4.3:** congela a fatia implementada do agente proativo em `CTR-AGT-001`–`003 v1`: EvidencePack imutável, recuperação somente da memória/playbooks já autorizados, sugestão `HUMAN_ONLY` separada de `CTR-INC-001` e cliente determinístico padrão. O caminho OpenAI é opt-in e não integra a demo crítica.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -498,3 +502,79 @@ A mudança é incompatível semanticamente, portanto novas versões são obrigat
 `RSK-RCA6-001`: sparsity/custo do cube — usar rollups observados e benchmark. `RSK-RCA6-002`: leakage por decline — perfil somente pós-detecção e teste negativo. `RSK-RCA6-003`: confiança excessiva — default inconclusivo e holdout antes de calibrar. `RSK-RCA6-004`: divergência UI/API — mock congelado e adaptador v1 até CP3.
 
 **Parecer do Integration Contract Guardian — PLANNING: `PLAN READY`.** Owners, mocks, versões, testes, migração e grafo acíclico estão definidos. A calibração exata dos limiares de `SUPPORTED` é `OPEN-001`, sob Renato, mas não bloqueia desenvolvimento: antes do holdout a promoção é desativada e o comportamento seguro é inconclusivo. Antes de cada merge aplicam-se `code-review-gate`; toda UI passa por `browser-acceptance-gate`; contratos/merges passam por guardian em modo INTEGRATION. Nenhuma tarefa foi criada no Linear sem autorização.
+
+## 17. Descoberta 2.4 — agente proativo de diagnóstico
+
+**Estado:** `PARTIALLY UNBLOCKED`. A fatia determinística abaixo está implementada; extensão com corpus novo, vector store ou cliente OpenAI no deploy continua bloqueada pelas decisões abertas.
+
+### DEC-026 — agente propõe hipótese; o motor preserva a verdade causal
+
+**Estado:** `DECIDED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-027`.
+
+Quando um Incident é criado ou atualizado, um agente proativo deve receber somente um pacote de evidências imutável do motor e gerar uma sugestão operacional. A ausência de precedente no RAG não encerra a investigação: o agente pode propor uma hipótese nova a partir de métricas, slice, perfil de decline, alternativas do RCA e evidências atuais. O agente retorna `INSUFFICIENT_EVIDENCE` apenas quando não consegue sustentar sequer uma sugestão de investigação rastreável.
+
+`root_cause` continua sendo autoridade exclusiva do motor determinístico e mantém `SUPPORTED|INCONCLUSIVE`. A saída do agente é uma camada separada, rotulada como hipótese (`SUGGESTED`) e nunca como fato, confirmação humana ou ação financeira. O agente não recebe ferramentas de pagamento, escrita em Incident, mudança de rota, retry, cancelamento ou refund.
+
+### Proposta de fluxo e fronteiras
+
+```text
+Incident persistido → CTR-AGT-001 EvidencePack → agente read-only
+                                              ├→ CTR-AGT-002 RetrievalTrace (opcional)
+                                              └→ CTR-AGT-003 DiagnosticSuggestion → API/web
+```
+
+| Contrato proposto | Produtor → consumidor | Conteúdo e guardrail |
+| --- | --- | --- |
+| `CTR-AGT-001 v1` `EvidencePack` | motor/RCA → agente | Incident, métricas, evidências, alternativas, decline profile, escopo e limitações; imutável, com `correlation_id`. |
+| `CTR-AGT-002 v1` `RetrievalTrace` | memória/documentação → agente | fontes filtradas por autorização, versão, score e citações; `NO_PRECEDENT` é dado, não instrução. |
+| `CTR-AGT-003 v1` `DiagnosticSuggestion` | agente → API/web | `SUGGESTED|INSUFFICIENT_EVIDENCE|UNAVAILABLE`, hipótese, confiança calibrada, razões/evidence IDs, lacunas e próximos passos `HUMAN_ONLY`. |
+
+### Guardrails e decisões abertas
+
+- `SUGGESTED` não muda `Incident.root_cause`, não confirma fraude e não cria side effect financeiro; é uma fila de investigação humana.
+- “Fraude” só poderá aparecer como hipótese se uma taxonomia versionada e evidências observáveis a sustentarem. Um decline code como `SUSPECTED_FRAUD`, isoladamente, não basta para afirmar fraude real.
+- O baseline de recuperação é a memória estruturada de Incidents humanos confirmados. Documentos/runbooks adicionais, embeddings ou web retrieval exigem owner, fonte, permissões, freshness, avaliação de no-answer e contrato próprio.
+
+| ID | Estado | Pergunta que bloqueia | Owner proposto | Fallback seguro |
+| --- | --- | --- | --- | --- |
+| `OPEN-AGT-001` | OPEN | Qual taxonomia distingue fraude, bloqueio antifraude, falha de issuer, provider e método? | Renato | agente sugere somente categorias já suportadas pelo motor. |
+| `OPEN-AGT-002` | OPEN | Quais fontes operacionais, além da memória, o agente pode recuperar e citar? | Altoé | somente memória estruturada existente. |
+| `OPEN-AGT-003` | OPEN | Qual limiar/avaliação separa `SUGGESTED` de `INSUFFICIENT_EVIDENCE`? | Team | não publicar hipótese se não houver ao menos duas evidências atuais independentes. |
+
+**Parecer do Integration Contract Guardian — CHANGE CONTROL: `PLAN READY` para a fatia determinística.** `CTR-AGT-001`–`003 v1` preservam a autoridade do motor, só usam memória/playbooks autorizados e fornecem fallbacks tipados. Corpus externo, embeddings, vector store, cliente OpenAI no deploy e calibração com ground truth continuam `PLAN BLOCKED` até resolver `OPEN-AGT-001`–`003` em versão posterior.
+
+### DEC-029 — congelar o agente em uma fatia determinística e grounded
+
+**Estado:** `DECIDED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-029`.
+
+`CTR-AGT-001` EvidencePack, `CTR-AGT-002` RetrievalTrace e `CTR-AGT-003` DiagnosticSuggestion são contratos v1 implementados. O agente roda após o Incident ser produzido pelo motor, escreve sua saída separadamente e nunca altera `root_cause`, estado do Incident ou qualquer pagamento. A recuperação usa somente `IncidentMemoryService` e playbooks versionados já presentes; o cliente padrão é determinístico/offline. `SUGGESTED` exige ao menos duas evidências atuais de fontes distintas; caso contrário retorna `INSUFFICIENT_EVIDENCE`, e falha técnica retorna `UNAVAILABLE`.
+
+O endpoint aditivo `GET /v1/incidents/{incident_id}/suggestion` expõe apenas a hipótese já persistida. Integração de corpus externo, embeddings, vector store, taxonomia de fraude mais ampla ou cliente OpenAI na imagem Railway continua fora desta revisão e exige novo change control.
+
+## 18. Recuperação de demo — janela de sete horas
+
+### DEC-027 — priorizar prova ao vivo do mecanismo causal sobre integrações amplas
+
+**Estado:** `DECIDED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-028`.
+
+O escopo para as sete horas restantes é demonstrar o núcleo do desafio usando apenas dados sintéticos já autorizados: fluxo contínuo normal, injeção de provider-BR e issuer-MX-merchant simultâneos, detecção, causa/evidência, impacto e recomendação `HUMAN_ONLY`. Não iniciar integração real Yuno, ingestão de payload externo, novo vector store, corpus amplo, autenticação ou agente autônomo; esses itens não bloqueiam a demo e aumentam o risco de integração.
+
+| Faixa | Owner | Entrega verificável |
+| --- | --- | --- |
+| 0:00–0:30 | Team | smoke atual, cenário de baseline e contratos congelados; parar se a base não iniciar. |
+| 0:30–2:30 | Renato | stream contínuo/cenários configuráveis com timestamps coerentes; provider-BR e issuer-MX-merchant reproduzíveis. |
+| 0:30–3:30 | Rogério | detector/RCA separa os dois slices e evita duplicar perda; E2E de Incident persistido. |
+| 0:30–3:30 | André | console mínimo de demo e tela que mostra normalidade, Incident, impacto, evidência e ação humana; pode iniciar com mock de contrato congelado. |
+| 3:30–5:00 | Team | integrar stream → Incident → UI, sem fixtures no runtime live. |
+| 5:00–6:00 | Altoé/Rogério | Evidence Pack/template de sugestão proativa somente se o caminho crítico estiver verde; sem nova dependência RAG. |
+| 6:00–7:00 | Team | browser/deploy smoke, dois simultâneos, caso sem evidência e trial by fire desconhecido. |
+
+**Parecer do Integration Contract Guardian — PLANNING: `PLAN READY` somente para a fatia de demo acima.** O grafo é acíclico e reaproveita contratos existentes; o agente amplo continua `PLAN BLOCKED` em §17 e não entra nesta janela.
+
+### DEC-028 — baseline temporal sintético pelo mesmo stream da demo
+
+**Estado:** `DECIDED`. **Owner:** Rogério. **Flight Log:** `FL-20260830-ROGERIO-029`.
+
+`CTR-DEMO-001 v1` adiciona apenas `POST /demo/baseline-traffic`, protegido por `DEMO_MODE`, para publicar um número limitado de janelas anteriores e pagamentos por janela no `CTR-STR-001`. Cada janela recebe timestamps coerentes e uma correlação de baseline própria; o listener e a ingestão existentes continuam sendo os únicos consumidores. A resposta informa o intervalo temporal, quantidade de janelas, pagamentos solicitados e eventos aceitos para a fila.
+
+O endpoint não aceita dados de provider, não consulta Yuno, não persiste uma nova fonte externa e não muda `CTR-API-001`. A injeção de cenário continua a usar o mesmo relógio do controller, logo ocorre depois do baseline e pode ser comparada pelo detector sem fixture manual.

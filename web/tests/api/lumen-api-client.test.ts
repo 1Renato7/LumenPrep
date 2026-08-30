@@ -23,7 +23,7 @@ import {
   type LumenApiClient,
 } from "../../lib/api/client-interface";
 import { createMockLumenApiClient } from "../../lib/mocks/transaction-api-client";
-import { parseTransactionInput } from "../../lib/api/parse";
+import { parseDiagnosticSuggestion, parseTransactionInput } from "../../lib/api/parse";
 import type { TransactionBatchRequest, TransactionList } from "../../lib/api/types";
 
 const batchRequest: TransactionBatchRequest = {
@@ -47,6 +47,16 @@ test("accepts every payment method exposed by the expanded transaction catalog",
   }
 });
 
+test("agent hypotheses reject untrusted action execution and remain a separate read model", () => {
+  const valid = {
+    schema_version: "1.0", incident_id: "inc_1", evidence_fingerprint: "fingerprint", status: "SUGGESTED", suggested_category: "PROVIDER_DEGRADATION",
+    summary_for_operations: "Investigate the provider.", executive_summary: "A hypothesis only.", reasons: [{ statement: "Current evidence supports investigation.", evidence_ids: ["evd_1"] }], confidence: 0.5,
+    recommended_actions: [{ action: "Validate provider health.", execution: "HUMAN_ONLY", rationale_evidence_ids: ["evd_1"] }], limitations: [], retrieval_trace: {}, model_version: "deterministic-template-v1",
+  };
+  assert.equal(parseDiagnosticSuggestion(valid).suggested_category, "PROVIDER_DEGRADATION");
+  assert.throws(() => parseDiagnosticSuggestion({ ...valid, recommended_actions: [{ ...valid.recommended_actions[0], execution: "AUTOMATIC" }] }));
+});
+
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
 }
@@ -61,6 +71,21 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
     rejected_incident_ids: [],
     limitations: [],
   };
+  const diagnosticSuggestion = {
+    schema_version: "1.0",
+    incident_id: "incident/one",
+    evidence_fingerprint: "test-fingerprint",
+    status: "SUGGESTED",
+    suggested_category: "PROVIDER_DEGRADATION",
+    summary_for_operations: "Investigate the provider connection.",
+    executive_summary: "An agent hypothesis, not an engine cause.",
+    reasons: [{ statement: "Current evidence supports this investigation.", evidence_ids: ["evd_1"] }],
+    confidence: 0.7,
+    recommended_actions: [{ action: "Validate provider health.", execution: "HUMAN_ONLY", rationale_evidence_ids: ["evd_1"] }],
+    limitations: ["This remains a hypothesis."],
+    retrieval_trace: { status: "NO_PRECEDENT" },
+    model_version: "deterministic-template-v1",
+  };
   const client = createLumenApiClient({
     baseUrl: " https://api.example.test/v1/// ",
     fetchImpl: async (url, init) => {
@@ -72,6 +97,7 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
       if (requestUrl.includes("transaction-batches/")) return json(listFixture);
       if (requestUrl.endsWith("transactions/txn%20one/incidents")) return json(resolvedTransactionIncident);
       if (requestUrl.endsWith("/incidents")) return json([incidentFixture]);
+      if (requestUrl.endsWith("/incidents/incident%2Fone/suggestion")) return json(diagnosticSuggestion);
       if (requestUrl.includes("transactions?")) return json(listFixture);
       if (requestUrl.includes("transactions/")) return json(processingFixture);
       return json({ incident: incidentFixture, memory: similarIncidentsFixture, explanation: explanationFixture });
@@ -87,6 +113,7 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
   await client.listIncidents();
   const incidentDetails = await client.listTransactionIncidents("txn one");
   await client.getIncident("incident/one");
+  const suggestion = await client.getDiagnosticSuggestion("incident/one");
 
   assert.deepEqual(calls, [
     "GET https://api.example.test/v1/transaction-catalog",
@@ -98,9 +125,11 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
     "GET https://api.example.test/v1/incidents",
     "GET https://api.example.test/v1/transactions/txn%20one/incidents",
     "GET https://api.example.test/v1/incidents/incident%2Fone",
+    "GET https://api.example.test/v1/incidents/incident%2Fone/suggestion",
   ]);
   assert.deepEqual(incidentDetails.incidents[0].incident.root_cause.alternatives, [{ category: "ISSUER_DECLINE", confidence: 0.18 }]);
   assert.equal(incidentDetails.incidents[0].incident.recommendations[0].recommendation_class, "ESCALATE");
+  assert.equal(suggestion.status, "SUGGESTED");
   assert.equal(normalizeApiBaseUrl("https://api.example.test/v1///"), "https://api.example.test/v1");
 });
 

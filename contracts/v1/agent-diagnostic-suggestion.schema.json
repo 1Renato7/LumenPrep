@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/agent-diagnostic-suggestion.schema.json",
+  "title": "CTR-AGT-003 DiagnosticSuggestion v1",
+  "description": "A labelled investigation hypothesis produced by the proactive agent. It is not Incident.root_cause, it never promotes a cause to SUPPORTED, it never asserts fraud as fact, and every recommended action is HUMAN_ONLY.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "incident_id",
+    "evidence_fingerprint",
+    "status",
+    "suggested_category",
+    "summary_for_operations",
+    "executive_summary",
+    "reasons",
+    "confidence",
+    "recommended_actions",
+    "limitations",
+    "retrieval_trace",
+    "model_version"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "incident_id": {"type": "string", "minLength": 1},
+    "evidence_fingerprint": {"type": "string", "minLength": 1},
+    "status": {
+      "enum": ["SUGGESTED", "INSUFFICIENT_EVIDENCE", "UNAVAILABLE"],
+      "description": "SUGGESTED is allowed on current evidence alone, including when retrieval returned NO_PRECEDENT. INSUFFICIENT_EVIDENCE means no traceable hypothesis could be supported. UNAVAILABLE is a technical failure of the model or retrieval; the deterministic explanation is preserved."
+    },
+    "suggested_category": {"type": ["string", "null"], "description": "Null unless status is SUGGESTED. Never a confirmed-fraud category."},
+    "summary_for_operations": {"type": "string", "minLength": 1},
+    "executive_summary": {"type": "string", "minLength": 1},
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["statement", "evidence_ids"],
+        "properties": {
+          "statement": {"type": "string", "minLength": 1},
+          "evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "recommended_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "execution", "rationale_evidence_ids"],
+        "properties": {
+          "action": {"type": "string", "minLength": 1, "description": "Investigative only: verify provider status, validate configuration, escalate to the owner, inspect merchant logs."},
+          "execution": {"const": "HUMAN_ONLY"},
+          "rationale_evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "retrieval_trace": {"$ref": "agent-retrieval-trace.schema.json"},
+    "model_version": {"type": "string", "minLength": 1}
+  }
+}

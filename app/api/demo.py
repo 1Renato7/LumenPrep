@@ -106,6 +106,31 @@ class BackgroundTrafficRequest(BaseModel):
     seed: int | None = Field(default=None, ge=0)
 
 
+class BaselineTrafficRequest(BaseModel):
+    window_count: int = Field(default=12, ge=2, le=48)
+    payments_per_window: int = Field(default=60, ge=12, le=200)
+
+
+@router.post("/demo/baseline-traffic", status_code=202)
+def seed_baseline_traffic(request: BaselineTrafficRequest) -> dict[str, Any]:
+    """CTR-DEMO-001 v1: seed synthetic history through the live stream only."""
+    if not settings.demo_mode:
+        raise HTTPException(status_code=403, detail="DEMO_MODE_REQUIRED")
+    result = _get_controller().seed_baseline_history(
+        window_count=request.window_count,
+        payments_per_window=request.payments_per_window,
+    )
+    return {
+        "status": "ACCEPTED",
+        "source": "live_stream",
+        "window_count": result.window_count,
+        "payments_requested": result.payments_requested,
+        "events_published": result.events_published,
+        "first_window_start": result.first_window_start,
+        "last_window_end": result.last_window_end,
+    }
+
+
 @router.post("/demo/background-traffic", status_code=202)
 def emit_background_traffic(request: BackgroundTrafficRequest) -> dict[str, Any]:
     """TASK-DATA-009: demo-only trigger for background traffic through the batch API."""

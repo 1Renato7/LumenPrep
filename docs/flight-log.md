@@ -4138,3 +4138,363 @@ Rebasear a entrega local de diagnóstico sobre a `origin/main` atual, resolver s
 - **FACT:** `origin/main` avançou de `404c23b` para `82bea0d`; a entrega local é descendente do commit anterior.
 - **TEST:** antes da publicação, executar `pytest`, validação de contratos, testes/build web e `git diff --check`.
 - **Regra:** qualquer conflito sem resolução preservadora ou falha de gate interrompe o push; force push é proibido.
+
+### FL-20260830-TEAM-027 — Separar hipótese proativa do agente da causa comprovada pelo motor
+
+- **Timestamp:** 2026-08-30T02:27:22-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** product | architecture | AI/RAG | payments
+- **Escopo:** agente de diagnóstico proativo, `CTR-AGT-001`–`003`, Incident, memória e explicação
+- **Links:** `DEC-026`; `CTR-INC-001 v2`; `CTR-MEM-001`; `CTR-LLM-001`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O fluxo anterior assumia um copiloto reativo acionado por pergunta do operador e tratava `INCONCLUSIVE` como conclusão do diagnóstico atual. O solicitante definiu que o agente deve iniciar a investigação junto ao motor e ainda sugerir uma explicação quando não houver precedente documentado no RAG.
+
+#### Decisão
+
+Criar um agente read-only e proativo após a persistência do Incident. Ele consome um pacote imutável de evidências do motor, pode recuperar precedentes autorizados e produz uma hipótese de investigação rotulada `SUGGESTED`, ou `INSUFFICIENT_EVIDENCE` somente quando não houver base rastreável para sugestão. A hipótese não altera `root_cause`, não confirma fraude e não possui ferramentas de pagamento ou escrita.
+
+#### Critérios e por que agora
+
+O desafio valoriza diagnóstico proativo e explicação de causas inéditas; ausência de memória não pode interromper a investigação. Ao mesmo tempo, pagamentos exigem que texto de modelo não adquira autoridade para executar, confirmar ou modificar efeitos financeiros.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Encerrar em `INCONCLUSIVE` sem precedente | máxima cautela | não oferece próxima ação para caso novo | FACT: o solicitante exige sugestão proativa | rejeitada |
+| Agente promover causa/fraude diretamente | experiência aparentemente simples | alucinação e autoridade financeira indevida | FACT: `root_cause` é hoje autoritativo no motor | rejeitada |
+| Hipótese separada e rastreável | investigação útil sem falsificar fatos | exige novo contrato, avaliação e UX cuidadosa | ASSUMPTION: evidências atuais permitem calibração | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o motor já persiste métricas, scope, evidências, alternativas e perfil de decline; a memória separa `NO_PRECEDENT` de causa atual.
+- **TEST:** NOT RUN — não há ainda `EvidencePack`, corpus de agente ou avaliação de sugestões.
+- **ASSUMPTION:** duas evidências atuais independentes serão um mínimo inicial para publicar uma hipótese; validar antes de congelar `CTR-AGT-003`.
+- **UNKNOWN:** taxonomia e sinais que distinguem fraude real, bloqueio antifraude e falha operacional.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** diagnóstico proativo para incidentes inéditos e uma trilha explícita para investigação humana.
+- **Abrimos mão de:** afirmar uma causa/fraude com base apenas na narrativa do agente.
+- **Dívida/limitação:** sem corpus autorizado e evals, a implementação está bloqueada.
+- **Risco residual:** sugestão plausível pode ancorar o operador; mitigar com evidências, confiança, lacunas visíveis e proibição de promoção automática.
+
+#### Consequências e propagação
+
+- **Produto/demo:** o detalhe do Incident precisará exibir hipótese, confiança, evidências e lacunas separadamente da causa do motor.
+- **Arquitetura/contratos:** propor `CTR-AGT-001`–`003`; não alterar contratos existentes antes de change control.
+- **Pessoas/branches:** Renato define taxonomia/sinais; Altoé define corpus e evals; Rogério coordena contratos/API; André consome mock congelado na UI.
+- **Plano/Linear:** `docs/plans/system-plan.md` 2.4.0 atualizado; Linear não alterado.
+- **Testes/observabilidade:** exigir casos de hipótese sem precedente, no-answer, evidência conflitante, memória indisponível e tentativa de promoção indevida.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** incidente novo sem precedente recebe sugestão citada e humana, sem mudar `root_cause`.
+- **Caminho feliz:** Incident → EvidencePack → sugestão → detalhe com evidências e ação humana.
+- **Caso difícil/adverso:** jurado injeta combinação inédita ou decline `SUSPECTED_FRAUD` sem outra prova; agente declara hipótese/lacuna, nunca fraude confirmada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** `INSUFFICIENT_EVIDENCE` com lacunas explícitas e evidence IDs disponíveis; nenhum side effect.
+
+#### Gatilhos de revisão
+
+Qualquer tentativa de permitir escrita, pagamento, promoção de causa, corpus sem autorização, ou falha em distinguir hipótese de fato exige nova decisão e change control.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260830-TEAM-028 — Congelar a demo em uma fatia causal executável em sete horas
+
+- **Timestamp:** 2026-08-30T02:27:22-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** scope | architecture | demo | quality
+- **Escopo:** stream sintético, detector/RCA, Incident, UI e ensaio da demo
+- **Links:** `DEC-027`; `CTR-TXN-001`; `CTR-DET-001`; `CTR-INC-001`; plano 2.4.1 §18
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Restam sete horas de hackathon. O plano completo inclui integração Yuno, ingestão ampla e agente/RAG, mas essas frentes não cabem com segurança na janela sem comprometer a prova ao vivo exigida pelo desafio.
+
+#### Decisão
+
+Congelar a demo em stream sintético contínuo, baseline, duas degradações simultâneas, RCA/evidência, impacto e recomendação humana. Integração Yuno, novo corpus/RAG, vector store e agente amplo ficam fora do caminho crítico; o Evidence Pack/template só entra após o fluxo principal verde.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Construir integração Yuno e RAG completos | maior escopo potencial | alto risco de contrato, dados e deploy; sacrifica ensaio | FACT: restam sete horas | rejeitada |
+| Polir apenas a UI atual | baixo risco de código | não prova stream, anomalia ou causa | FACT: Incident live ainda precisa ser demonstrado | rejeitada |
+| Fatia causal sintética ponta a ponta | cobre o núcleo avaliável e é reprodutível | não prova integração externa real | FACT: o enunciado permite dados inventados | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** deploy, persistência, cube, detector, RCA e UI existem; o enunciado aceita transações e histórico inventados.
+- **TEST:** NOT RUN — a sequência completa dos dois Incidents e trial by fire será a validação desta janela.
+- **ASSUMPTION:** os componentes existentes podem ser conectados sem mudança incompatível de contrato.
+- **UNKNOWN:** comportamento do deploy sob stream contínuo e qualidade da separação por resíduo.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** demonstração defensável do problema central.
+- **Abrimos mão de:** integração real Yuno e agente/RAG completo nesta entrega.
+- **Dívida/limitação:** o produto continua sintético e o agente amplo permanece planejado, não implementado.
+- **Risco residual:** cenários podem falhar em detectar/separar; o ensaio começa cedo para preservar tempo de correção.
+
+#### Consequências e propagação
+
+- **Produto/demo:** o hero é normal → queda → causa/evidência → ação humana → dois simultâneos → caso desconhecido.
+- **Arquitetura/contratos:** preservar contratos públicos existentes; mudanças exigem change control.
+- **Pessoas/branches:** Renato stream/cenários; Rogério detector/RCA/E2E; André UI; Altoé só entra após caminho crítico.
+- **Plano/Linear:** plano 2.4.1 atualizado; Linear não alterado.
+- **Testes/observabilidade:** smoke, E2E de dois Incidents, browser/deploy e trial by fire são gates obrigatórios.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um fluxo sintético inédito cria um Incident correto ou abstention explícita, sem intervenção manual no diagnóstico.
+- **Caminho feliz:** baseline → provider-BR e issuer-MX-merchant → dois Incidents → UI.
+- **Caso difícil/adverso:** combinação nova do jurado não pode depender de ID/cenário hardcoded.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** demonstrar o cenário configurável conhecido com limitações explícitas; não simular sucesso.
+
+#### Gatilhos de revisão
+
+Falha do smoke, impossibilidade de separar os Incidents, ou mudança incompatível de contrato obriga cortar o agente/template e concentrar toda a janela no mecanismo causal.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260830-ROGERIO-029 — Semear baseline temporal pelo stream sintético, sem integrar Yuno
+
+- **Timestamp:** 2026-08-30T03:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Rogério
+- **Categoria:** scope | architecture | contract | demo
+- **Escopo:** `LiveStreamController`, `CTR-STR-001`, `CTR-DEMO-001 v1` e detector
+- **Links:** `DEC-027`; `DEC-028`; `CTR-STR-001`; plano 2.4.2 §18
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O controller existente publica eventos de um lote perto de um único timestamp e o trigger de background usa a batch API limitada a 100 itens. Isso não forma um histórico temporal útil para o detector antes de injetar a queda. O solicitante confirmou que integrar Yuno ou qualquer fonte externa não cabe na janela do hackathon.
+
+#### Decisão
+
+Adicionar um trigger de demo, somente em `DEMO_MODE`, que publica várias janelas passadas de tráfego sintético pelo `TransactionServer` existente. O controller passa a ordenar os timestamps em janelas de cinco minutos e a usar uma correlação compartilhada por janela de baseline; o cenário seguinte recebe o próximo intervalo temporal. O caminho continua produtor → stream → listener → ingestão → agregação/detecção, sem payload, SDK ou credencial Yuno.
+
+#### Critérios e por que agora
+
+O núcleo a provar é baseline normal seguido de degradação detectável. Reaproveitar a fronteira do stream preserva a demo ponta a ponta e elimina a maior lacuna de tempo sem abrir uma integração externa.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Integrar Yuno/SDK | maior fidelidade a produção | contratos, dados e credenciais indisponíveis na janela | FACT: o solicitante excluiu Yuno por prazo | rejeitada |
+| Usar somente o batch background atual | nenhum endpoint novo | não garante histórico temporal nem correlação agregada do stream | FACT: limite atual é 100 e timestamps não avançam por pagamento | rejeitada |
+| Baseline sintético no stream existente | exercita ingestão real e é reproduzível | continua sendo dado sintético/in-process | FACT: `CTR-STR-001` e listener já existem | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o detector usa apenas janelas anteriores do mesmo slice para construir baseline.
+- **FACT:** o `LiveStreamController` e o listener já são a fronteira local de produção/consumo da demo.
+- **TEST:** NOT RUN — testes de timestamps, ingestão e detecção seguirão a implementação.
+- **ASSUMPTION:** 12 janelas com volume mínimo configurado serão suficientes para os guards estatísticos da demo; validar no E2E.
+- **UNKNOWN:** a separação completa de dois cenários simultâneos pertence à próxima fatia de detector/RCA.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** histórico observável e repetível sem serviço externo.
+- **Abrimos mão de:** realismo de payload e tráfego de produção da Yuno.
+- **Dívida/limitação:** stream continua in-process e limitado para a demo.
+- **Risco residual:** um volume pequeno pode não superar o guard de amostra; limites e testes deixam isso explícito.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a demo pode iniciar em normalidade antes de mostrar a queda.
+- **Arquitetura/contratos:** novo `CTR-DEMO-001 v1` é aditivo e `DEMO_MODE`-only; `CTR-API-001` não muda.
+- **Pessoas/branches:** Rogério implementa controller/endpoint/testes; Renato pode consumir o clock temporal nos cenários.
+- **Plano/Linear:** plano 2.4.2 atualizado; Linear não alterado.
+- **Testes/observabilidade:** testar ordenação temporal, correlação por janela, negação fora de `DEMO_MODE` e fluxo listener.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** baseline publicado antes do cenário cria janelas elegíveis para comparação e não gera alerta por si.
+- **Caminho feliz:** baseline → listener → cenário → detector.
+- **Caso difícil/adverso:** jurado aumenta o número de janelas/pagamentos dentro dos limites e o fluxo ainda não depende de fixture ou Yuno.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** chamar o controller diretamente no ensaio local e explicitar a limitação do trigger caso a rota não esteja exposta.
+
+#### Gatilhos de revisão
+
+Falha de ingestão, timestamps fora da janela, custo excessivo no Railway ou necessidade de fonte real exigem novo change control; fonte externa não será adicionada nesta janela.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260830-TEAM-029 — Congelar `CTR-AGT-001`–`003 v1` com cliente determinístico como padrão do agente proativo
+
+- **Timestamp:** 2026-08-30T09:40:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** architecture | contract | AI/RAG | payments
+- **Escopo:** `app/agent/`, `app/worker/incident_pipeline.py`, `app/api/incidents.py`, `contracts/v1/agent-*.schema.json`, `CTR-API-001 v3`
+- **Links:** `DEC-026`; `DEC-028`; `CTR-AGT-001 v1`; `CTR-AGT-002 v1`; `CTR-AGT-003 v1`; `CTR-INC-001 v1`; `CTR-MEM-001 v1.1`; `FL-20260830-TEAM-027`
+- **Supersedes / superseded by:** desbloqueia parcialmente `FL-20260830-TEAM-027` (§17 `PLAN BLOCKED`); não o revoga
+
+#### Contexto e pergunta
+
+`FL-20260830-TEAM-027` aceitou o agente proativo mas deixou §17 como `PLAN BLOCKED` por `OPEN-AGT-001`–`003` (taxonomia de fraude, corpus autorizado, limiar de suficiência). Restam ~7 horas de hackathon. A pergunta é se dá para implementar uma fatia vertical do agente sem resolver as três decisões abertas e sem colocar latência/indisponibilidade de LLM no caminho crítico do Incident.
+
+#### Decisão
+
+Implementar `app/agent/` com três contratos novos congelados em v1 (`EvidencePack`, `RetrievalTrace`, `DiagnosticSuggestion`) e adotar os fallbacks seguros já escritos em §17 como comportamento de produção, em vez de esperar as decisões abertas:
+
+- `OPEN-AGT-001` → o agente só pode sugerir categorias já produzidas pelo motor (`root_cause.category` + `rca_alternatives`) ou categorias de risco não-confirmatórias; afirmar fraude como fato é rejeitado pelo validador.
+- `OPEN-AGT-002` → a recuperação usa exclusivamente a memória estruturada existente (`IncidentMemoryService`) e o catálogo versionado de playbooks. Sem vector store, embeddings, web ou corpus novo.
+- `OPEN-AGT-003` → `SUGGESTED` exige no mínimo duas evidências atuais independentes (`source_ref` distintos) no `EvidencePack`; abaixo disso o agente devolve `INSUFFICIENT_EVIDENCE`.
+
+O cliente LLM é injetável e o **padrão é determinístico e offline** (`deterministic-template-v1`), montado a partir do `EvidencePack` e do `RetrievalTrace`. O cliente OpenAI existe, é opt-in por configuração e nunca é construído em teste. A geração roda depois da persistência do Incident, dentro de `try/except`, e uma falha do agente nunca aborta a transação do worker.
+
+#### Critérios e por que agora
+
+Três critérios dominaram: (1) o Incident persistido é o núcleo da nota do desafio e não pode depender do agente; (2) as três decisões abertas já possuíam fallback seguro escrito, então esperar por elas custaria a fatia inteira sem reduzir risco; (3) um cliente determinístico por padrão torna a demo reprodutível e os testes independentes de chave OpenAI. A decisão não podia continuar aberta porque a janela restante não comporta congelar contrato depois de implementar consumidores.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter §17 bloqueado até fechar `OPEN-AGT-001`–`003` | máxima cautela contratual | consome a janela inteira; entrega zero do agente | FACT: restam ~7h e §18 já cortou o agente amplo | rejeitada; os fallbacks seguros já estavam escritos |
+| Chamar OpenAI por padrão no pipeline | narrativa mais rica na demo | latência/indisponibilidade dentro da transação DuckDB do worker; teste dependente de chave | FACT: `derive_incidents_for_correlation` roda entre `BEGIN` e `COMMIT` em `transaction_worker.py:93-124` | rejeitada; LLM real vira opt-in |
+| Expor a sugestão dentro de `CTR-INC-001` | um único payload para a UI | mudança incompatível em contrato congelado e consumido pelo `web/` | FACT: `CTR-INC-001 v1` está `FROZEN` e o schema é `additionalProperties: false` | rejeitada; endpoint aditivo separado |
+| Contratos novos + cliente determinístico padrão + endpoint aditivo | fatia demonstrável sem tocar contrato congelado nem caminho crítico | mais um endpoint e mais uma tabela para manter | ASSUMPTION: duas evidências independentes é limiar inicial defensável | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `Incident` e seu schema usam `extra="forbid"` / `additionalProperties: false`, então a sugestão não cabe no contrato atual sem versionar.
+- **FACT:** `derive_incidents_for_correlation` é chamada dentro da transação DuckDB do worker; exceção não capturada faria rollback do lifecycle da transação.
+- **FACT:** `openai==2.38.0` está instalado neste host, mas **não** é dependência declarada no `pyproject.toml` nem no `uv.lock` usado pelo Dockerfile.
+- **TEST:** ver adendo — a suíte foi executada após a implementação.
+- **ASSUMPTION:** duas evidências atuais independentes é limiar suficiente para publicar hipótese; owner Team; gatilho de revisão é o primeiro holdout com ground truth.
+- **UNKNOWN:** calibração real de `confidence`; hoje é derivada do motor, não estimada pelo agente.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** hipótese proativa rastreável para Incidents inéditos, sem precedente, sem tocar `CTR-INC-001` e sem risco no caminho crítico.
+- **Abrimos mão de:** narrativa gerada por LLM real por padrão na demo; a saída padrão é template determinístico.
+- **Dívida/limitação:** o caminho OpenAI não roda na imagem Docker atual porque `openai` não está no `uv.lock` congelado; ativá-lo exige mudança de dependência coordenada por Rogério.
+- **Risco residual:** o limiar de duas evidências pode ser permissivo ou restritivo demais; é observável nos testes de suficiência e reversível em um parâmetro.
+
+#### Consequências e propagação
+
+- **Produto/demo:** o detalhe do Incident pode exibir "hipótese do agente" separada da causa do motor; ausência de sugestão é 404 tipado, não hipótese vazia.
+- **Arquitetura/contratos:** cria `CTR-AGT-001`–`003 v1`; `CTR-API-001 v3` recebe path aditivo `GET /v1/incidents/{incident_id}/suggestion`; `CTR-INC-001 v1` inalterado.
+- **Pessoas/branches:** André consome o endpoint novo; Altoé mantém a autoridade da memória; Renato continua dono da taxonomia de `OPEN-AGT-001`.
+- **Plano/Linear:** `docs/plans/system-plan.md` §17 atualizado para `PARTIALLY UNBLOCKED`. Linear não alterado.
+- **Testes/observabilidade:** exigidos casos de sem-precedente, memória indisponível, resposta malformada, evidence ID inventado, ação não `HUMAN_ONLY`, tentativa de promoção de `root_cause`, idempotência e `SUSPECTED_FRAUD`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um Incident persistido sem precedente produz `SUGGESTED` citando apenas evidence IDs do próprio `EvidencePack`.
+- **Caminho feliz:** pipeline `batch → worker → Incident → suggestion` persistida e legível pelo endpoint.
+- **Caso difícil/adverso:** cliente devolve JSON inválido, cita `evd_inventado`, pede `execution: AUTOMATIC` ou tenta escrever `root_cause`.
+- **Resultado observado:** ver adendo.
+- **Fallback:** falha do agente devolve `UNAVAILABLE` com limitação; o Incident e a explicação determinística permanecem intactos.
+
+#### Gatilhos de revisão
+
+Fechamento de `OPEN-AGT-001`–`003`, primeiro holdout com ground truth, decisão de declarar `openai` como dependência, ou qualquer pedido de expor a sugestão dentro de `CTR-INC-001`.
+
+#### Adendos
+
+- Pendente: resultado da suíte após implementação.
+
+### Adendo de validação — FL-20260830-ROGERIO-029
+
+- **Timestamp:** 2026-08-30T03:22:00-03:00
+- **Autor:** Rogério
+- **Resultado:** PASS para a microtarefa `CTR-DEMO-001 v1`.
+- **Evidência automatizada:** `python scripts/validate_contracts.py` (OK), `python -m compileall -q app` (OK) e `python -m pytest -q` (178 passed).
+- **Evidência funcional:** no Swagger local (`DEMO_MODE=true`, `DUCKDB_PATH=:memory:`), `POST /demo/baseline-traffic` com `window_count=3` e `payments_per_window=12` devolveu `202 ACCEPTED`, 36 pagamentos solicitados, 39 eventos publicados e intervalo `14:00–14:15Z`; `GET /transactions/health` devolveu `published=76`, `listener_cursor=76`, `backlog=0`. Console do Swagger sem erros.
+- **Revisão:** o estado temporal do controller foi protegido por lock após identificar corrida entre chamadas concorrentes. O diff desta microtarefa não revisa nem aceita as alterações paralelas já presentes em `app/agent/`, Incident/API ou `web/`.
+
+### FL-20260830-TEAM-030 — Rebasear a entrega integrada sobre a main remota preservando os contratos locais
+
+- **Timestamp:** 2026-08-30T03:35:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** Git/integration | contract | demo
+- **Escopo:** `main`, `origin/main@144299d`, `CTR-DEMO-001`, `CTR-AGT-001`–`003`
+- **Links:** `DEC-028`; `DEC-029`; `FL-20260830-ROGERIO-029`; `FL-20260830-TEAM-029`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Após a implementação local de baseline temporal e do agente proativo, `origin/main` avançou para `144299d` com a ponte de promoção de memória. O solicitante autorizou push direto para `main` e determinou prioridade às alterações locais atuais em caso de conflito.
+
+#### Decisão
+
+Criar um commit único com a árvore local coerente, rebaseá-lo sobre `origin/main` e preservar as alterações locais de `CTR-DEMO-001` e `CTR-AGT-001`–`003` em conflitos semânticos. A ponte remota de memória é mantida sempre que não contrariar esses contratos; conflito textual é resolvido por composição, nunca por descarte cego. Após rebase, executar gates e fazer push fast-forward, sem force push.
+
+#### Critérios e por que agora
+
+O objetivo é publicar a fatia demonstrável sem perder a evolução remota de memória nem a janela de demo já validada. O usuário concedeu a autoridade necessária para integração direta na `main`.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Descartar alterações locais para seguir a remota | rebase rápido | perde baseline e agente atuais | FACT: usuário priorizou alterações atuais | rejeitada |
+| Sobrescrever a main remota | mantém apenas o local | apaga a ponte de memória recém-publicada | FACT: `origin/main` contém commit adicional | rejeitada |
+| Rebase e composição orientada a contratos | preserva ambas as evoluções | exige revisão dos hotspots compartilhados | FACT: contratos são aditivos e a suíte local passa | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** base local `e935983`; remoto `144299d`.
+- **TEST:** `python -m pytest -q tests/test_diagnostic_agent.py tests/test_simulation_live_stream.py tests/test_background_traffic.py` — 19 passed.
+- **ASSUMPTION:** os diffs são composicionais fora de `app/api/demo.py`, `app/api/incidents.py` e documentos; validar no rebase.
+- **UNKNOWN:** eventuais conflitos textuais não vistos até aplicar o rebase.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** entrega única e main atualizada.
+- **Abrimos mão de:** isolar as duas fatias em commits/PRs separados nesta janela.
+- **Dívida/limitação:** o cliente OpenAI continua opt-in e não declarado no lockfile.
+- **Risco residual:** conflito semântico em API/documentação; mitigado por rebase, contratos e gates pós-integração.
+
+#### Consequências e propagação
+
+- **Produto/demo:** baseline e sugestão proativa seguem disponíveis, ambos sintéticos/offline por padrão.
+- **Arquitetura/contratos:** contratos locais prevalecem em conflito, preservando compatibilidade aditiva com a ponte de memória.
+- **Pessoas/branches:** Team coordena a integração; nenhum Linear é alterado.
+- **Plano/Linear:** plano 2.4.3 sincronizado; Linear não alterado.
+- **Testes/observabilidade:** repetir contratos, suíte, revisão e smoke local depois do rebase.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** a main rebaseada mantém o endpoint de baseline, o endpoint de sugestão e os testes de memória existentes.
+- **Caminho feliz:** commit local → rebase → testes → push fast-forward.
+- **Caso difícil/adverso:** conflito em rota/documento compartilhado preserva os dois comportamentos, sem remover `HUMAN_ONLY`.
+- **Resultado observado:** PENDING.
+- **Fallback:** interromper antes do push se um conflito não puder ser composto sem quebrar contrato.
+
+#### Gatilhos de revisão
+
+Falha de contrato, teste crítico, conflito semântico sem composição ou necessidade de force push interrompe a publicação.
+
+#### Adendos
+
+- Pendente: hash do commit, resultado do rebase e push.

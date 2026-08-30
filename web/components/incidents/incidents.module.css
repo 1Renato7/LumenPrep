@@ -29,6 +29,15 @@
 .twoColumn { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(20rem, .75fr); gap: 1rem; }
 .current { border-left: .35rem solid #7990ff; }
 .impactCard { border-left: .35rem solid #d29b4a; }
+.agentCard { display: grid; gap: .8rem; border-left: .35rem solid #c28cff; background: linear-gradient(110deg, rgba(78, 39, 117, .25), rgba(7, 11, 27, .86) 55%); }
+.agentCard h2 { margin: .25rem 0; }
+.agentBadge { display: inline-flex; width: fit-content; align-items: center; justify-content: center; padding: .32rem .55rem; border: 1px solid #d0a8ff; border-radius: 999px; color: #e4d3ff; font-size: .66rem; font-weight: 850; letter-spacing: .07em; }
+.agentSummary { max-width: 72rem; margin: 0; color: #f3ebff; font-size: 1.05rem; line-height: 1.55; }
+.agentNotice { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: .75rem; border: 1px solid rgba(208, 168, 255, .4); border-radius: .7rem; background: rgba(65, 35, 94, .26); }
+.agentNotice p { margin: 0; }
+.agentReasons { display: grid; gap: .6rem; }
+.agentReasons article { padding: .75rem; border: 1px solid rgba(208, 168, 255, .28); border-radius: .7rem; background: rgba(53, 27, 83, .22); }
+.agentReasons p { margin-top: 0; }
 .impactCard > h2 { margin: .25rem 0; color: #ffdaa0; font-size: clamp(1.8rem, 4vw, 2.5rem); }
 .actionCard { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .65rem 1rem; border-color: rgba(95, 214, 151, .55); background: linear-gradient(110deg, rgba(21, 88, 61, .26), rgba(7, 11, 27, .86) 55%); }
 .actionCard h2 { margin: .25rem 0; }

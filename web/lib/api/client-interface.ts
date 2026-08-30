@@ -1,5 +1,6 @@
 import {
   ApiPayloadError,
+  parseDiagnosticSuggestion,
   parseIncidentDetail,
   parseIncidentList,
   parseTransactionIncidentDetail,
@@ -12,6 +13,7 @@ import {
 import type {
   Incident,
   IncidentDetail,
+  DiagnosticSuggestion,
   TransactionBatchAccepted,
   TransactionBatchRequest,
   TransactionCatalog,
@@ -45,6 +47,8 @@ export interface LumenApiClient {
   listIncidents(options?: RequestOptions): Promise<Incident[]>;
   listTransactionIncidents(transactionId: string, options?: RequestOptions): Promise<TransactionIncidentDetail>;
   getIncident(incidentId: string, options?: RequestOptions): Promise<IncidentDetail>;
+  /** Additive CTR-AGT-003 read: never changes the engine-owned Incident. */
+  getDiagnosticSuggestion(incidentId: string, options?: RequestOptions): Promise<DiagnosticSuggestion>;
 }
 
 export type LumenApiErrorCode =
@@ -203,6 +207,7 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
       return request(`/transactions/${encodeURIComponent(transactionId)}/incidents`, { method: "GET" }, parseTransactionIncidentDetail, requestOptions);
     },
     getIncident: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}`, { method: "GET" }, parseIncidentDetail, requestOptions),
+    getDiagnosticSuggestion: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}/suggestion`, { method: "GET" }, parseDiagnosticSuggestion, requestOptions),
   };
 }
 

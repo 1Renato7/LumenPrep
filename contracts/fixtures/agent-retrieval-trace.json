@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "incident_id": "inc_agent_provider_br_001",
+  "status": "NO_PRECEDENT",
+  "filter_criteria": "confirmation = 'HUMAN_CONFIRMED' AND shared_scope = true",
+  "candidate_count": 1,
+  "index_version": "structured-v1",
+  "fallback_used": false,
+  "sources": [
+    {
+      "source": "playbook_catalog",
+      "source_id": "PB-GENERIC-INVESTIGATION",
+      "version": "1.0",
+      "score": null,
+      "summary": "Inspect current evidence and escalate to the payment operations owner.",
+      "evidence_ids": []
+    }
+  ],
+  "authorized_evidence_ids": [
+    "evd_decline_9f8e7d6c5b4a3210",
+    "evd_det_a1b2c3d4e5f60718"
+  ]
+}

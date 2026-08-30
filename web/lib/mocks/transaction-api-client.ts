@@ -18,6 +18,7 @@ import {
 import {
   parseIncident,
   parseIncidentDetail,
+  parseDiagnosticSuggestion,
   parseTransactionBatchAccepted,
   parseTransactionCatalog,
   parseTransactionList,
@@ -41,6 +42,13 @@ export function createMockLumenApiClient(): MockLumenApiClient {
   const failed = parseTransactionRecord(failedFixture);
   const incident = parseIncident(incidentFixture);
   const incidentDetail = parseIncidentDetail({ incident: incidentFixture, memory: similarIncidentsFixture, explanation: explanationFixture });
+  const diagnosticSuggestion = parseDiagnosticSuggestion({
+    schema_version: "1.0", incident_id: incident.incident_id, evidence_fingerprint: "fixture-evidence-fingerprint", status: "SUGGESTED", suggested_category: "PROVIDER_DEGRADATION",
+    summary_for_operations: "The provider connection is the leading investigation hypothesis; confirm it with the current evidence.", executive_summary: "The agent suggests investigating provider degradation. This does not change the engine cause.",
+    reasons: [{ statement: "The approval-rate shift and concentrated scope point to the provider connection.", evidence_ids: ["evd_current_rate", "evd_current_scope"] }], confidence: 0.74,
+    recommended_actions: [{ action: "Compare provider health and decline codes before a human decides whether to reroute.", execution: "HUMAN_ONLY", rationale_evidence_ids: ["evd_current_rate", "evd_current_scope"] }],
+    limitations: ["This is a read-only agent hypothesis, not a confirmed cause."], retrieval_trace: { status: "MATCH_FOUND", source: "fixture" }, model_version: "deterministic-template-v1",
+  });
 
   return {
     source: "MOCK_FIXTURE",
@@ -104,6 +112,11 @@ export function createMockLumenApiClient(): MockLumenApiClient {
       checkCancelled(options);
       if (incidentId !== incident.incident_id) throw new LumenApiError("NOT_FOUND", 404, { correlation_id: "corr_demo_mock_not_found" }, "Incident fixture was not found.");
       return structuredClone(incidentDetail);
+    },
+    async getDiagnosticSuggestion(incidentId, options) {
+      checkCancelled(options);
+      if (incidentId !== incident.incident_id) throw new LumenApiError("NOT_FOUND", 404, { correlation_id: "corr_demo_mock_not_found" }, "Agent suggestion fixture was not found.");
+      return structuredClone(diagnosticSuggestion);
     },
   };
 }

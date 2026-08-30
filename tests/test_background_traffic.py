@@ -88,3 +88,18 @@ def test_endpoint_rejects_count_outside_bounds():
         assert response.status_code == 422
     finally:
         settings.demo_mode = False
+
+
+def test_baseline_traffic_endpoint_requires_demo_mode_then_seeds_history(monkeypatch):
+    monkeypatch.setattr(settings, "demo_mode", False)
+    denied = client.post("/demo/baseline-traffic", json={"window_count": 2, "payments_per_window": 12})
+    assert denied.status_code == 403
+
+    monkeypatch.setattr(settings, "demo_mode", True)
+    accepted = client.post("/demo/baseline-traffic", json={"window_count": 2, "payments_per_window": 12})
+    assert accepted.status_code == 202
+    body = accepted.json()
+    assert body["source"] == "live_stream"
+    assert body["window_count"] == 2
+    assert body["payments_requested"] == 24
+    assert body["events_published"] >= 24

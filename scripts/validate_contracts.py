@@ -45,6 +45,9 @@ PAIRS: dict[str, list[str]] = {
         "transaction-failed.json",
     ],
     "transaction-incident-detail.schema.json": ["transaction-incident-detail-no-incident.json"],
+    "agent-evidence-pack.schema.json": ["agent-evidence-pack.json"],
+    "agent-retrieval-trace.schema.json": ["agent-retrieval-trace.json"],
+    "agent-diagnostic-suggestion.schema.json": ["agent-diagnostic-suggestion.json"],
 }
 
 

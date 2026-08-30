@@ -134,3 +134,16 @@ paths:
       responses:
         "200": {description: Incident plus typed SimilarIncidentResult and ExplanationBundle}
         "404": {description: INCIDENT_NOT_FOUND}
+  /incidents/{incident_id}/suggestion:
+    get:
+      operationId: getIncidentSuggestion
+      description: "Additive resource for CTR-AGT-003. The agent hypothesis is served separately from the Incident so that frozen CTR-INC-001 v1 is unchanged and no consumer can mistake a suggestion for the engine's confirmed cause. Every recommended action is HUMAN_ONLY."
+      parameters:
+        - {name: incident_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: "Agent hypothesis for one Incident; SUGGESTED, INSUFFICIENT_EVIDENCE or UNAVAILABLE."
+          content:
+            application/json:
+              schema: {$ref: "agent-diagnostic-suggestion.schema.json"}
+        "404": {description: "INCIDENT_NOT_FOUND when the Incident does not exist; SUGGESTION_NOT_AVAILABLE when no suggestion has been generated for it."}

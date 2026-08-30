@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/agent-evidence-pack.schema.json",
+  "title": "CTR-AGT-001 EvidencePack v1",
+  "description": "Immutable projection of engine-computed facts handed to the proactive diagnostic agent. The agent receives this object and nothing else: no database, no SQL, no credentials, no payment tools.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "incident_id",
+    "correlation_id",
+    "evidence_fingerprint",
+    "scope",
+    "window",
+    "eligible_attempts",
+    "lost_approvals",
+    "impact",
+    "detector_evidence",
+    "rca_alternatives",
+    "decline_profile",
+    "limitations",
+    "authorized_evidence_ids",
+    "root_cause",
+    "engine_version"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "incident_id": {"type": "string", "minLength": 1},
+    "correlation_id": {"type": "string", "minLength": 1},
+    "evidence_fingerprint": {"type": "string", "minLength": 1, "description": "Digest of every other field; the agent idempotency key is derived from it."},
+    "scope": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"}
+      }
+    },
+    "approval_rate_observed": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "approval_rate_expected": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "eligible_attempts": {"type": "integer", "minimum": 0},
+    "lost_approvals": {"type": "integer", "minimum": 0},
+    "impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "method", "amount_minor", "currency"],
+      "properties": {
+        "metric": {"type": "string", "minLength": 1},
+        "method": {"type": "string", "minLength": 1},
+        "amount_minor": {"type": "integer", "minimum": 0},
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$"}
+      }
+    },
+    "detector_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_id", "kind", "statement", "source_ref"],
+        "properties": {
+          "evidence_id": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "minLength": 1},
+          "statement": {"type": "string", "minLength": 1},
+          "source_ref": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "rca_alternatives": {
+      "type": "array",
+      "description": "Competing hypotheses the RCA already ranked. Never a cause.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "confidence"],
+        "properties": {
+          "category": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "decline_profile": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "authorized_evidence_ids": {
+      "type": "array",
+      "description": "The only evidence IDs a suggestion may cite from current evidence.",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "root_cause": {
+      "type": "object",
+      "description": "Read-only mirror of the engine-owned diagnosis. The agent may never write it.",
+      "additionalProperties": false,
+      "required": ["status", "category", "confidence"],
+      "properties": {
+        "status": {"enum": ["SUPPORTED", "INCONCLUSIVE"]},
+        "category": {"type": ["string", "null"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "engine_version": {"type": "string", "minLength": 1}
+  }
+}

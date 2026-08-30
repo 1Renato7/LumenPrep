@@ -85,6 +85,18 @@ CREATE TABLE IF NOT EXISTS incident_records (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
+CREATE TABLE IF NOT EXISTS incident_suggestions (
+    suggestion_id VARCHAR PRIMARY KEY,
+    incident_id VARCHAR NOT NULL,
+    idempotency_key VARCHAR UNIQUE NOT NULL,
+    evidence_fingerprint VARCHAR NOT NULL,
+    model_version VARCHAR NOT NULL,
+    prompt_version VARCHAR NOT NULL,
+    status VARCHAR NOT NULL,
+    payload_json VARCHAR NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
 CREATE TABLE IF NOT EXISTS transaction_incident_links (
     transaction_id VARCHAR NOT NULL,
     incident_id VARCHAR NOT NULL,

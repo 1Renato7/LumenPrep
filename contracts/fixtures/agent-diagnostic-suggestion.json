@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "incident_id": "inc_agent_provider_br_001",
+  "evidence_fingerprint": "f83837922a3c27e7f38cdb253adba300",
+  "status": "SUGGESTED",
+  "suggested_category": "PROVIDER_DEGRADATION",
+  "summary_for_operations": "Investigation hypothesis for country=BR x provider_id=dlocal: provider degradation between 2026-08-30T12:00:00Z and 2026-08-30T12:05:00Z, where approval rate is 41.00% against an expected 87.00% across 240 eligible attempts. This is a hypothesis to investigate, not the engine's confirmed cause.",
+  "executive_summary": "About 48,200.00 BRL of GMV is at risk on country=BR x provider_id=dlocal; a human review is required.",
+  "reasons": [
+    {
+      "statement": "Detector candidate cand_provider_br_001 contributed to this Incident.",
+      "evidence_ids": [
+        "evd_det_a1b2c3d4e5f60718"
+      ]
+    },
+    {
+      "statement": "The failure signature is dominated by PROVIDER_TIMEOUT on 96 declined attempts, which narrows where to look first.",
+      "evidence_ids": [
+        "evd_decline_9f8e7d6c5b4a3210"
+      ]
+    }
+  ],
+  "confidence": 0.75,
+  "recommended_actions": [
+    {
+      "action": "Inspect current evidence and escalate to the payment operations owner.",
+      "execution": "HUMAN_ONLY",
+      "rationale_evidence_ids": [
+        "evd_det_a1b2c3d4e5f60718",
+        "evd_decline_9f8e7d6c5b4a3210"
+      ]
+    },
+    {
+      "action": "Verify the current operational status reported for country=BR x provider_id=dlocal and compare it against the baseline window.",
+      "execution": "HUMAN_ONLY",
+      "rationale_evidence_ids": [
+        "evd_det_a1b2c3d4e5f60718",
+        "evd_decline_9f8e7d6c5b4a3210"
+      ]
+    },
+    {
+      "action": "Escalate to the payment operations owner for this scope with the evidence above.",
+      "execution": "HUMAN_ONLY",
+      "rationale_evidence_ids": [
+        "evd_det_a1b2c3d4e5f60718",
+        "evd_decline_9f8e7d6c5b4a3210"
+      ]
+    }
+  ],
+  "limitations": [
+    "This is an agent hypothesis for investigation, not the engine's confirmed cause; every recommended action is HUMAN_ONLY and the system executes no payment action.",
+    "No human-confirmed precedent passed the retrieval threshold; this hypothesis rests on current evidence only."
+  ],
+  "retrieval_trace": {
+    "schema_version": "1.0",
+    "incident_id": "inc_agent_provider_br_001",
+    "status": "NO_PRECEDENT",
+    "filter_criteria": "confirmation = 'HUMAN_CONFIRMED' AND shared_scope = true",
+    "candidate_count": 1,
+    "index_version": "structured-v1",
+    "fallback_used": false,
+    "sources": [
+      {
+        "source": "playbook_catalog",
+        "source_id": "PB-GENERIC-INVESTIGATION",
+        "version": "1.0",
+        "score": null,
+        "summary": "Inspect current evidence and escalate to the payment operations owner.",
+        "evidence_ids": []
+      }
+    ],
+    "authorized_evidence_ids": [
+      "evd_decline_9f8e7d6c5b4a3210",
+      "evd_det_a1b2c3d4e5f60718"
+    ]
+  },
+  "model_version": "deterministic-template-v1"
+}

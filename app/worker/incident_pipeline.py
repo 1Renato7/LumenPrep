@@ -9,13 +9,17 @@ already-persisted current Incident.
 from __future__ import annotations
 
 import json
+import logging
 from hashlib import sha256
 from typing import Any
 
+from app.agent import DiagnosticAgentService
 from app.aggregation import WindowMetrics, compute_windows
 from app.detection import detect_candidates
-from app.incidents import DuckDBIncidentRepository, Evidence, correlate_candidates, compute_impact, to_incident
+from app.incidents import DuckDBIncidentRepository, Evidence, Incident, correlate_candidates, compute_impact, to_incident
 from app.rca import explore_slices, rank_hypotheses
+
+logger = logging.getLogger(__name__)
 
 LOW_SAMPLE_ATTEMPTS = 12
 
@@ -60,8 +64,26 @@ def derive_incidents_for_correlation(con, correlation_id: str) -> list[str]:
         )
         persisted = repository.upsert(incident)
         _link_matching_transactions(con, repository, persisted.model_dump(mode="json"))
+        _suggest_for_persisted_incident(persisted, window.decline_profile)
         incident_ids.append(persisted.incident_id)
     return incident_ids
+
+
+def _suggest_for_persisted_incident(incident: Incident, decline_profile: dict[str, int]) -> None:
+    """Run the proactive agent on an Incident that is already durable.
+
+    This call is deliberately last and deliberately swallowed.  It runs inside
+    the worker's DuckDB transaction, so an agent error escaping here would roll
+    back the transaction lifecycle it has nothing to do with.  Detection, the
+    Incident and the deterministic explanation must survive a model that is
+    slow, unavailable or wrong.
+    """
+    try:
+        DiagnosticAgentService().suggest_for_incident(incident, decline_profile=decline_profile)
+    except Exception as error:
+        logger.warning(
+            "diagnostic agent skipped for %s: %s", incident.incident_id, type(error).__name__
+        )
 
 
 def _most_specific_candidates(candidates: list[Any]) -> list[Any]:

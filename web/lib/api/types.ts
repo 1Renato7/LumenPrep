@@ -246,6 +246,23 @@ export interface IncidentDetail {
   explanation: ExplanationBundle;
 }
 
+/** CTR-AGT-003: a read-only, non-authoritative investigation hypothesis. */
+export interface DiagnosticSuggestion {
+  schema_version: "1.0";
+  incident_id: string;
+  evidence_fingerprint: string;
+  status: "SUGGESTED" | "INSUFFICIENT_EVIDENCE" | "UNAVAILABLE";
+  suggested_category: string | null;
+  summary_for_operations: string;
+  executive_summary: string;
+  reasons: Array<{ statement: string; evidence_ids: string[] }>;
+  confidence: number;
+  recommended_actions: Array<{ action: string; execution: "HUMAN_ONLY"; rationale_evidence_ids: string[] }>;
+  limitations: string[];
+  retrieval_trace: Record<string, unknown>;
+  model_version: string;
+}
+
 export interface TransactionIncidentLink extends IncidentDetail {
   evidence_ids: string[];
   limitations: string[];

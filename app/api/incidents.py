@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.agent import DiagnosticSuggestionRepository
 from app.config import settings
 from app.explanation import (
     GroundedExplainer,
@@ -255,6 +256,22 @@ def get_transaction_incidents(transaction_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="TRANSACTION_NOT_FOUND")
     candidate_responses, grounding = resolved
     return _grounding_detail_contract(transaction_id, candidate_responses, grounding)
+
+
+@router.get("/incidents/{incident_id}/suggestion")
+def get_incident_suggestion(incident_id: str) -> dict[str, Any]:
+    """Return CTR-AGT-003, the agent hypothesis, as a resource of its own.
+
+    Keeping it off the Incident payload preserves frozen ``CTR-INC-001 v1`` and
+    makes the separation legible to a consumer: an absent suggestion is a typed
+    404, never an empty hypothesis attached to a real diagnosis.
+    """
+    if incident_id not in _incident_records():
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+    suggestion = DiagnosticSuggestionRepository().latest_for_incident(incident_id)
+    if suggestion is None:
+        raise HTTPException(status_code=404, detail="SUGGESTION_NOT_AVAILABLE")
+    return suggestion.model_dump(mode="json")
 
 
 @router.get("/incidents/{incident_id}")

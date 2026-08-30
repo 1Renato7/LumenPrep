@@ -1,6 +1,7 @@
 import type {
   Incident,
   IncidentDetail,
+  DiagnosticSuggestion,
   TransactionBatchAccepted,
   TransactionCatalog,
   TransactionClassification,
@@ -342,6 +343,25 @@ export function parseTransactionIncidentDetail(value: unknown): TransactionIncid
 export function parseIncidentDetail(value: unknown): IncidentDetail {
   const detail = exactObject(value, ["incident", "memory", "explanation"], [], "IncidentDetail");
   return { incident: parseIncident(detail.incident), memory: parseSimilarIncidents(detail.memory), explanation: parseExplanation(detail.explanation) };
+}
+
+/** Keep the agent's hypothesis on its additive contract; never parse it as an Incident cause. */
+export function parseDiagnosticSuggestion(value: unknown): DiagnosticSuggestion {
+  const suggestion = exactObject(value, ["schema_version", "incident_id", "evidence_fingerprint", "status", "suggested_category", "summary_for_operations", "executive_summary", "reasons", "confidence", "recommended_actions", "limitations", "retrieval_trace", "model_version"], [], "DiagnosticSuggestion");
+  if (suggestion.schema_version !== "1.0") fail("DiagnosticSuggestion.schema_version must be 1.0.", value);
+  const status = enumValue(suggestion.status, new Set(["SUGGESTED", "INSUFFICIENT_EVIDENCE", "UNAVAILABLE"]), "DiagnosticSuggestion.status") as DiagnosticSuggestion["status"];
+  if (!Array.isArray(suggestion.reasons)) fail("DiagnosticSuggestion.reasons must be an array.", suggestion.reasons);
+  const reasons = suggestion.reasons.map((item, index) => {
+    const reason = exactObject(item, ["statement", "evidence_ids"], [], `DiagnosticSuggestion.reasons[${index}]`);
+    return { statement: string(reason.statement, `DiagnosticSuggestion.reasons[${index}].statement`), evidence_ids: stringArray(reason.evidence_ids, `DiagnosticSuggestion.reasons[${index}].evidence_ids`) };
+  });
+  if (!Array.isArray(suggestion.recommended_actions)) fail("DiagnosticSuggestion.recommended_actions must be an array.", suggestion.recommended_actions);
+  const recommendedActions = suggestion.recommended_actions.map((item, index) => {
+    const action = exactObject(item, ["action", "execution", "rationale_evidence_ids"], [], `DiagnosticSuggestion.recommended_actions[${index}]`);
+    if (action.execution !== "HUMAN_ONLY") fail("DiagnosticSuggestion.recommended_actions.execution must be HUMAN_ONLY.", item);
+    return { action: string(action.action, `DiagnosticSuggestion.recommended_actions[${index}].action`), execution: "HUMAN_ONLY" as const, rationale_evidence_ids: stringArray(action.rationale_evidence_ids, `DiagnosticSuggestion.recommended_actions[${index}].rationale_evidence_ids`) };
+  });
+  return { schema_version: "1.0", incident_id: string(suggestion.incident_id, "DiagnosticSuggestion.incident_id"), evidence_fingerprint: string(suggestion.evidence_fingerprint, "DiagnosticSuggestion.evidence_fingerprint"), status, suggested_category: nullableString(suggestion.suggested_category, "DiagnosticSuggestion.suggested_category"), summary_for_operations: string(suggestion.summary_for_operations, "DiagnosticSuggestion.summary_for_operations"), executive_summary: string(suggestion.executive_summary, "DiagnosticSuggestion.executive_summary"), reasons, confidence: number(suggestion.confidence, "DiagnosticSuggestion.confidence", 0, 1), recommended_actions: recommendedActions, limitations: stringArray(suggestion.limitations, "DiagnosticSuggestion.limitations"), retrieval_trace: object(suggestion.retrieval_trace, "DiagnosticSuggestion.retrieval_trace"), model_version: string(suggestion.model_version, "DiagnosticSuggestion.model_version") };
 }
 
 function parseIncidentEvidence(value: unknown): Incident["evidence"] {

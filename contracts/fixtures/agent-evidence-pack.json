@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "incident_id": "inc_agent_provider_br_001",
+  "correlation_id": "corr_agent_provider_br_001",
+  "evidence_fingerprint": "f83837922a3c27e7f38cdb253adba300",
+  "scope": {
+    "country": [
+      "BR"
+    ],
+    "provider_id": [
+      "dlocal"
+    ]
+  },
+  "window": {
+    "start": "2026-08-30T12:00:00Z",
+    "end": "2026-08-30T12:05:00Z"
+  },
+  "approval_rate_observed": 0.41,
+  "approval_rate_expected": 0.87,
+  "eligible_attempts": 240,
+  "lost_approvals": 110,
+  "impact": {
+    "metric": "GMV_AT_RISK",
+    "method": "EXPECTED_APPROVAL_SHORTFALL",
+    "amount_minor": 4820000,
+    "currency": "BRL"
+  },
+  "detector_evidence": [
+    {
+      "evidence_id": "evd_det_a1b2c3d4e5f60718",
+      "kind": "DETECTOR_CANDIDATE",
+      "statement": "Detector candidate cand_provider_br_001 contributed to this Incident.",
+      "source_ref": "window://2026-08-30T12:00:00Z/provider_id=dlocal"
+    },
+    {
+      "evidence_id": "evd_decline_9f8e7d6c5b4a3210",
+      "kind": "DECLINE_PROFILE",
+      "statement": "Dominant decline profile is PROVIDER_TIMEOUT across 96 eligible attempts in this slice.",
+      "source_ref": "window://decline-profile"
+    }
+  ],
+  "rca_alternatives": [
+    {
+      "category": "PROVIDER_DEGRADATION",
+      "confidence": 0.82
+    },
+    {
+      "category": "COUNTRY_LOCALIZED_DEGRADATION",
+      "confidence": 0.51
+    }
+  ],
+  "decline_profile": {
+    "NO_DECLINE": 98,
+    "PROVIDER_TIMEOUT": 96,
+    "DO_NOT_HONOR": 46
+  },
+  "limitations": [],
+  "authorized_evidence_ids": [
+    "evd_decline_9f8e7d6c5b4a3210",
+    "evd_det_a1b2c3d4e5f60718"
+  ],
+  "root_cause": {
+    "status": "SUPPORTED",
+    "category": "PROVIDER_DEGRADATION",
+    "confidence": 0.82
+  },
+  "engine_version": "cube-rca-v2"
+}

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { LumenApiError, type LumenApiClient } from "@/lib/api/client-interface";
 import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
-import type { IncidentDetail as IncidentDetailData } from "@/lib/api/types";
+import type { DiagnosticSuggestion, IncidentDetail as IncidentDetailData } from "@/lib/api/types";
 import styles from "./incidents.module.css";
 
 export function IncidentDetail({ incidentId, api: suppliedApi }: { incidentId: string; api?: LumenApiClient }) {
@@ -16,6 +16,8 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
   const client = useMemo(() => resolveLumenClient(suppliedApi), [suppliedApi]);
   const [detail, setDetail] = useState<IncidentDetailData | null>(null);
   const [error, setError] = useState<string | null>(client.error);
+  const [suggestion, setSuggestion] = useState<DiagnosticSuggestion | null>(null);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -26,6 +28,21 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
       .catch((reason: unknown) => {
         if (reason instanceof LumenApiError && reason.code === "CANCELLED") return;
         setError(apiErrorMessage(reason, "The incident could not be loaded."));
+      });
+    return () => controller.abort("incident changed");
+  }, [client, incidentId, reload]);
+
+  useEffect(() => {
+    if (!client.api) return;
+    const controller = new AbortController();
+    void client.api.getDiagnosticSuggestion(incidentId, { signal: controller.signal })
+      .then(setSuggestion)
+      .catch((reason: unknown) => {
+        if (reason instanceof LumenApiError && reason.code === "CANCELLED") return;
+        setSuggestion(null);
+        setSuggestionError(reason instanceof LumenApiError && reason.code === "NOT_FOUND"
+          ? "No agent hypothesis has been published for this incident."
+          : apiErrorMessage(reason, "The agent hypothesis is unavailable. The engine diagnosis remains available."));
       });
     return () => controller.abort("incident changed");
   }, [client, incidentId, reload]);
@@ -48,7 +65,7 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
     </section>
 
     <section className={styles.twoColumn}>
-      <article className={`${styles.card} ${styles.current}`}><p className={styles.label}>What failed</p><h2>Current diagnosis</h2><div className={styles.meta}><Field label="Cause status" value={incident.root_cause.status} /><Field label="Category" value={incident.root_cause.category ?? "Not isolated"} /><Field label="Confidence" value={`${Math.round(incident.root_cause.confidence * 100)}%`} /></div>
+      <article className={`${styles.card} ${styles.current}`}><p className={styles.label}>Deterministic engine</p><h2>Engine cause</h2><div className={styles.meta}><Field label="Cause status" value={incident.root_cause.status} /><Field label="Category" value={incident.root_cause.category ?? "Not isolated"} /><Field label="Confidence" value={`${Math.round(incident.root_cause.confidence * 100)}%`} /></div>
         {inconclusive ? <p className={styles.warning}><strong>Current cause remains INCONCLUSIVE.</strong> Historical similarity can guide investigation, but it does not confirm this cause.</p> : null}
         <h3>What happened</h3><p>{explanation.what_happened}</p><h3>Where and why</h3><p>{explanation.where_and_why}</p>
         <h3>Confidence factors</h3><div className={styles.factorList}>{Object.entries(incident.root_cause.confidence_factors).map(([name, value]) => <div className={styles.factor} key={name}><span>{humanize(name)}</span><progress aria-label={`${humanize(name)} confidence factor`} max={1} value={value} /><strong>{Math.round(value * 100)}%</strong></div>)}</div>
@@ -62,19 +79,31 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
       </article>
     </section>
 
-    <section className={`${styles.card} ${styles.actionCard}`}><div><p className={styles.label}>What to do</p><h2>Human recommendation</h2></div><span className={styles.humanOnly}>HUMAN_ONLY</span><p className={styles.actionText}>{explanation.recommended_action}</p><div className={styles.meta}><Field label="Explanation playbook" value={explanation.playbook_id} /><Field label="Execution" value={explanation.execution} /></div><div className={styles.actionList}>{incident.recommendations.map((item) => <article key={`${item.playbook_id}-${item.action}`}><strong>{item.playbook_id}</strong><p>{item.action}</p><small>{item.recommendation_class ? `${humanize(item.recommendation_class)} · ` : ""}{item.execution} · Rationale: {item.rationale_evidence_ids.join(", ") || "Not provided"}</small></article>)}</div></section>
+    <AgentHypothesis suggestion={suggestion} error={suggestionError} loading={!suggestion && !suggestionError} onRetry={() => { setSuggestion(null); setSuggestionError(null); setReload((value) => value + 1); }} />
 
-    <section className={styles.card}><p className={styles.label}>Why the system says this</p><h2>Evidence trail</h2><div className={styles.evidenceGrid}>{incident.evidence.map((evidence) => <article className={styles.evidenceItem} key={evidence.evidence_id}><div><span className={styles.evidenceKind}>{evidence.kind}</span><code>{evidence.evidence_id}</code></div><p>{evidence.statement}</p><small>Source: {evidence.source_ref}</small></article>)}</div></section>
+    <section className={`${styles.card} ${styles.actionCard}`}><div><p className={styles.label}>Human decision</p><h2>Human recommendation</h2></div><span className={styles.humanOnly}>HUMAN_ONLY</span><p className={styles.actionText}>{explanation.recommended_action}</p><div className={styles.meta}><Field label="Explanation playbook" value={explanation.playbook_id} /><Field label="Execution" value={explanation.execution} /></div><div className={styles.actionList}>{incident.recommendations.map((item) => <article key={`${item.playbook_id}-${item.action}`}><strong>{item.playbook_id}</strong><p>{item.action}</p><small>{item.recommendation_class ? `${humanize(item.recommendation_class)} · ` : ""}{item.execution} · Rationale: {item.rationale_evidence_ids.join(", ") || "Not provided"}</small></article>)}</div></section>
 
-    <section className={`${styles.card} ${styles.memory}`}><p className={styles.label}>Historical context</p><h2>Incident memory · {memory.memory_status}</h2>
+    <section className={styles.card}><p className={styles.label}>Current observed facts</p><h2>Evidence</h2><div className={styles.evidenceGrid}>{incident.evidence.map((evidence) => <article className={styles.evidenceItem} key={evidence.evidence_id}><div><span className={styles.evidenceKind}>{evidence.kind}</span><code>{evidence.evidence_id}</code></div><p>{evidence.statement}</p><small>Source: {evidence.source_ref}</small></article>)}</div></section>
+
+    <section className={`${styles.card} ${styles.memory}`}><p className={styles.label}>Historical context only</p><h2>Precedent · {memory.memory_status}</h2>
       {memory.memory_status === "MATCH_FOUND" ? <><p><strong>Historical match found.</strong> It is contextual evidence, not proof of the current cause.</p><div className={styles.matchList}>{memory.matches.map((match) => <article className={styles.match} key={match.incident_id}><h3>{match.incident_id}</h3><div className={styles.meta}><Field label="Occurred at" value={formatDate(match.occurred_at)} /><Field label="Confirmation" value={match.confirmation} /><Field label="Confirmed cause" value={match.confirmed_cause} /><Field label="Structured score" value={`${Math.round(match.structured_score * 100)}%`} /><Field label="Semantic score" value={match.semantic_score === null || match.semantic_score === undefined ? "Not available" : `${Math.round(match.semantic_score * 100)}%`} /><Field label="Prior playbook" value={match.prior_playbook_id} /></div><p><strong>Matching:</strong> {match.matching_factors.join(", ") || "None"}</p><p><strong>Different:</strong> {match.different_factors.join(", ") || "None"}</p><p><strong>Evidence:</strong> {match.evidence_ids.join(", ") || "None"}</p></article>)}</div></> : null}
       {memory.memory_status === "NO_PRECEDENT" ? <p role="status"><strong>NO_PRECEDENT.</strong> No historical match was found. This is not a memory outage.</p> : null}
       {memory.memory_status === "MEMORY_UNAVAILABLE" ? <p className={styles.warning} role="status"><strong>MEMORY_UNAVAILABLE.</strong> Historical retrieval is unavailable; this is different from NO_PRECEDENT.</p> : null}
       <details className={styles.trace}><summary>Memory retrieval trace</summary><div className={styles.meta}><Field label="Query incident" value={memory.query_incident_id} /><Field label="Correlation ID" value={memory.correlation_id} /><Field label="Filter" value={memory.retrieval_trace.cypher_filter} /><Field label="Candidates" value={String(memory.retrieval_trace.candidate_count)} /><Field label="Embedding model" value={memory.retrieval_trace.embedding_model ?? "Not used"} /><Field label="Index version" value={memory.retrieval_trace.index_version} /><Field label="Fallback" value={memory.retrieval_trace.fallback_used ? "Used" : "Not used"} /></div></details>
     </section>
 
-    <section className={styles.card}><p className={styles.label}>Grounded explanation</p><h2>Agent output</h2><p>{explanation.recurrence_statement ?? "No recurrence statement was returned."}</p><h3>Evidence IDs used</h3><EvidenceIds ids={explanation.evidence_ids} /><h3>Limitations</h3><ul className={styles.limitations}>{[...new Set([...incident.limitations, ...explanation.limitations])].map((item) => <li key={item}>{item}</li>)}</ul></section>
+    <section className={styles.card}><p className={styles.label}>Scope and interpretation limits</p><h2>Operational notes</h2><p>{explanation.recurrence_statement ?? "No recurrence statement was returned."}</p><h3>Evidence IDs used by the operational explanation</h3><EvidenceIds ids={explanation.evidence_ids} /><h3>Limitations</h3><ul className={styles.limitations}>{[...new Set([...incident.limitations, ...explanation.limitations])].map((item) => <li key={item}>{item}</li>)}</ul></section>
   </main>;
+}
+
+function AgentHypothesis({ suggestion, error, loading, onRetry }: { suggestion: DiagnosticSuggestion | null; error: string | null; loading: boolean; onRetry: () => void }) {
+  return <section className={`${styles.card} ${styles.agentCard}`} aria-labelledby="agent-hypothesis-title"><div className={styles.cardTop}><div><p className={styles.label}>Read-only agent</p><h2 id="agent-hypothesis-title">Agent hypothesis</h2></div><span className={styles.agentBadge}>{suggestion?.status ?? (loading ? "LOADING" : "NOT PUBLISHED")}</span></div>
+    {loading ? <p role="status">Loading the separately published agent hypothesis…</p> : null}
+    {error ? <div className={styles.agentNotice} role="status"><p>{error}</p><button className={styles.button} type="button" onClick={onRetry}>Retry hypothesis</button></div> : null}
+    {suggestion ? <><div className={styles.meta}><Field label="Suggested category" value={suggestion.suggested_category ?? "No category suggested"} /><Field label="Confidence" value={`${Math.round(suggestion.confidence * 100)}%`} /><Field label="Model" value={suggestion.model_version} /></div><p className={styles.agentSummary}>{suggestion.summary_for_operations}</p>
+      {suggestion.status === "SUGGESTED" ? <><h3>Reasons cited by the agent</h3><div className={styles.agentReasons}>{suggestion.reasons.map((reason) => <article key={`${reason.statement}-${reason.evidence_ids.join("-")}`}><p>{reason.statement}</p><EvidenceIds ids={reason.evidence_ids} /></article>)}</div><h3>Agent-proposed investigation steps</h3><div className={styles.actionList}>{suggestion.recommended_actions.map((action) => <article key={`${action.action}-${action.rationale_evidence_ids.join("-")}`}><p>{action.action}</p><small>{action.execution} · Rationale: {action.rationale_evidence_ids.join(", ") || "Not provided"}</small></article>)}</div></> : <p className={styles.warning}><strong>{suggestion.status}.</strong> The agent did not publish a causal hypothesis; use the engine cause and current evidence for the investigation.</p>}
+      {suggestion.limitations.length ? <><h3>Agent limitations</h3><ul className={styles.limitations}>{suggestion.limitations.map((item) => <li key={item}>{item}</li>)}</ul></> : null}</> : null}
+  </section>;
 }
 
 function Field({ label, value }: { label: string; value: string }) { return <div><p className={styles.label}>{label}</p><p className={styles.value}>{value}</p></div>; }
