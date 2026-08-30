@@ -3872,3 +3872,7 @@ Não há commits remotos divergentes, o diff pertence a esta recuperação e os 
 #### Gatilhos de revisão
 
 Rejeição do push, divergência remota, falha de gate ou descoberta de contrato incompatível interrompe a publicação.
+
+#### Adendos
+
+- **2026-08-30T00:39:43-03:00:** PASS — commit `2cf5091` (`feat: persist grounded incident pipeline`) foi criado diretamente na `main` e `git push origin main` atualizou `origin/main` de `613df52` para `2cf5091`. Não houve force push, merge ou rebase.
