@@ -391,7 +391,7 @@ André: mock explícito → client live → Logs/Detail → Incidents → browse
 | `TASK-PIPE-002/003` | concluída localmente | worker chama aggregation/detector/RCA/repository; API usa repository no modo live e fixtures só com `DEMO_MODE`. |
 | `TASK-PIPE-004` | concluída localmente | teste público batch → terminal → Incident `INCONCLUSIVE` → TDI grounded, sem fixture, passou. Suite completa: 168 testes. |
 | `TASK-INT-003` | parcialmente concluída / holdout bloqueado | benchmark existente lido: 8.256 eventos, 90 partições e digest `d3fb…5d2461`; não será repetido. O conjunto de avaliação confirma invariantes, mas `root_cause_accuracy`, `scope_exact_match`, `false_incidents` e abstention estatística são `NOT RUN` sem ground truth de holdout. |
-| `TASK-DEP-002` | bloqueada externamente | requer serviço Railway, Volume, domínio e origins reais para CORS/restart/health. |
+| `TASK-DEP-002` | parcial deployed | Railway publicou `e50863d`; health 200 e suite web live online 35/35 passaram. Volume após restart/redeploy, CORS com origins reais e Neo4j sem fallback em Incident persistido continuam pendentes. |
 
 ### Evidências da integração de Pessoa B
 
@@ -399,8 +399,8 @@ André: mock explícito → client live → Logs/Detail → Incidents → browse
 | --- | --- | --- |
 | `TASK-WEB-001..004` | concluída localmente | factory live/offline explícita, Logs/Detail/Incidents ligados a `CTR-API-001 v3` e `CTR-TDI-001 v1`; runtime live não importa fixture, polling é cancelável e API indisponível produz erro honesto. |
 | `TASK-WEB-005` | concluída localmente | suite web live 35/35 contra a imagem final exige `COMPLETE`, outcome e ausência de `UNKNOWN`; o E2E Python prova a transação gatilho ligada ao Incident persistido. |
-| `TASK-DEP-003` / `TASK-QA-001` | parcial local / pendente externo | build e browser local passaram em desktop/mobile, incluindo sample → submit → log/detail/Incidents, Neo4j sem fallback e console limpo. Vercel → Railway, allowlist CORS real, persistência/restart e browser deployed exigem URLs externas. |
+| `TASK-DEP-003` / `TASK-QA-001` | parcial deployed | build e browser local passaram em desktop/mobile; Vercel reportou deployment concluído e Railway passou live 35/35. O domínio Vercel exato permanece inacessível sem sessão autenticada e a allowlist não foi configurada; browser Vercel/CORS continuam pendentes. |
 
 ### Parecer do Integration Contract Guardian — INTEGRATION 2.2.1
 
-**Estado: `READY WITH WARNINGS`.** Não há mudança de schema, endpoint ou semântica pública. Produtores e consumidores usam as mesmas fixtures/OpenAPI; janelas preservam correlação/moeda e a conclusão terminal é atômica entre canonical, Incident, link e record. A imagem de deploy instala o lock congelado, extra Neo4j e configuração do simulator. Suites, imagem, live smoke e browser local passaram; ausência de corrida em `origin/main` continua gate imediato do push. Deploy/browser online não podem ser promovidos a concluídos sem evidência externa.
+**Estado: `READY WITH WARNINGS`.** Não há mudança de schema, endpoint ou semântica pública. Produtores e consumidores usam as mesmas fixtures/OpenAPI; janelas preservam correlação/moeda e a conclusão terminal é atômica entre canonical, Incident, link e record. A imagem de deploy instala o lock congelado, extra Neo4j e configuração do simulator. Suites, imagem, browser local e Railway live passaram; `main@e50863d` está publicada. Vercel browser/CORS, restart do Volume e Neo4j online sem fallback continuam warnings explícitos.
