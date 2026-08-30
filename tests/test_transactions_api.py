@@ -52,8 +52,15 @@ def test_batch_persists_before_202_and_can_be_read_back():
 
     transaction = client.get(f"/v1/transactions/{accepted['transaction_ids'][0]}")
     assert transaction.status_code == 200
-    assert transaction.json()["status"] == "PROCESSING"
-    assert transaction.json()["processing"] == {"stage": "RECEIVED", "progress_percent": 0, "failure_code": None}
+    body = transaction.json()
+    # The durable worker (TASK-TXN-WORKER-001) may already have driven this to a
+    # terminal state by the time we read it back — persist-before-202 is what's
+    # under test here, not how far the pipeline got.
+    assert body["status"] in {"PROCESSING", "SUCCEEDED", "FAILED", "UNKNOWN"}
+    if body["status"] == "PROCESSING":
+        assert body["processing"]["stage"] in {"RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING"}
+    else:
+        assert body["processing"] == {"stage": "COMPLETE", "progress_percent": 100, "failure_code": None}
 
     batch = client.get(f"/v1/transaction-batches/{accepted['batch_id']}")
     assert batch.status_code == 200

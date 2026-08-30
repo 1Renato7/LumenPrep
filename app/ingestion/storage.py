@@ -60,7 +60,9 @@ CREATE TABLE IF NOT EXISTS transaction_records (
     processing_json VARCHAR NOT NULL,
     outcome_json VARCHAR,
     classification_json VARCHAR,
-    correlation_id VARCHAR NOT NULL
+    correlation_id VARCHAR NOT NULL,
+    lease_owner VARCHAR,
+    lease_expires_at TIMESTAMP
 );
 """
 

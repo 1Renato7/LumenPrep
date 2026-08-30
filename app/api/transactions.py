@@ -14,10 +14,11 @@ from random import Random, SystemRandom
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.ingestion.storage import get_connection
+from app.worker.transaction_worker import run_batch_to_completion
 
 router = APIRouter(prefix="/v1", tags=["transactions"])
 
@@ -302,16 +303,19 @@ def generate_transaction_samples(request: SampleRequest) -> dict[str, Any]:
 @router.post("/transaction-batches", status_code=status.HTTP_202_ACCEPTED)
 def create_transaction_batch(
     request: BatchRequest,
+    background_tasks: BackgroundTasks,
     idempotency_header: Annotated[str, Header(alias="Idempotency-Key", min_length=8)],
 ) -> dict[str, Any]:
     if idempotency_header != request.idempotency_key:
         raise HTTPException(status_code=422, detail="IDEMPOTENCY_KEY_REQUIRED_OR_MISMATCH")
     try:
-        return _create_batch(request)
+        response = _create_batch(request)
     except IdempotencyConflict as error:
         raise HTTPException(status_code=409, detail="IDEMPOTENCY_KEY_CONFLICT") from error
     except Exception as error:
         raise HTTPException(status_code=503, detail="INGESTION_UNAVAILABLE") from error
+    background_tasks.add_task(run_batch_to_completion, response["batch_id"])
+    return response
 
 
 @router.get("/transaction-batches/{batch_id}")
