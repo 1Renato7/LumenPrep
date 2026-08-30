@@ -115,6 +115,7 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 - **Plano geral:** 2.8.0; **contratos:** `CTR-INC-001 v1` e `CTR-TXL-001 v1` aditivos; **decisão:** `DEC-036` / `FL-20260830-TEAM-039`.
 - A persistência calcula uma assinatura de recorrência por categoria causal, métrica e escopo completo, separada do fingerprint de entrega por janela. O primeiro `detected_at` dessa assinatura permanece estável nas ocorrências futuras.
 - A API devolve `recurrence_first_detected_at` no Incident e, nos logs de transação, em cada Incident relacionado. A interface deve exibir a data explicitamente, sem inferi-la de precedentes GraphRAG.
+
 ## Adendo 2.9.1 — default do runtime OpenAI
 
 - **Plano geral:** 2.9.1; **contrato interno:** `CTR-AGT-RUN-001 v1`; **decisão:** `DEC-039` / `FL-20260830-ROGERIO-031`.
