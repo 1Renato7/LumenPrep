@@ -2556,6 +2556,75 @@ Mudança nos schemas `CTR-TXN/TXL`, falha de equivalência entre harness e batch
 
 - **2026-08-29T20:10:32-03:00:** conflitos de merge de `renato/tarefa44@602ae9d` foram resolvidos preservando o plano transaction-first da `main`; o código foi integrado exclusivamente como `CMP-HARNESS-001` no commit `6d6e0b4`. `CTR-TXN/TXL/API v3` não foram promovidos nem alterados. PASS: revisão sem bloqueadores, `python -m pytest -x -vv` com 59 testes aprovados e smoke do Swagger com `POST /transactions` = `202`, `listener_cursor=1` e `backlog=0`, sem erros de console. `LUM2-61/62` permanecem as tarefas de adapter/lifecycle.
 
+### FL-20260829-RENATO-006 — Configurar perfis de latência e decline com fallback sem alterar CTR-EVT-001
+
+- **Timestamp:** 2026-08-29T20:42:43-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Codex como implementador e recorder
+- **Categoria:** data | contract | quality
+- **Escopo:** `LUM2-46`, `TASK-DATA-004`, `CMP-DATA-001`, `CTR-EVT-001 v1`, `CTR-SCN-001`
+- **Links:** `config/generator/v1/default.json`; `app/simulation/outcomes.py`; `app/simulation/historical.py`; `tests/test_simulation_profiles.py`; branch `renato/tarefa46`
+- **Supersedes / superseded by:** substitui os placeholders de latência e decline de `TASK-DATA-002`; não altera o schema congelado
+
+#### Contexto e pergunta
+
+O outcome generator e o harness histórico ainda emitiam uma faixa de latência genérica e `GENERIC_DECLINE`, impedindo calibração de p95/timeout e diagnóstico por código. Era necessário adicionar diferenças por provider e códigos brutos/normalizados sem criar uma versão incompatível de `CTR-EVT-001`.
+
+#### Decisão
+
+Usar perfis versionados no config do gerador: p50/p95, multiplicador de timeout e latência do orquestrador por provider; códigos de decline ponderados por provider e status. Um perfil `default` atende providers novos sem mudança de schema. Timeout e erro recebem somente seus códigos técnicos compatíveis; sucesso não recebe decline.
+
+#### Critérios e por que agora
+
+`LUM2-46` precisa desbloquear benchmark e detector com dados observáveis e reproduzíveis. O contrato já comporta `timing.orchestrator_latency_ms` opcional e `decline` normalizado, portanto uma mudança no payload seria custo de integração sem ganho.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter valores genéricos no código | menor diff | p95 sem calibração e diagnóstico sem código | FACT: placeholders atuais | não atende `LUM2-46` |
+| Adicionar campos ou v2 de `CTR-EVT-001` | pode carregar mais telemetria | exige mudança coordenada de produtores e consumidores | FACT: campos atuais já suportam o dado | custo sem necessidade |
+| Perfis no config com fallback | reproduzível, auditável e extensível | parâmetros exigem calibração futura | TEST: distribuição e coerência são verificáveis localmente | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `CTR-EVT-001 v1` aceita timing por estágio e decline bruto/normalizado sem schema novo.
+- **TEST:** 62 testes passaram; os testes novos comprovam repetição por seed, ordem de p50/p95 entre providers, baixa amostra, ausência de ground truth e compatibilidade status/código.
+- **ASSUMPTION:** os parâmetros representam dados sintéticos plausíveis para a demo, não uma medição de produção.
+- **UNKNOWN:** a calibração definitiva dos thresholds depende de `TASK-DATA-005` e dos evals do detector.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** caudas de latência e declines explicáveis para p95, timeout e RCA.
+- **Abrimos mão de:** fidelidade a uma tabela privada de códigos de um adquirente real.
+- **Dívida/limitação:** os perfis continuam estáticos e precisam de benchmark/eval antes de qualquer ajuste de threshold.
+- **Risco residual:** um provider novo cai no perfil default; o fallback é explícito, mas pode não refletir sua distribuição real.
+
+#### Consequências e propagação
+
+- **Produto/demo:** cenários e tráfego histórico exibem latência e declines coerentes sem expor ground truth.
+- **Arquitetura/contratos:** `CTR-EVT-001 v1` permanece compatível; não há change control de schema.
+- **Pessoas/branches:** `LUM2-47` pode materializar os dados; detector/RCA recebem códigos normalizados.
+- **Plano/Linear:** a issue `LUM2-46` é atualizada para pronta somente após os gates finais e commits desta branch.
+- **Testes/observabilidade:** perfis e fallback são cobertos por teste determinístico; benchmark quantitativo fica em `LUM2-47`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** mesma seed repete os eventos e providers mantêm p50/p95 distintos, enquanto falhas carregam decline compatível.
+- **Caminho feliz:** gerar eventos normal/histórico, validar schema e consumir na ingestão.
+- **Caso difícil/adverso:** provider desconhecido usa fallback, batch de baixa amostra não expõe ground truth e timeout nunca recebe decline de issuer.
+- **Resultado observado:** PASS — suíte completa com 62 testes aprovada; interface pública não foi exercitada porque a mudança é interna de geração/harness.
+- **Fallback:** perfil `default` mantém eventos válidos até que uma distribuição específica seja configurada.
+
+#### Gatilhos de revisão
+
+Benchmark de `LUM2-47` incompatível, novo provider sem perfil aceitável, ou contrato futuro que exija mais estágios/códigos exige nova decisão e possível change control.
+
+#### Adendos
+
+- **2026-08-29T21:00:00-03:00:** browser acceptance local passou em servidor com `DEMO_MODE=true` e `DUCKDB_PATH=:memory:`. Pelo Swagger, `POST /demo/scenarios/scenario_provider_br/inject` retornou `202 ACCEPTED` com `events_published=54`; em seguida `GET /transactions/health` retornou `published=54`, `listener_cursor=54` e `backlog=0`. Console sem erros; há somente warning pré-existente do Swagger CDN sobre deep-link whitespace.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._

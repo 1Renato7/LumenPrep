@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from math import log
 from typing import Any
 
 import numpy as np
@@ -132,10 +133,8 @@ class HistoricalTransactionGenerator:
         dimensions = self._sample_dimensions(count)
         seconds = self._random.integers(0, 60, size=count)
         amounts = self._random.lognormal(mean=10.2, sigma=0.75, size=count).round().astype(int)
-        provider_latencies = self._random.lognormal(mean=6.2, sigma=0.42, size=count).round().astype(int)
-        slow = np.isin(dimensions["status"], ("TIMEOUT", "ERROR"))
-        provider_latencies[slow] *= 4
-        total_latencies = provider_latencies + self._random.integers(10, 80, size=count)
+        provider_latencies, orchestrator_latencies = self._sample_timings(dimensions)
+        total_latencies = provider_latencies + orchestrator_latencies
 
         events: list[dict[str, Any]] = []
         for index in range(count):
@@ -160,23 +159,44 @@ class HistoricalTransactionGenerator:
                 "payment_method_category": str(dimensions["payment_method_category"][index]),
                 "status": status,
                 "timing": {
+                    "orchestrator_latency_ms": int(orchestrator_latencies[index]),
                     "provider_latency_ms": int(provider_latencies[index]),
                     "total_latency_ms": int(total_latencies[index]),
                 },
                 "correlation_id": f"history:{self._config.fingerprint[:12]}",
                 "is_test": True,
             }
-            if status == "DECLINED":
-                event["decline"] = {
-                    "normalized_code": "GENERIC_DECLINE",
-                    "category": "PROVIDER",
-                    "retryability": "RETRY_LATER",
-                    "raw_code": None,
-                    "raw_message": None,
-                    "mapping_version": "historical-v1",
-                }
+            decline = self._sample_decline(str(dimensions["provider_id"][index]), status)
+            if decline is not None:
+                event["decline"] = decline.as_payload()
             events.append(event)
         return events
+
+    def _sample_timings(self, dimensions: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+        count = len(dimensions["provider_id"])
+        provider_latencies = np.empty(count, dtype=int)
+        orchestrator_latencies = np.empty(count, dtype=int)
+        providers = dimensions["provider_id"]
+        statuses = dimensions["status"]
+        for provider_id in np.unique(providers):
+            mask = providers == provider_id
+            profile = self._config.latency_profile_for(str(provider_id))
+            sigma = log(profile.p95_ms / profile.p50_ms) / 1.6448536269514722
+            values = self._random.lognormal(mean=log(profile.p50_ms), sigma=sigma, size=int(mask.sum())).round().astype(int)
+            slow = np.isin(statuses[mask], ("TIMEOUT", "ERROR"))
+            values[slow] = (values[slow] * profile.timeout_multiplier).round().astype(int)
+            provider_latencies[mask] = np.maximum(values, 1)
+            orchestrator_latencies[mask] = self._random.integers(
+                profile.orchestrator_min_ms, profile.orchestrator_max_ms + 1, size=int(mask.sum())
+            )
+        return provider_latencies, orchestrator_latencies
+
+    def _sample_decline(self, provider_id: str, status: str):
+        codes = self._config.decline_codes_for(provider_id, status)
+        if not codes:
+            return None
+        probabilities = np.array([code.probability for code in codes], dtype=float)
+        return codes[int(self._random.choice(len(codes), p=probabilities))]
 
     def _sample_dimensions(self, count: int) -> dict[str, np.ndarray]:
         sampled: dict[str, np.ndarray] = {}

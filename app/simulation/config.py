@@ -21,6 +21,54 @@ class WeightedValue:
 
 
 @dataclass(frozen=True)
+class LatencyProfile:
+    """Provider timing parameters for deterministic synthetic attempts."""
+
+    p50_ms: int
+    p95_ms: int
+    timeout_multiplier: float
+    orchestrator_min_ms: int
+    orchestrator_max_ms: int
+
+    def validate(self, provider_id: str) -> None:
+        if self.p50_ms <= 0 or self.p95_ms < self.p50_ms:
+            raise ConfigurationError(f"latency profile {provider_id} must have 0 < p50_ms <= p95_ms")
+        if self.timeout_multiplier <= 1:
+            raise ConfigurationError(f"latency profile {provider_id} timeout_multiplier must be greater than 1")
+        if self.orchestrator_min_ms < 0 or self.orchestrator_max_ms < self.orchestrator_min_ms:
+            raise ConfigurationError(f"latency profile {provider_id} has invalid orchestrator bounds")
+
+
+@dataclass(frozen=True)
+class DeclineCode:
+    normalized_code: str
+    category: str
+    retryability: str
+    raw_code: str
+    raw_message: str
+    statuses: tuple[str, ...]
+    probability: float
+
+    def validate(self, provider_id: str) -> None:
+        if not all(isinstance(value, str) and value for value in self.__dict__.values() if isinstance(value, str)):
+            raise ConfigurationError(f"decline profile {provider_id} contains an empty code field")
+        if not self.statuses or any(status not in {"DECLINED", "TIMEOUT", "ERROR"} for status in self.statuses):
+            raise ConfigurationError(f"decline profile {provider_id} contains an invalid status")
+        if not 0 < self.probability <= 1:
+            raise ConfigurationError(f"decline profile {provider_id} has an invalid probability")
+
+    def as_payload(self) -> dict[str, str]:
+        return {
+            "normalized_code": self.normalized_code,
+            "category": self.category,
+            "retryability": self.retryability,
+            "raw_code": self.raw_code,
+            "raw_message": self.raw_message,
+            "mapping_version": "generator-v1",
+        }
+
+
+@dataclass(frozen=True)
 class Distribution:
     dimension: str
     cardinality: int
@@ -78,6 +126,8 @@ class GeneratorConfig:
     sampling_order: tuple[str, ...]
     dimensions: Mapping[str, Distribution]
     conditional_probabilities: tuple[ConditionalDistribution, ...]
+    latency_profiles: Mapping[str, LatencyProfile]
+    decline_profiles: Mapping[str, tuple[DeclineCode, ...]]
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "GeneratorConfig":
@@ -110,6 +160,24 @@ class GeneratorConfig:
                 sampling_order=tuple(payload["sampling_order"]),
                 dimensions=dimensions,
                 conditional_probabilities=conditional_probabilities,
+                latency_profiles={
+                    provider: LatencyProfile(**profile) for provider, profile in payload["latency_profiles"].items()
+                },
+                decline_profiles={
+                    provider: tuple(
+                        DeclineCode(
+                            normalized_code=code["normalized_code"],
+                            category=code["category"],
+                            retryability=code["retryability"],
+                            raw_code=code["raw_code"],
+                            raw_message=code["raw_message"],
+                            statuses=tuple(code["statuses"]),
+                            probability=code["probability"],
+                        )
+                        for code in profile
+                    )
+                    for provider, profile in payload["decline_profiles"].items()
+                },
             )
         except (KeyError, TypeError) as error:
             raise ConfigurationError(f"Invalid generator configuration shape: {error}") from error
@@ -149,6 +217,18 @@ class GeneratorConfig:
         for rule in self.conditional_probabilities:
             self._validate_rule(rule)
         self._validate_rule_ambiguity()
+        if "default" not in self.latency_profiles or "default" not in self.decline_profiles:
+            raise ConfigurationError("latency_profiles and decline_profiles require a default fallback")
+        for provider, profile in self.latency_profiles.items():
+            profile.validate(provider)
+        for provider, codes in self.decline_profiles.items():
+            if not codes:
+                raise ConfigurationError(f"decline profile {provider} must contain at least one code")
+            for code in codes:
+                code.validate(provider)
+            for status in {status for code in codes for status in code.statuses}:
+                if not isclose(sum(code.probability for code in codes if status in code.statuses), 1.0, abs_tol=1e-9):
+                    raise ConfigurationError(f"decline profile {provider} probabilities for {status} must sum to 1")
 
     def distribution_for(self, dimension: str, context: Mapping[str, str]) -> tuple[WeightedValue, ...]:
         matching_rules = [
@@ -183,9 +263,20 @@ class GeneratorConfig:
                 }
                 for rule in self.conditional_probabilities
             ],
+            "latency_profiles": {provider: profile.__dict__ for provider, profile in sorted(self.latency_profiles.items())},
+            "decline_profiles": {
+                provider: [code.__dict__ for code in codes] for provider, codes in sorted(self.decline_profiles.items())
+            },
         }
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return sha256(canonical.encode("utf-8")).hexdigest()
+
+    def latency_profile_for(self, provider_id: str) -> LatencyProfile:
+        return self.latency_profiles.get(provider_id, self.latency_profiles["default"])
+
+    def decline_codes_for(self, provider_id: str, status: str) -> tuple[DeclineCode, ...]:
+        codes = self.decline_profiles.get(provider_id, self.decline_profiles["default"])
+        return tuple(code for code in codes if status in code.statuses)
 
     def _validate_rule(self, rule: ConditionalDistribution) -> None:
         if not isinstance(rule.rule_id, str) or not rule.rule_id:

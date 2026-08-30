@@ -2,8 +2,9 @@
 injecao de cenarios (CTR-SCN-001), aplicando `effects` sobre as tentativas
 que casam `filters`, e publicando-as em CTR-STR-001.
 
-decline_code_distribution do CTR-SCN-001 nao e aplicado ainda — decline
-codes realistas sao TASK-DATA-003 (Renato); aqui so approval_rate_multiplier,
+`decline_code_distribution` do CTR-SCN-001 ainda não força uma distribuição
+específica de cenário; cada status de falha recebe o perfil realista e
+compatível de TASK-DATA-004. Aqui são aplicados approval_rate_multiplier,
 latency_p95_multiplier e timeout_rate.
 """
 
@@ -100,7 +101,14 @@ class LiveStreamController:
                 matched_flags.append(is_match)
                 if is_match:
                     matched += 1
-                    attempt = replace(attempt, status=_resample_status(self._random, attempt.status, scenario.effects))
+                    # A changed status cannot retain a decline selected for the
+                    # original outcome. OutcomeGenerator picks a compatible code
+                    # when materializing the adjusted canonical event.
+                    attempt = replace(
+                        attempt,
+                        status=_resample_status(self._random, attempt.status, scenario.effects),
+                        decline=None,
+                    )
                 adjusted.append(attempt)
 
             for attempt, event, is_match in zip(adjusted, self._generator.to_canonical_events(adjusted), matched_flags):
