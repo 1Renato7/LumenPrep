@@ -71,6 +71,14 @@ export function createMockLumenApiClient(): MockLumenApiClient {
       });
       return parseTransactionSampleResponse(fixture);
     },
+    async getLiveDemoTrials(options) {
+      checkCancelled(options);
+      return { schema_version: "1.0", enabled: false, reason: "LIVE_DEMO_TRIALS_DISABLED", execution_mode: "QUEUED_SAFE", trials: [] };
+    },
+    async startLiveDemoTrial(_trialId, _idempotencyKey, options) {
+      checkCancelled(options);
+      throw new LumenApiError("HTTP", null, { detail: "LIVE_DEMO_TRIALS_DISABLED" }, "Live demo trials are unavailable in the fixture client.");
+    },
     async createTransactionBatch(_request, options) {
       checkCancelled(options);
       return parseTransactionBatchAccepted(batchAcceptedFixture);

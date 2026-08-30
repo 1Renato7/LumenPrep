@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     duckdb_path: str | None = None
     demo_mode: bool = False
     transaction_reset_key: str | None = None
+    # Explicitly opt-in trial controls for a live Incident demo. This is kept
+    # distinct from DEMO_MODE, which intentionally swaps Incident reads for
+    # fixtures and therefore cannot prove the persisted pipeline.
+    demo_live_trials_enabled: bool = False
 
     cors_allowed_origins: str = ""
 

@@ -9,6 +9,35 @@ servers:
   - url: http://127.0.0.1:8000/v1
     description: Local development
 paths:
+  /demo/live-trials:
+    get:
+      operationId: getLiveDemoTrials
+      responses:
+        "200":
+          description: Server-side availability and fixed metadata for reversible live demo trials
+          content:
+            application/json:
+              schema: {$ref: "live-demo-trials.schema.json"}
+  /demo/live-trials/{trial_id}:
+    post:
+      operationId: startLiveDemoTrial
+      parameters:
+        - name: trial_id
+          in: path
+          required: true
+          schema: {type: string, enum: [deterministic, graph_enriched]}
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, minLength: 8, maxLength: 48}
+      responses:
+        "202":
+          description: An own baseline batch is complete and a fixed 25-transaction current batch is queued
+          content:
+            application/json:
+              schema: {$ref: "live-demo-trial-accepted.schema.json"}
+        "403": {description: LIVE_DEMO_TRIALS_DISABLED or LIVE_INCIDENTS_REQUIRE_DEMO_MODE_FALSE}
+        "422": {description: UNKNOWN_LIVE_DEMO_TRIAL}
   /refusal-codes/resolve:
     get:
       operationId: resolveRefusalCode

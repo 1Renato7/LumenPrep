@@ -122,7 +122,9 @@ def _acquire_lease(con, transaction_id: str, worker_id: str, lease_seconds: int)
     return acquired is not None
 
 
-def _advance_locked(con, transaction_id: str) -> list[SuggestionJob]:
+def _advance_locked(
+    con, transaction_id: str, *, derive_incidents_on_complete: bool = True
+) -> list[SuggestionJob]:
     row = con.execute(
         "SELECT status, processing_json, input_json, correlation_id FROM transaction_records WHERE transaction_id = ?",
         [transaction_id],
@@ -176,7 +178,8 @@ def _advance_locked(con, transaction_id: str) -> list[SuggestionJob]:
                 transaction_id,
             ],
         )
-        derive_incidents_for_correlation(con, row[3], suggestion_jobs=suggestion_jobs)
+        if derive_incidents_on_complete:
+            derive_incidents_for_correlation(con, row[3], suggestion_jobs=suggestion_jobs)
         con.execute("COMMIT")
         transaction_started = False
     except Exception as exc:  # a technical worker failure must never read as a business decline
@@ -203,6 +206,7 @@ def advance_transaction(
     worker_id: str | None = None,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     run_suggestions: bool = True,
+    derive_incidents_on_complete: bool = True,
 ) -> bool:
     """Advance ``transaction_id`` by exactly one stage. Returns False if it is not a
     leasable PROCESSING record (already terminal, or currently leased by someone else).
@@ -217,7 +221,11 @@ def advance_transaction(
     with CONNECTION_LOCK:
         if not _acquire_lease(con, transaction_id, worker_id, lease_seconds):
             return False
-        suggestion_jobs = _advance_locked(con, transaction_id)
+        suggestion_jobs = (
+            _advance_locked(con, transaction_id)
+            if derive_incidents_on_complete
+            else _advance_locked(con, transaction_id, derive_incidents_on_complete=False)
+        )
     if run_suggestions:
         for job in suggestion_jobs:
             # Keep older in-process worker tests/jobs compatible while every newly
@@ -249,7 +257,8 @@ def advance_one(*, worker_id: str | None = None, lease_seconds: int = DEFAULT_LE
 
 
 def run_to_completion(
-    transaction_id: str, *, worker_id: str | None = None, run_suggestions: bool = True
+    transaction_id: str, *, worker_id: str | None = None, run_suggestions: bool = True,
+    derive_incidents_on_complete: bool = True,
 ) -> None:
     """Drive one transaction through every remaining stage. Safe to call again on an
     already-terminal or already-leased transaction — it becomes a no-op."""
@@ -260,17 +269,48 @@ def run_to_completion(
             ).fetchone()
         if row is None or row[0] != "PROCESSING":
             return
-        if not advance_transaction(transaction_id, worker_id=worker_id, run_suggestions=run_suggestions):
+        if not advance_transaction(
+            transaction_id,
+            worker_id=worker_id,
+            run_suggestions=run_suggestions,
+            derive_incidents_on_complete=derive_incidents_on_complete,
+        ):
             return
 
 
-def run_batch_to_completion(batch_id: str) -> None:
+def run_batch_to_completion(
+    batch_id: str, *, derive_incidents_once_after_batch: bool = False
+) -> None:
+    """Complete a batch, optionally deriving its Incident once at the end.
+
+    The deferred mode is for a fixed synthetic demo batch. It still persists and
+    normalizes every event with the durable worker, but avoids recomputing the
+    full aggregate/detector cube after each of its 25 rows. Normal public batch
+    processing preserves the existing immediate-analysis default.
+    """
     with CONNECTION_LOCK:
-        ids = [r[0] for r in get_connection().execute(
-            "SELECT transaction_id FROM transaction_records WHERE batch_id = ?", [batch_id]
-        ).fetchall()]
+        rows = get_connection().execute(
+            "SELECT transaction_id, correlation_id FROM transaction_records WHERE batch_id = ?", [batch_id]
+        ).fetchall()
+    ids = [row[0] for row in rows]
     for transaction_id in ids:
-        run_to_completion(transaction_id)
+        run_to_completion(
+            transaction_id, derive_incidents_on_complete=not derive_incidents_once_after_batch
+        )
+    if not derive_incidents_once_after_batch or not rows:
+        return
+    correlation_ids = {str(row[1]) for row in rows}
+    if len(correlation_ids) != 1:
+        raise RuntimeError("batch records must share exactly one correlation_id")
+    suggestion_jobs: list[SuggestionJob] = []
+    with CONNECTION_LOCK:
+        derive_incidents_for_correlation(
+            get_connection(), next(iter(correlation_ids)), suggestion_jobs=suggestion_jobs
+        )
+    for job in suggestion_jobs:
+        incident, decline_profile = job[0], job[1]
+        refusal_code_summaries = job[2] if len(job) > 2 else []
+        _suggest_for_persisted_incident(incident, decline_profile, refusal_code_summaries)
 
 
 def reconcile_stuck(*, max_records: int = 1000, run_suggestions: bool = True) -> int:

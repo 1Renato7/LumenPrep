@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { LumenApiError, type LumenApiClient } from "../../lib/api/client-interface";
 import { resolveLumenClient } from "../../lib/api/client-runtime";
-import type { TransactionCatalog } from "../../lib/api/types";
+import type { LiveDemoTrialAccepted, LiveDemoTrialAvailability, LiveDemoTrialId, TransactionCatalog } from "../../lib/api/types";
 import {
   addTransactionRow,
   catalogOptions,
@@ -39,6 +39,11 @@ export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(() => createIdempotencyKey());
+  const [liveTrials, setLiveTrials] = useState<LiveDemoTrialAvailability | null>(null);
+  const [liveTrialError, setLiveTrialError] = useState<string | null>(null);
+  const [runningTrials, setRunningTrials] = useState<Partial<Record<LiveDemoTrialId, true>>>({});
+  const [trialRuns, setTrialRuns] = useState<Partial<Record<LiveDemoTrialId, LiveDemoTrialAccepted>>>({});
+  const trialIdempotencyKeys = useRef<Partial<Record<LiveDemoTrialId, string>>>({});
 
   useEffect(() => {
     if (!api) return;
@@ -46,6 +51,16 @@ export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
     api.getTransactionCatalog().then(
       (nextCatalog) => { if (active) { setCatalog(nextCatalog); setCatalogError(null); } },
       (error: unknown) => { if (active) { setCatalog(null); setCatalogError(errorMessage(error, "The transaction catalog is unavailable.")); } },
+    );
+    return () => { active = false; };
+  }, [api]);
+
+  useEffect(() => {
+    if (!api) return;
+    let active = true;
+    api.getLiveDemoTrials().then(
+      (availability) => { if (active) { setLiveTrials(availability); setLiveTrialError(null); } },
+      () => { if (active) setLiveTrials(null); },
     );
     return () => { active = false; };
   }, [api]);
@@ -91,6 +106,26 @@ export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
       } else setSubmitError(errorMessage(error, "The batch could not be submitted. Your entries are still available to edit."));
     } finally { setIsSubmitting(false); }
   };
+  const startLiveTrial = async (trialId: LiveDemoTrialId) => {
+    if (!api) return;
+    const key = trialIdempotencyKeys.current[trialId] ?? createIdempotencyKey();
+    trialIdempotencyKeys.current[trialId] = key;
+    setLiveTrialError(null); setRunningTrials((current) => ({ ...current, [trialId]: true }));
+    try {
+      // Creating an isolated baseline performs real worker transitions before the
+      // current 25-transaction batch is accepted. Keep the normal API timeout
+      // for interactive actions, but allow this explicit demo preparation window.
+      const accepted = await api.startLiveDemoTrial(trialId, key, { timeoutMs: 60_000 });
+      setTrialRuns((current) => ({ ...current, [trialId]: accepted }));
+    } catch (error) {
+      setLiveTrialError(errorMessage(error, "The live demo trial could not be started."));
+    } finally {
+      setRunningTrials((current) => {
+        const { [trialId]: _completedTrial, ...remaining } = current;
+        return remaining;
+      });
+    }
+  };
 
   if (!catalog || !api) return <FormState error={client.error ?? catalogError} onRetry={retryCatalog} />;
 
@@ -112,6 +147,12 @@ export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
           </div>
           {sampleError ? <p className={styles.errorPanel} role="alert">{sampleError}</p> : null}
         </section>
+
+        {liveTrials?.enabled ? <section className={`${styles.panel} ${styles.liveTrialPanel}`} aria-labelledby="live-trials-title">
+          <div className={styles.panelHeader}><div><p className={styles.eyebrow}>Live demo controls</p><h2 className={styles.sectionTitle} id="live-trials-title">Run isolated trials.</h2><p className={styles.sectionHint}>Each button builds its own baseline and queues 25 fixed synthetic transactions with provider response codes. You can start both; the single-worker runtime processes them safely in a queue.</p></div><span className={styles.counter}>Queued safe</span></div>
+          <div className={styles.liveTrialGrid}>{liveTrials.trials.map((trial) => <article className={styles.liveTrialCard} key={trial.trial_id}><p>{trial.flow === "DETERMINISTIC" ? "Deterministic engine" : "Graph enrichment"}</p><h3>{trial.title}</h3><span>{trial.description}</span><button className={`${styles.button} ${styles.primaryButton}`} type="button" onClick={() => void startLiveTrial(trial.trial_id)} disabled={Boolean(runningTrials[trial.trial_id])}>{runningTrials[trial.trial_id] ? "Preparing baseline…" : `Run ${trial.transaction_count}-transaction trial`}</button>{trialRuns[trial.trial_id] ? <p className={styles.liveTrialResult} role="status">Queued: <code>{trialRuns[trial.trial_id]?.transaction_ids.length}</code> transactions. <a href={`/transactions?batch_id=${encodeURIComponent(trialRuns[trial.trial_id]?.batch_id ?? "")}`}>Open its live log</a></p> : null}</article>)}</div>
+          {liveTrialError ? <p className={styles.errorPanel} role="alert">{liveTrialError}</p> : null}
+        </section> : null}
 
         <form className={styles.batchForm} onSubmit={(event) => void submitBatch(event)} noValidate>
           <div className={styles.batchHeader}><div><h2 className={styles.sectionTitle}>Transactions</h2><p className={styles.sectionHint}>All fields are synthetic and validated against the current catalog.</p></div><span className={styles.counter}>{form.rows.length} / {maximumRows}</span></div>

@@ -16,6 +16,9 @@ import type {
   TransactionIncidentDetail,
   NotificationFeed,
   HumanReviewResponse,
+  LiveDemoTrial,
+  LiveDemoTrialAccepted,
+  LiveDemoTrialAvailability,
 } from "./types";
 
 export class ApiPayloadError extends Error {
@@ -202,6 +205,42 @@ export function parseTransactionBatchAccepted(value: unknown): TransactionBatchA
     fail("TransactionBatchAccepted.transaction_ids must be unique and contain 1..100 items.", value);
   }
   return { schema_version: schemaVersion(response.schema_version, "TransactionBatchAccepted.schema_version"), batch_id: string(response.batch_id, "TransactionBatchAccepted.batch_id"), accepted_at: string(response.accepted_at, "TransactionBatchAccepted.accepted_at"), status: "PROCESSING", transaction_ids: transactionIds, correlation_id: string(response.correlation_id, "TransactionBatchAccepted.correlation_id") };
+}
+
+export function parseLiveDemoTrialAvailability(value: unknown): LiveDemoTrialAvailability {
+  const response = exactObject(value, ["schema_version", "enabled", "reason", "execution_mode", "trials"], [], "LiveDemoTrialAvailability");
+  if (typeof response.enabled !== "boolean") fail("LiveDemoTrialAvailability.enabled must be boolean.", value);
+  if (response.execution_mode !== "QUEUED_SAFE") fail("LiveDemoTrialAvailability.execution_mode must be QUEUED_SAFE.", value);
+  if (!Array.isArray(response.trials)) fail("LiveDemoTrialAvailability.trials must be an array.", value);
+  const trials = response.trials.map((item, index): LiveDemoTrial => {
+    const trial = exactObject(item, ["trial_id", "flow", "title", "description", "transaction_count"], [], `LiveDemoTrialAvailability.trials[${index}]`);
+    const trialId = enumValue(trial.trial_id, new Set<LiveDemoTrial["trial_id"]>(["deterministic", "graph_enriched"]), `LiveDemoTrialAvailability.trials[${index}].trial_id`);
+    const flow = enumValue(trial.flow, new Set<LiveDemoTrial["flow"]>(["DETERMINISTIC", "GRAPH_ENRICHED"]), `LiveDemoTrialAvailability.trials[${index}].flow`);
+    if ((trialId === "deterministic" && flow !== "DETERMINISTIC") || (trialId === "graph_enriched" && flow !== "GRAPH_ENRICHED")) fail("Live demo trial flow does not match its id.", value);
+    if (integer(trial.transaction_count, `LiveDemoTrialAvailability.trials[${index}].transaction_count`, 25, 25) !== 25) fail("Live demo trial must contain 25 transactions.", value);
+    return { trial_id: trialId, flow, title: string(trial.title, `LiveDemoTrialAvailability.trials[${index}].title`), description: string(trial.description, `LiveDemoTrialAvailability.trials[${index}].description`), transaction_count: 25 };
+  });
+  return { schema_version: schemaVersion(response.schema_version, "LiveDemoTrialAvailability.schema_version"), enabled: response.enabled, reason: response.reason === null ? null : string(response.reason, "LiveDemoTrialAvailability.reason"), execution_mode: "QUEUED_SAFE", trials };
+}
+
+export function parseLiveDemoTrialAccepted(value: unknown): LiveDemoTrialAccepted {
+  const response = exactObject(value, ["schema_version", "trial_id", "flow", "execution_mode", "baseline_batch_ids", "batch_id", "accepted_at", "status", "transaction_ids", "correlation_id"], [], "LiveDemoTrialAccepted");
+  const batch = parseTransactionBatchAccepted({
+    schema_version: response.schema_version,
+    batch_id: response.batch_id,
+    accepted_at: response.accepted_at,
+    status: response.status,
+    transaction_ids: response.transaction_ids,
+    correlation_id: response.correlation_id,
+  });
+  const trialId = enumValue(response.trial_id, new Set<LiveDemoTrialAccepted["trial_id"]>(["deterministic", "graph_enriched"]), "LiveDemoTrialAccepted.trial_id");
+  const flow = enumValue(response.flow, new Set<LiveDemoTrialAccepted["flow"]>(["DETERMINISTIC", "GRAPH_ENRICHED"]), "LiveDemoTrialAccepted.flow");
+  if ((trialId === "deterministic" && flow !== "DETERMINISTIC") || (trialId === "graph_enriched" && flow !== "GRAPH_ENRICHED")) fail("Live demo trial flow does not match its id.", value);
+  if (response.execution_mode !== "QUEUED_SAFE") fail("LiveDemoTrialAccepted.execution_mode must be QUEUED_SAFE.", value);
+  const baselineBatchIds = stringArray(response.baseline_batch_ids, "LiveDemoTrialAccepted.baseline_batch_ids");
+  if (baselineBatchIds.length !== 1) fail("LiveDemoTrialAccepted must contain one baseline batch id.", value);
+  if (batch.transaction_ids.length !== 25) fail("LiveDemoTrialAccepted must contain 25 transaction ids.", value);
+  return { ...batch, trial_id: trialId, flow, execution_mode: "QUEUED_SAFE", baseline_batch_ids: baselineBatchIds };
 }
 
 export function parseTransactionDataResetResponse(value: unknown): TransactionDataResetResponse {

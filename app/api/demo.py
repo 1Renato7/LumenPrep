@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -24,6 +24,62 @@ _SCENARIO_SCHEMA = Path(__file__).resolve().parents[2] / "contracts" / "v1" / "s
 
 _controller: LiveStreamController | None = None
 _scenario_contract = ScenarioV1Contract(_SCENARIO_SCHEMA)
+
+
+def _live_trials_available() -> bool:
+    """Live trial writes require live Incident reads, never fixture mode."""
+    return settings.demo_live_trials_enabled and not settings.demo_mode
+
+
+@router.get("/v1/demo/live-trials")
+def get_live_demo_trials() -> dict[str, Any]:
+    """CTR-DEMO-002 v1: browser-safe availability for the reversible demo panel."""
+    if settings.demo_mode:
+        reason = "LIVE_INCIDENTS_REQUIRE_DEMO_MODE_FALSE"
+    elif not settings.demo_live_trials_enabled:
+        reason = "LIVE_DEMO_TRIALS_DISABLED"
+    else:
+        reason = None
+    # Imported lazily because the trial harness deliberately reuses the batch
+    # boundary, whose module is assembled by this API package.
+    from app.simulation.live_demo_trials import trial_catalog
+
+    return {
+        "schema_version": "1.0",
+        "enabled": _live_trials_available(),
+        "reason": reason,
+        "execution_mode": "QUEUED_SAFE",
+        "trials": trial_catalog() if _live_trials_available() else [],
+    }
+
+
+@router.post("/v1/demo/live-trials/{trial_id}", status_code=status.HTTP_202_ACCEPTED)
+def start_live_demo_trial(
+    trial_id: str,
+    background_tasks: BackgroundTasks,
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=48),
+) -> dict[str, Any]:
+    """Queue one fixed 25-transaction trial after its isolated baseline.
+
+    The current batch is intentionally left to the regular background worker so
+    the web Log can show the real `PROCESSING` lifecycle. Baseline batches are
+    completed first through that same worker, not direct persistence.
+    """
+    if not _live_trials_available():
+        detail = "LIVE_INCIDENTS_REQUIRE_DEMO_MODE_FALSE" if settings.demo_mode else "LIVE_DEMO_TRIALS_DISABLED"
+        raise HTTPException(status_code=403, detail=detail)
+    try:
+        from app.simulation.live_demo_trials import launch_trial
+
+        response = launch_trial(trial_id, idempotency_key=idempotency_key)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    background_tasks.add_task(
+        run_batch_to_completion,
+        str(response["batch_id"]),
+        derive_incidents_once_after_batch=True,
+    )
+    return response
 
 
 def _get_controller() -> LiveStreamController:

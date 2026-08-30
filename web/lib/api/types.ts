@@ -103,6 +103,32 @@ export interface TransactionDataResetResponse {
   correlation_id: string;
 }
 
+export type LiveDemoTrialId = "deterministic" | "graph_enriched";
+export type LiveDemoTrialFlow = "DETERMINISTIC" | "GRAPH_ENRICHED";
+
+export interface LiveDemoTrial {
+  trial_id: LiveDemoTrialId;
+  flow: LiveDemoTrialFlow;
+  title: string;
+  description: string;
+  transaction_count: 25;
+}
+
+export interface LiveDemoTrialAvailability {
+  schema_version: TransactionSchemaVersion;
+  enabled: boolean;
+  reason: string | null;
+  execution_mode: "QUEUED_SAFE";
+  trials: LiveDemoTrial[];
+}
+
+export interface LiveDemoTrialAccepted extends TransactionBatchAccepted {
+  trial_id: LiveDemoTrialId;
+  flow: LiveDemoTrialFlow;
+  execution_mode: "QUEUED_SAFE";
+  baseline_batch_ids: string[];
+}
+
 export type TransactionStatus = "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNKNOWN";
 export type ProcessingStage =
   | "RECEIVED"

@@ -52,6 +52,36 @@ test("batch calls use the configured public API URL and Idempotency-Key header",
   assert.equal(receivedHeaders?.get("Idempotency-Key"), "idem-key-1");
 });
 
+test("live demo trial calls stay under the versioned API path and retain their retry key", async () => {
+  withBaseUrl();
+  let receivedUrl = "";
+  let receivedHeaders: Headers | undefined;
+  const client = createLumenApiClient({
+    fetchImpl: async (url, init) => {
+      receivedUrl = String(url);
+      receivedHeaders = new Headers(init?.headers);
+      return Response.json({
+        schema_version: "1.0",
+        trial_id: "deterministic",
+        flow: "DETERMINISTIC",
+        execution_mode: "QUEUED_SAFE",
+        baseline_batch_ids: ["batch_baseline_1"],
+        batch_id: "batch_trial_1",
+        accepted_at: "2026-08-29T18:00:00Z",
+        status: "PROCESSING",
+        transaction_ids: Array.from({ length: 25 }, (_unused, index) => `txn_${index + 1}`),
+        correlation_id: "corr_trial_1",
+      });
+    },
+  });
+
+  const accepted = await client.startLiveDemoTrial("deterministic", "demo-retry-key");
+
+  assert.equal(accepted.transaction_ids.length, 25);
+  assert.equal(receivedUrl, "https://api.example.test/v1/demo/live-trials/deterministic");
+  assert.equal(receivedHeaders?.get("Idempotency-Key"), "demo-retry-key");
+});
+
 test("specified HTTP responses become typed API errors", async () => {
   withBaseUrl();
   for (const [status, code] of [

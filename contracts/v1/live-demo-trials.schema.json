@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "enabled", "reason", "execution_mode", "trials"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "enabled": {"type": "boolean"},
+    "reason": {"type": ["string", "null"]},
+    "execution_mode": {"const": "QUEUED_SAFE"},
+    "trials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trial_id", "flow", "title", "description", "transaction_count"],
+        "properties": {
+          "trial_id": {"type": "string", "enum": ["deterministic", "graph_enriched"]},
+          "flow": {"type": "string", "enum": ["DETERMINISTIC", "GRAPH_ENRICHED"]},
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "transaction_count": {"const": 25}
+        }
+      }
+    }
+  }
+}

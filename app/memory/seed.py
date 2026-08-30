@@ -17,6 +17,8 @@ def mastercard_d2_precedent(*, now: datetime | None = None) -> HistoricalInciden
             "provider_id": ("stripe",),
             "country": ("BR",),
             "card_brand": ("MASTERCARD",),
+            "payment_method_category": ("CARD",),
+            "currency": ("BRL",),
         },
         metrics={
             "decline_codes": ["DO_NOT_HONOR", "ISSUER_UNAVAILABLE"],
@@ -33,4 +35,3 @@ def seed_mastercard_d2(repository: IncidentMemoryRepository, *, now: datetime | 
     incident = mastercard_d2_precedent(now=now)
     repository.upsert(incident)
     return incident
-

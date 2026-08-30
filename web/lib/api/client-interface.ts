@@ -12,6 +12,8 @@ import {
   parseTransactionList,
   parseTransactionRecord,
   parseTransactionSampleResponse,
+  parseLiveDemoTrialAccepted,
+  parseLiveDemoTrialAvailability,
 } from "./parse";
 import type {
   Incident,
@@ -30,6 +32,9 @@ import type {
   TransactionIncidentDetail,
   HumanReviewRequest,
   HumanReviewResponse,
+  LiveDemoTrialAccepted,
+  LiveDemoTrialAvailability,
+  LiveDemoTrialId,
 } from "./types";
 
 export interface RequestOptions {
@@ -47,6 +52,8 @@ export interface ListTransactionsQuery {
 export interface LumenApiClient {
   getTransactionCatalog(options?: RequestOptions): Promise<TransactionCatalog>;
   generateTransactionSamples(request: TransactionSampleRequest, options?: RequestOptions): Promise<TransactionSampleResponse>;
+  getLiveDemoTrials(options?: RequestOptions): Promise<LiveDemoTrialAvailability>;
+  startLiveDemoTrial(trialId: LiveDemoTrialId, idempotencyKey: string, options?: RequestOptions): Promise<LiveDemoTrialAccepted>;
   createTransactionBatch(request: TransactionBatchRequest, options?: RequestOptions): Promise<TransactionBatchAccepted>;
   resetTransactionData(adminKey: string, options?: RequestOptions): Promise<TransactionDataResetResponse>;
   getTransactionBatch(batchId: string, options?: RequestOptions): Promise<TransactionList>;
@@ -208,6 +215,8 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
   return {
     getTransactionCatalog: (requestOptions) => request("/transaction-catalog", { method: "GET" }, parseTransactionCatalog, requestOptions),
     generateTransactionSamples: (body, requestOptions) => request("/transaction-samples", jsonPost(body), parseTransactionSampleResponse, requestOptions),
+    getLiveDemoTrials: (requestOptions) => request("/demo/live-trials", { method: "GET" }, parseLiveDemoTrialAvailability, requestOptions),
+    startLiveDemoTrial: (trialId, idempotencyKey, requestOptions) => request(`/demo/live-trials/${encodeURIComponent(trialId)}`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey } }, parseLiveDemoTrialAccepted, requestOptions),
     createTransactionBatch: (body, requestOptions) => request("/transaction-batches", jsonPost(body, { "Idempotency-Key": body.idempotency_key }), parseTransactionBatchAccepted, requestOptions),
     resetTransactionData: (adminKey, requestOptions) => {
       if (!adminKey) throw new LumenApiError("VALIDATION", 422, null, "An administrator reset key is required.");
