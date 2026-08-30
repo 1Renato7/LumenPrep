@@ -2901,6 +2901,66 @@ Novo tipo de recomendação executável, consumidor que rejeite campo opcional, 
 
 - **2026-08-29T22:05:00-03:00:** PASS: `python -m pytest -q` aprovou 91 testes, `python scripts/validate_contracts.py` aprovou schemas e fixtures, `python -m compileall -q app` passou e `git diff --check` não reportou erros. Browser acceptance ficou `PASS WITH LIMITATIONS`: o navegador real do Codex bloqueou `http://127.0.0.1:8091/v1/incidents` com `net::ERR_BLOCKED_BY_CLIENT`; o endpoint e os cenários de contrato foram exercitados pela suíte FastAPI, mas não houve consumidor web local para clicar nesta branch.
 
+### FL-20260829-ROGERIO-007 — Priorizar impacto apenas dentro da mesma moeda sem FX implícito
+
+- **Timestamp:** 2026-08-29T22:20:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** product | data | quality
+- **Escopo:** `LUM2-36`, `TASK-INC-002`, `CTR-INC-001 v1`, `app/incidents/__init__.py`
+- **Links:** `docs/plans/system-plan.md` v2.0.4; `tests/test_incident_priority.py`
+- **Supersedes / superseded by:** não altera a fórmula de impacto local existente; substitui qualquer ordenação global implícita entre moedas.
+
+#### Contexto e pergunta
+
+O módulo calculava GMV em `amount_minor`, mas o ranking preliminar de candidatos não distinguia moedas. Comparar diretamente um valor em BRL com outro em MXN produziria uma prioridade numérica sem taxa, data ou fonte de câmbio.
+
+#### Decisão
+
+Calcular impacto com ticket médio e aprovações perdidas na moeda da janela e priorizar Incidents por `impact.amount_minor` somente dentro de buckets da mesma `currency`. Sem FX versionado, a saída expõe buckets independentes em vez de uma ordem global artificial.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Comparar `amount_minor` entre moedas | implementação curta | ranking financeiramente inválido | FACT: BRL e MXN possuem unidades diferentes | rejeitada |
+| Chamar uma API FX em tempo real | ranking global | nova dependência, latência e dados não reproduzíveis | ASSUMPTION: demo não possui feed FX confiável | fora do MVP |
+| Buckets por moeda com ordenação local | determinístico e auditável | UI não recebe um único ranking global | TEST: BRL/MXN podem ser validados sem câmbio | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `WindowMetrics` fornece `amount_minor` e `currency`; `Impact` preserva a moeda local.
+- **TEST:** NOT RUN no momento deste registro; serão cobertos BRL, MXN, duplicidade de candidato e ausência deliberada de FX.
+- **UNKNOWN:** a moeda de apresentação executiva se a demo exigir comparação internacional.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** priorização honesta e reproduzível dentro de cada mercado.
+- **Abrimos mão de:** ranking único de mercados diferentes.
+- **Risco residual:** o consumidor deve apresentar o bucket de moeda, não concatenar listas como se fossem comparáveis.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** nenhuma conversão ou nova dependência externa é adicionada a `CTR-INC-001`.
+- **Pessoas/branches:** API/UI devem consumir buckets explicitamente quando exibirem múltiplas moedas.
+- **Linear:** `LUM2-36` recebe evidência somente após testes e revisão.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** maior GMV em BRL aparece antes de menor GMV em BRL; MXN permanece separado.
+- **Caso difícil/adverso:** candidatos sobrepostos não duplicam GMV; zero tentativas falha explicitamente; não há FX silencioso.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** apresentar buckets sem conversão até uma decisão de FX versionada.
+
+#### Gatilhos de revisão
+
+Pedido de ranking global, nova moeda de apresentação, ou fonte FX auditável exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:32:00-03:00:** PASS: `python -m pytest -q` aprovou 94 testes; os testes específicos cobriram GMV local, não duplicação de perdas em candidatos correlacionados, buckets BRL/MXN e janela sem tentativas. `python scripts/validate_contracts.py`, `python -m compileall -q app` e `git diff --check` também passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve alteração de rota, UI ou fluxo executável no navegador.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._

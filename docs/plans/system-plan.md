@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.0.3
+- **Versão:** 2.0.4
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
 - **Change class:** `MAJOR`; muda a entrada pública, a API, o frontend final e o deployment.
@@ -15,6 +15,7 @@
 - **Changelog 2.0.1:** registra a implementação validada de histórico/stream mediado por servidor em `renato/tarefa44@602ae9d` como evidência do harness interno. Ela não implementa nem congela `CTR-TXN/TXL/API v3`; `TASK-DATA-009 / LUM2-62` deve adaptá-la à batch API comum antes de integração funcional.
 - **Changelog 2.0.2:** integra `renato/tarefa44@602ae9d` na `main` como `CMP-HARNESS-001`; `CTR-TXN/TXL/API v3` continuam sendo a única fronteira pública planejada, e `LUM2-61/62` continuam responsáveis pelo adapter e tráfego de fundo compatíveis.
 - **Changelog 2.0.3:** `CTR-INC-001 v1` recebe os campos aditivos `root_cause.alternatives` e `recommendation_class`. Produtores os publicam; consumidores devem tolerar sua ausência em payloads v1 legados. Alternativas são ordenadas por confiança decrescente e nunca promovem a causa atual.
+- **Changelog 2.0.4:** a priorização de incidentes ordena `impact.amount_minor` somente dentro da mesma moeda. Sem uma fonte FX versionada, BRL e MXN são retornados em buckets independentes e não recebem ranking global fabricado.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -171,7 +172,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | CTR-EVT-001 v1 | FROZEN | DATA/TXN → ING | canonical payment attempt event | quarantine/dedupe/watermark | schema existente |
 | CTR-AGG-001 v1 | FROZEN | AGG → DET/RCA | métricas calculadas | `INSUFFICIENT_VOLUME` | schema existente |
 | CTR-DET-001 v1 | FROZEN | DET → INC | candidatos numéricos | `NO_ANOMALY`, data quality | schema existente |
-| CTR-INC-001 v1 | FROZEN, adendo 2.0.3 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas e classe de recomendação | `INCONCLUSIVE` válido; campos aditivos ausentes em payload legado são tolerados | fixtures existentes + `tests/test_incident_serialization.py` |
+| CTR-INC-001 v1 | FROZEN, adendos 2.0.3/2.0.4 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação e impacto local priorizável | `INCONCLUSIVE` válido; moedas não recebem conversão implícita | fixtures existentes + testes de serialização/prioridade |
 | CTR-MEM-001 v1.1 | FROZEN | MEM → EXP/API | precedente tipado | `NO_PRECEDENT`, `MEMORY_UNAVAILABLE` | fixtures existentes |
 | CTR-LLM-001 v1 | FROZEN | EXP → API/WEB | explicação grounded | template determinístico | schema existente |
 | CTR-DEP-001 v1 | FROZEN | Railway/Vercel → team | URLs, env, health e CORS | local mode; no fake live | deployment plan |
@@ -188,6 +189,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 - RAG recebe somente Incident já derivado e não é chamado por transação individual.
 - `root_cause.alternatives` é uma lista ordenada por confiança decrescente; cada item é hipótese, não causa atual, e não altera `root_cause.status`.
 - `recommendation_class` só classifica a recomendação humana (`INVESTIGATE`, `MONITOR` ou `ESCALATE`); `execution` permanece obrigatoriamente `HUMAN_ONLY`.
+- Incidentes são ordenados por `impact.amount_minor` apenas dentro do bucket da mesma `currency`; sem FX versionado não há comparação global entre moedas.
 - UI consome exclusivamente `NEXT_PUBLIC_API_BASE_URL`; não possui credencial de banco/agent.
 
 ## 8. Persistência, processamento e segurança

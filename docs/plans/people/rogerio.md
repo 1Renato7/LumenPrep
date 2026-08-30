@@ -4,7 +4,7 @@
 
 > A `main` recebeu primeiro este replanejamento documental. Os drafts executáveis v3 estão em `codex/andre-dashboard-pitch@cc24c7a`; Rogério deve integrá-los por microtarefa, não copiar cegamente sobre a API atual.
 
-- **Plano geral:** 2.0.3
+- **Plano geral:** 2.0.4
 - **Objetivo:** `OBJ-ROGERIO-001`
 - **Papel:** contratos, batch ingestion, lifecycle durável, API FastAPI, DuckDB/Parquet e deploy Railway.
 - **Resultado:** toda transação da Vercel entra por uma única API, é persistida antes do `202`, processada de modo idempotente e consultável por log/detalhe.
@@ -31,6 +31,7 @@ O MVP adapta o Dockerfile e o runbook Railway já publicados para FastAPI + work
 - Reentrega/restart não duplica event, metric ou transaction.
 - `POST /transaction-samples` retorna somente inputs, seed e correlation; não persiste, processa ou antecipa outcomes.
 - Em `CTR-INC-001 v1`, serializar `root_cause.alternatives` em ordem decrescente de confiança e `recommendation_class`, sem alterar a causa atual ou permitir execução automática.
+- Priorizar `Impact.amount_minor` somente em buckets da mesma moeda; sem fonte FX versionada, não comparar BRL com MXN.
 
 ## Trabalho preservado
 

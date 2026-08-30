@@ -187,6 +187,21 @@ class Incident(BaseModel):
         return self
 
 
+def prioritize_incidents_by_local_impact(incidents: Iterable[Incident]) -> dict[str, list[Incident]]:
+    """Rank incidents by GMV at risk within their own currency only.
+
+    ``amount_minor`` has no cross-currency meaning.  Bucketing is therefore the
+    honest fallback until a versioned FX source is introduced.
+    """
+    buckets: dict[str, list[Incident]] = {}
+    for incident in incidents:
+        buckets.setdefault(incident.impact.currency, []).append(incident)
+    return {
+        currency: sorted(bucket, key=lambda incident: (-incident.impact.amount_minor, incident.incident_id))
+        for currency, bucket in sorted(buckets.items())
+    }
+
+
 def to_incident(
     correlated: CorrelatedCandidates,
     impact: Impact,
