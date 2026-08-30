@@ -94,6 +94,7 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
             "category": "PROVIDER_DEGRADATION",
             "confidence": 0.88,
             "confidence_factors": {"fixture_fallback": 0.88},
+            "alternatives": [],
         },
         "impact": {
             "metric": "GMV_AT_RISK",
@@ -114,6 +115,7 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
             {
                 "playbook_id": no_precedent_explanation["playbook_id"],
                 "action": no_precedent_explanation["recommended_action"],
+                "recommendation_class": "INVESTIGATE",
                 "execution": "HUMAN_ONLY",
                 "rationale_evidence_ids": no_precedent_explanation["evidence_ids"],
             }
@@ -163,7 +165,7 @@ def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], ex
 
 @router.get("/incidents")
 def list_incidents(transaction_id: str | None = Query(default=None, min_length=1)) -> list[dict[str, Any]]:
-    """List current records, optionally restricted to a transaction's authored links."""
+    """List current records; a `transaction_id` filter returns the full grounded trace per Incident."""
     records = _fixture_records()
     if transaction_id is None:
         return list(records.values())
@@ -174,7 +176,14 @@ def list_incidents(transaction_id: str | None = Query(default=None, min_length=1
         # authorized Incident to expose.  The public collection contract therefore
         # remains an empty list instead of manufacturing an error or a record.
         return []
-    return [records[incident_id] for incident_id in related_ids if incident_id in records]
+    responses = []
+    for incident_id in related_ids:
+        incident = records.get(incident_id)
+        if incident is None:
+            continue
+        memory, explanation = _memory_and_explanation(incident)
+        responses.append(build_incident_response(incident, memory, explanation))
+    return responses
 
 
 @router.get("/incidents/{incident_id}")

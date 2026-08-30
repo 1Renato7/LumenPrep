@@ -162,6 +162,10 @@ export interface Incident {
     category: string | null;
     confidence: number;
     confidence_factors: Record<string, number>;
+    alternatives?: Array<{
+      category: string;
+      confidence: number;
+    }>;
   };
   impact: {
     metric: "GMV_AT_RISK";
@@ -181,6 +185,7 @@ export interface Incident {
   recommendations: Array<{
     playbook_id: string;
     action: string;
+    recommendation_class?: "INVESTIGATE" | "MONITOR" | "ESCALATE";
     execution: "HUMAN_ONLY";
     rationale_evidence_ids: string[];
   }>;

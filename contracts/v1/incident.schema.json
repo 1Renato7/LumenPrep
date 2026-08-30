@@ -22,7 +22,19 @@
         "status": {"enum": ["SUPPORTED", "INCONCLUSIVE"]},
         "category": {"type": ["string", "null"]},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "confidence_factors": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}}
+        "confidence_factors": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}},
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "confidence"],
+            "properties": {
+              "category": {"type": "string", "minLength": 1},
+              "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+            }
+          }
+        }
       }
     },
     "impact": {
@@ -58,14 +70,25 @@
         "type": "object",
         "required": ["playbook_id", "action", "execution", "rationale_evidence_ids"],
         "properties": {
-          "playbook_id": {"type": "string"},
-          "action": {"type": "string"},
-          "execution": {"const": "HUMAN_ONLY"},
+        "playbook_id": {"type": "string"},
+        "action": {"type": "string"},
+        "recommendation_class": {"enum": ["INVESTIGATE", "MONITOR", "ESCALATE"]},
+        "execution": {"const": "HUMAN_ONLY"},
           "rationale_evidence_ids": {"type": "array", "items": {"type": "string"}}
         }
       }
     },
     "limitations": {"type": "array", "items": {"type": "string"}},
     "correlation_id": {"type": "string", "minLength": 1}
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"const": "SUPPORTED"}}},
+      "then": {"properties": {"root_cause": {"properties": {"status": {"const": "SUPPORTED"}}}}}
+    },
+    {
+      "if": {"properties": {"state": {"const": "INCONCLUSIVE"}}},
+      "then": {"properties": {"root_cause": {"properties": {"status": {"const": "INCONCLUSIVE"}}}}}
+    }
+  ]
 }

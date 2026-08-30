@@ -46,7 +46,7 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
       if (requestUrl.includes("transaction-batches/")) return json(listFixture);
       if (requestUrl.includes("transactions?")) return json(listFixture);
       if (requestUrl.includes("transactions/")) return json(processingFixture);
-      if (requestUrl.includes("incidents?")) return json([incidentFixture]);
+      if (requestUrl.includes("incidents?")) return json([{ incident: incidentFixture, memory: similarIncidentsFixture, explanation: explanationFixture }]);
       return json({ incident: incidentFixture, memory: similarIncidentsFixture, explanation: explanationFixture });
     },
   });
@@ -57,7 +57,7 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
   await client.getTransactionBatch("batch/one");
   await client.listTransactions({ status: "PROCESSING", cursor: "cursor one", limit: 20 });
   await client.getTransaction("txn/one");
-  await client.listIncidents({ transaction_id: "txn one" });
+  const incidentDetails = await client.listTransactionIncidents("txn one");
   await client.getIncident("incident/one");
 
   assert.deepEqual(calls, [
@@ -70,6 +70,8 @@ test("normalizes public base URL and follows every CTR-API-001 v3 path/query", a
     "GET https://api.example.test/v1/incidents?transaction_id=txn+one",
     "GET https://api.example.test/v1/incidents/incident%2Fone",
   ]);
+  assert.deepEqual(incidentDetails[0].incident.root_cause.alternatives, [{ category: "ISSUER_DECLINE", confidence: 0.18 }]);
+  assert.equal(incidentDetails[0].incident.recommendations[0].recommendation_class, "ESCALATE");
   assert.equal(normalizeApiBaseUrl("https://api.example.test/v1///"), "https://api.example.test/v1");
 });
 

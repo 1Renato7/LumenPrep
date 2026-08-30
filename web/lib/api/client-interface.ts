@@ -1,6 +1,7 @@
 import {
   ApiPayloadError,
   parseIncidentDetail,
+  parseIncidentDetailList,
   parseIncidentList,
   parseTransactionBatchAccepted,
   parseTransactionCatalog,
@@ -32,10 +33,6 @@ export interface ListTransactionsQuery {
   limit?: number;
 }
 
-export interface ListIncidentsQuery {
-  transaction_id?: string;
-}
-
 /** Stable shared surface for all web lanes; keep direct fetch calls out of pages. */
 export interface LumenApiClient {
   getTransactionCatalog(options?: RequestOptions): Promise<TransactionCatalog>;
@@ -44,7 +41,8 @@ export interface LumenApiClient {
   getTransactionBatch(batchId: string, options?: RequestOptions): Promise<TransactionList>;
   listTransactions(query?: ListTransactionsQuery, options?: RequestOptions): Promise<TransactionList>;
   getTransaction(transactionId: string, options?: RequestOptions): Promise<TransactionRecord>;
-  listIncidents(query?: ListIncidentsQuery, options?: RequestOptions): Promise<Incident[]>;
+  listIncidents(options?: RequestOptions): Promise<Incident[]>;
+  listTransactionIncidents(transactionId: string, options?: RequestOptions): Promise<IncidentDetail[]>;
   getIncident(incidentId: string, options?: RequestOptions): Promise<IncidentDetail>;
 }
 
@@ -173,7 +171,11 @@ export function createLumenApiClient(options: LumenApiClientOptions = {}): Lumen
     getTransactionBatch: (batchId, requestOptions) => request(`/transaction-batches/${encodeURIComponent(batchId)}`, { method: "GET" }, parseTransactionList, requestOptions),
     listTransactions: (query, requestOptions) => request(`/transactions${toQuery(query)}`, { method: "GET" }, parseTransactionList, requestOptions),
     getTransaction: (transactionId, requestOptions) => request(`/transactions/${encodeURIComponent(transactionId)}`, { method: "GET" }, parseTransactionRecord, requestOptions),
-    listIncidents: (query, requestOptions) => request(`/incidents${toQuery(query)}`, { method: "GET" }, parseIncidentList, requestOptions),
+    listIncidents: (requestOptions) => request("/incidents", { method: "GET" }, parseIncidentList, requestOptions),
+    listTransactionIncidents: (transactionId, requestOptions) => {
+      if (!transactionId) throw new LumenApiError("VALIDATION", 422, null, "transactionId must be non-empty.");
+      return request(`/incidents${toQuery({ transaction_id: transactionId })}`, { method: "GET" }, parseIncidentDetailList, requestOptions);
+    },
     getIncident: (incidentId, requestOptions) => request(`/incidents/${encodeURIComponent(incidentId)}`, { method: "GET" }, parseIncidentDetail, requestOptions),
   };
 }

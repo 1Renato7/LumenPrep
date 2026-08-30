@@ -232,10 +232,22 @@ export function parseIncident(value: unknown): Incident {
   for (const [key, metric] of Object.entries(metrics)) {
     if (metric !== null && typeof metric !== "string" && (typeof metric !== "number" || !Number.isFinite(metric))) fail(`Incident.metrics.${key} has an invalid value.`, metric);
   }
-  const rootCause = exactObject(incident.root_cause, ["status", "category", "confidence", "confidence_factors"], [], "Incident.root_cause");
+  const rootCause = exactObject(incident.root_cause, ["status", "category", "confidence", "confidence_factors"], ["alternatives"], "Incident.root_cause");
   if (rootCause.status !== "SUPPORTED" && rootCause.status !== "INCONCLUSIVE") fail("Incident.root_cause.status is invalid.", value);
   const confidenceFactors = object(rootCause.confidence_factors, "Incident.root_cause.confidence_factors");
   for (const [key, factor] of Object.entries(confidenceFactors)) number(factor, `Incident.root_cause.confidence_factors.${key}`, 0, 1);
+  const alternatives = rootCause.alternatives === undefined
+    ? undefined
+    : (() => {
+      if (!Array.isArray(rootCause.alternatives)) fail("Incident.root_cause.alternatives must be an array.", rootCause.alternatives);
+      return rootCause.alternatives.map((item) => {
+        const alternative = exactObject(item, ["category", "confidence"], [], "Incident.root_cause.alternative");
+        return {
+          category: string(alternative.category, "Incident.root_cause.alternative.category"),
+          confidence: number(alternative.confidence, "Incident.root_cause.alternative.confidence", 0, 1),
+        };
+      });
+    })();
   const impact = exactObject(incident.impact, ["metric", "amount_minor", "currency", "method"], ["lower_bound_minor", "upper_bound_minor"], "Incident.impact");
   if (impact.metric !== "GMV_AT_RISK" || impact.method !== "EXPECTED_APPROVAL_SHORTFALL") fail("Incident.impact has an invalid constant.", value);
   const impactCurrency = string(impact.currency, "Incident.impact.currency");
@@ -251,7 +263,7 @@ export function parseIncident(value: unknown): Incident {
     title: string(incident.title, "Incident.title"),
     scope: scope as Incident["scope"],
     metrics: metrics as Incident["metrics"],
-    root_cause: { status: rootCause.status, category: nullableString(rootCause.category, "Incident.root_cause.category"), confidence: number(rootCause.confidence, "Incident.root_cause.confidence", 0, 1), confidence_factors: confidenceFactors as Record<string, number> },
+    root_cause: { status: rootCause.status, category: nullableString(rootCause.category, "Incident.root_cause.category"), confidence: number(rootCause.confidence, "Incident.root_cause.confidence", 0, 1), confidence_factors: confidenceFactors as Record<string, number>, ...(alternatives === undefined ? {} : { alternatives }) },
     impact: { metric: "GMV_AT_RISK", amount_minor: integer(impact.amount_minor, "Incident.impact.amount_minor", 0), currency: impactCurrency, method: "EXPECTED_APPROVAL_SHORTFALL", ...(impact.lower_bound_minor === undefined ? {} : { lower_bound_minor: impact.lower_bound_minor === null ? null : integer(impact.lower_bound_minor, "Incident.impact.lower_bound_minor", 0) }), ...(impact.upper_bound_minor === undefined ? {} : { upper_bound_minor: impact.upper_bound_minor === null ? null : integer(impact.upper_bound_minor, "Incident.impact.upper_bound_minor", 0) }) },
     evidence,
     ...(incident.memory_matches === undefined ? {} : { memory_matches: parseLooseObjects(incident.memory_matches, "Incident.memory_matches") }),
@@ -264,6 +276,11 @@ export function parseIncident(value: unknown): Incident {
 export function parseIncidentList(value: unknown): Incident[] {
   if (!Array.isArray(value)) fail("Incident list must be an array.", value);
   return value.map(parseIncident);
+}
+
+export function parseIncidentDetailList(value: unknown): IncidentDetail[] {
+  if (!Array.isArray(value)) fail("Incident detail list must be an array.", value);
+  return value.map(parseIncidentDetail);
 }
 
 export function parseIncidentDetail(value: unknown): IncidentDetail {
@@ -282,9 +299,12 @@ function parseIncidentEvidence(value: unknown): Incident["evidence"] {
 function parseRecommendations(value: unknown): Incident["recommendations"] {
   if (!Array.isArray(value)) fail("Incident.recommendations must be an array.", value);
   return value.map((item) => {
-    const recommendation = exactObject(item, ["playbook_id", "action", "execution", "rationale_evidence_ids"], [], "Incident.recommendation");
+    const recommendation = exactObject(item, ["playbook_id", "action", "execution", "rationale_evidence_ids"], ["recommendation_class"], "Incident.recommendation");
     if (recommendation.execution !== "HUMAN_ONLY") fail("Incident.recommendation.execution must be HUMAN_ONLY.", item);
-    return { playbook_id: string(recommendation.playbook_id, "Incident.recommendation.playbook_id"), action: string(recommendation.action, "Incident.recommendation.action"), execution: "HUMAN_ONLY", rationale_evidence_ids: stringArray(recommendation.rationale_evidence_ids, "Incident.recommendation.rationale_evidence_ids") };
+    const recommendationClass = recommendation.recommendation_class === undefined
+      ? undefined
+      : enumValue(recommendation.recommendation_class, new Set(["INVESTIGATE", "MONITOR", "ESCALATE"]), "Incident.recommendation.recommendation_class") as NonNullable<Incident["recommendations"][number]["recommendation_class"]>;
+    return { playbook_id: string(recommendation.playbook_id, "Incident.recommendation.playbook_id"), action: string(recommendation.action, "Incident.recommendation.action"), ...(recommendationClass === undefined ? {} : { recommendation_class: recommendationClass }), execution: "HUMAN_ONLY", rationale_evidence_ids: stringArray(recommendation.rationale_evidence_ids, "Incident.recommendation.rationale_evidence_ids") };
   });
 }
 

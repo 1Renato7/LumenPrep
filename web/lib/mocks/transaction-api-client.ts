@@ -11,7 +11,6 @@ import succeededFixture from "../../../contracts/fixtures/transaction-succeeded.
 
 import {
   LumenApiError,
-  type ListIncidentsQuery,
   type ListTransactionsQuery,
   type LumenApiClient,
   type RequestOptions,
@@ -83,10 +82,14 @@ export function createMockLumenApiClient(): MockLumenApiClient {
       if (!record) throw new LumenApiError("NOT_FOUND", 404, { correlation_id: "corr_demo_mock_not_found" }, "Transaction fixture was not found.");
       return structuredClone(record);
     },
-    async listIncidents(query, options) {
+    async listIncidents(options) {
       checkCancelled(options);
-      if (query?.transaction_id === "missing") return [];
       return [structuredClone(incident)];
+    },
+    async listTransactionIncidents(transactionId, options) {
+      checkCancelled(options);
+      if (transactionId === "missing") return [];
+      return [structuredClone(incidentDetail)];
     },
     async getIncident(incidentId, options) {
       checkCancelled(options);

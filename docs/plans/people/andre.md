@@ -4,7 +4,7 @@
 
 > A pasta `web/` e os contratos/fixtures v3 estão publicados na `main` para integração compartilhada. O formulário usa o client v3; Logs, Detail e Incidents seguem fixtures explícitas até `LUM2-12`. Deploy e smoke Railway/Vercel continuam pendentes.
 
-- **Plano geral:** 2.1.0
+- **Plano geral:** 2.1.1
 - **Objetivo:** `OBJ-ANDRE-001`
 - **Papel:** frontend Next.js, experiência transaction-first, integração Vercel → Railway e acceptance visual.
 - **Resultado:** inserir uma ou várias transações manualmente ou gerar samples por quantidade, acompanhar logs e abrir classificação/incidentes sem calcular nenhum fato no navegador; seed permanece capacidade opcional da API.
@@ -21,7 +21,7 @@ O shell desktop usa sidebar `sticky` e conteúdo em colunas separadas; em mobile
 ## Ownership e limites
 
 - **Own:** `CMP-WEB-001`, diretório `web/`, rotas `/transactions/*`, `/incidents/*`, client HTTP e configuração Vercel.
-- **Consome:** `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CTR-INC-001`, `CTR-MEM-001` e `CTR-LLM-001`.
+- **Consome:** `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CTR-INC-001` (incluindo `root_cause.alternatives` e `recommendation_class` quando presentes), `CTR-MEM-001` e `CTR-LLM-001`.
 - **Somente API:** nenhuma query a DuckDB/Neo4j e nenhum cálculo de taxa, causa, confiança ou impacto.
 - **Segurança:** campos allowlisted; não coletar PAN, CVV, nome, e-mail ou PII; não oferecer ação financeira.
 - **Hotspot:** contratos e env são coordenados por Rogério; André coordena somente `web/`.

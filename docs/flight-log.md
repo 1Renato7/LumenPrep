@@ -1386,6 +1386,75 @@ André pediu que o time visse e integrasse o frontend no repositório comum. A m
 
 - **2026-08-29:** `code-review-gate` aprovou a publicação sem achado bloqueante no diff; `browser-acceptance-gate` permanece bloqueado pela política local de navegação para localhost. `integration-contract-guardian` classificou a promoção como `READY WITH WARNINGS` para preview compartilhado: formulário/client v3 alinhado a `transaction_id`, enquanto Logs, Detail e Incidents continuam fixture-backed até `LUM2-12`. Não declarar `LUM2-10`, `LUM2-11` ou `LUM2-12` concluídas.
 
+### FL-20260829-TEAM-022 — Integrar os incrementos de Incident sobre o frontend 2.1.0
+
+- **Timestamp:** 2026-08-29T22:45:47-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como integrador e recorder
+- **Categoria:** Git/integration | contract | quality
+- **Escopo:** `feat/OBJ-ROGERIO-001-platform-core`, `CTR-INC-001 v1`, `CMP-INC-001`, `CMP-WEB-001`, plano geral 2.1.1
+- **Links:** `FL-20260829-ROGERIO-007`, `FL-20260829-ROGERIO-008`, `FL-20260829-ROGERIO-009`, `FL-20260829-TEAM-021`, `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável; preserva o frontend publicado em 2.1.0 e integra adendos de Incident.
+
+#### Contexto e pergunta
+
+A `main` recebeu quatro commits de frontend após a primeira simulação da branch de Rogério. O novo merge encontrou conflitos textuais nos planos; código, schemas e testes se uniram automaticamente. Era necessário escolher se o plano de frontend seria substituído pelo plano 2.0.5 da branch ou se ambos os incrementos seriam preservados.
+
+#### Decisão
+
+Manter o frontend 2.1.0 e integrar os incrementos de Incident como 2.1.1: hipóteses ordenadas, `recommendation_class` humana, buckets por moeda e fingerprint causal exato. Preservar as entradas do Flight Log e não promover os mocks de `web/` a adapter live.
+
+#### Critérios e por que agora
+
+O usuário autorizou o push para a `main`; aceitar o plano antigo da branch removeria a evidência e as fronteiras da superfície `web/` já integrada. A versão 2.1.1 mantém a fonte de verdade arquitetural monotônica e descreve o estado publicado.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Aceitar o plano 2.0.5 da branch | resolução curta | regride a documentação e o handoff de `web/` 2.1.0 | FACT: `origin/main` contém o frontend e o plano 2.1.0 | perderia estado integrado |
+| Omitir os incrementos de Incident | evita conflito documental | descarta código e contratos testados | TEST: merge de código é limpo | contraria o push autorizado |
+| Preservar 2.1.0 e publicar 2.1.1 | mantém ambos os incrementos rastreáveis | exige resolver documentação e revalidar a união | TEST: merge-tree só conflitou nos planos | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `origin/main@f5f6e0c` e a branch divergem em quatro commits cada desde `103073b`.
+- **TEST:** a simulação anterior da branch passou 97 testes; a validação do merge atualizado será executada antes do push.
+- **ASSUMPTION:** `web/` continua em fixtures até `LUM2-12`, conforme plano 2.1.0.
+- **UNKNOWN:** o adapter live do frontend permanece fora deste merge.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** contratos de Incident e frontend compartilham a mesma `main` sem apagar evidência.
+- **Abrimos mão de:** uma resolução automática de documentação.
+- **Dívida/limitação:** o OpenAPI ainda não tipa explicitamente o envelope da listagem filtrada por `transaction_id`.
+- **Risco residual:** o adapter live deve tratar as extensões opcionais de `CTR-INC-001` ao substituir fixtures.
+
+#### Consequências e propagação
+
+- **Produto/demo:** UI preserva mocks explícitos; Incident ganha informação adicional sem ação automática.
+- **Arquitetura/contratos:** `CTR-INC-001 v1` permanece compatível por campos aditivos; `CTR-API-001 v3` não muda.
+- **Pessoas/branches:** André consome os novos campos quando presentes; Altoé mantém memória separada da causa atual.
+- **Plano/Linear:** plano geral e plano de André passam a apontar para 2.1.1; Linear não foi alterado.
+- **Testes/observabilidade:** Python, contratos, checagens de diff e testes/build do frontend precisam passar antes do push.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o merge preserva os testes Python e o build/testes do frontend sem marcadores de conflito.
+- **Caminho feliz:** API devolve incidentes compatíveis e `web/` continua compilando contra seus mocks.
+- **Caso difícil/adverso:** uma causa `INCONCLUSIVE` com precedentes permanece inconclusiva, e moedas distintas não recebem ranking comum.
+- **Resultado observado:** NOT RUN no momento deste registro.
+- **Fallback:** abortar o merge antes do commit; as duas branches permanecem recuperáveis.
+
+#### Gatilhos de revisão
+
+Falha de contratos/testes, consumidor que rejeite campo opcional, ou adapter live que precise de um envelope estável para `/incidents?transaction_id` exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:45:47-03:00:** a primeira validação do frontend falhou porque o parser estrito rejeitou `root_cause.alternatives`. A integração adicionou tipos, parser, fixtures e apresentação das extensões opcionais. Também separou `listIncidents()` de `listTransactionIncidents(transactionId)`, pois a rota filtrada devolve `IncidentDetail[]`, não `Incident[]`. PASS após correção: `python -m pytest -q` (105), `python scripts/validate_contracts.py`, `python -m compileall -q app`, `npm run lint`, `npm test` (27) e `npm run build`. O browser local do Codex não conectou durante a validação anterior; este gate fica `PASS WITH LIMITATIONS`, sem alegar interação visual.
+
 ## André
 
 <!-- ANDRE: faça append de novas entradas imediatamente antes da próxima seção. -->
@@ -2879,6 +2948,192 @@ Benchmark de `LUM2-47` incompatível, novo provider sem perfil aceitável, ou co
 
 - **2026-08-29T21:00:00-03:00:** browser acceptance local passou em servidor com `DEMO_MODE=true` e `DUCKDB_PATH=:memory:`. Pelo Swagger, `POST /demo/scenarios/scenario_provider_br/inject` retornou `202 ACCEPTED` com `events_published=54`; em seguida `GET /transactions/health` retornou `published=54`, `listener_cursor=54` e `backlog=0`. Console sem erros; há somente warning pré-existente do Swagger CDN sobre deep-link whitespace.
 - **2026-08-29T21:16:00-03:00:** a validação de volume revelou que o correlation ID histórico recalculava o fingerprint completo do config para cada evento. O valor agora é calculado uma vez por gerador, sem alterar payload nem seed. PASS: 13 testes focados em 18,11s e validação de contratos aprovada.
+
+### FL-20260829-ROGERIO-007 — Estender CTR-INC-001 v1 com hipóteses ordenadas sem mudar a causa atual
+
+- **Timestamp:** 2026-08-29T21:50:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** contract | product | integration
+- **Escopo:** `LUM2-37`, `TASK-INC-003`, `CTR-INC-001 v1`, `CMP-INC-001`, `CMP-MEM/EXP-001`, `CMP-WEB-001`
+- **Links:** `docs/plans/system-plan.md` v2.0.3; `contracts/v1/incident.schema.json`; `app/incidents/__init__.py`; `tests/test_incident_serialization.py`
+- **Supersedes / superseded by:** adendo compatível a `CTR-INC-001 v1`; não substitui DEC-014 nem muda `CTR-MEM-001`.
+
+#### Contexto e pergunta
+
+`LUM2-37` exigia publicar alternativas causais ordenadas e uma classe de recomendação, mas o contrato congelado expunha apenas a causa atual e `execution=HUMAN_ONLY`. A mudança precisava informar API, memória e UI sem transformar um precedente ou uma hipótese em confirmação causal.
+
+#### Decisão
+
+Adicionar opcionalmente `root_cause.alternatives` e `recommendation_class` a `CTR-INC-001 v1`. O produtor ordena alternativas por confiança decrescente; elas são hipóteses e não modificam `root_cause.status` ou `category`. Recomendações continuam obrigatoriamente `HUMAN_ONLY` e recebem uma classe declarativa (`INVESTIGATE`, `MONITOR` ou `ESCALATE`). Payloads v1 legados sem os campos permanecem aceitos.
+
+#### Critérios e por que agora
+
+A UI precisa distinguir uma causa suportada de hipóteses concorrentes, e a integração já possui consumidores de Incident. Uma extensão aditiva entrega essa leitura sem uma migração de versão durante o hackathon e preserva a regra de que só o RCA confirma a causa atual.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Tornar alternativas obrigatórias e criar v1.1 incompatível | contrato mais rígido | força migração simultânea de fixtures, API, memória e UI | FACT: `CTR-INC-001 v1` já é consumido por componentes integrados | custo de integração desnecessário |
+| Usar memory matches como alternativas | menos campos | confunde precedente histórico com hipótese causal atual | FACT: `CTR-MEM-001` é eixo independente de `root_cause` | viola a separação causal |
+| Campos aditivos e tolerância a legado | entrega a informação com risco contido | consumidores precisam tratar ausência | TEST: schema e serialização serão cobertos localmente | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `RootCause.status` já restringe a causa atual a `SUPPORTED|INCONCLUSIVE`; `execution` já restringe ações a `HUMAN_ONLY`.
+- **TEST:** NOT RUN no momento deste registro; testes de schema, ordenação e eixos causais serão executados antes de concluir.
+- **ASSUMPTION:** consumidores ignoram campos opcionais que ainda não exibem.
+- **UNKNOWN:** quais classes além de investigação serão úteis na demo final.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** explicação explícita de hipóteses concorrentes e classificação visual da recomendação.
+- **Abrimos mão de:** obrigar todos os payloads legados a carregar alternativas imediatamente.
+- **Risco residual:** classes futuras podem pedir enum maior; isso exigirá novo change control.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** plano geral, schema, modelos, fixtures e testes mudam no mesmo commit.
+- **Pessoas/branches:** André tolera/exibe os campos quando presentes; Altoé não usa memória para promover nem ordenar alternativas.
+- **Linear:** `LUM2-37` só muda para Done após testes, review e gates reais.
+- **Testes/observabilidade:** casos SUPPORTED/INCONCLUSIVE comprovam ordenação e preservação da causa atual.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** Incident serializado contém alternativas em ordem estável e recomendação humana classificada.
+- **Caso difícil/adverso:** `INCONCLUSIVE + MATCH_FOUND` continua inconclusivo; alternativa vazia e payload legado são válidos.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** campos opcionais ausentes preservam o contrato v1 existente.
+
+#### Gatilhos de revisão
+
+Novo tipo de recomendação executável, consumidor que rejeite campo opcional, ou evidência de que memória está promovendo hipótese exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:05:00-03:00:** PASS: `python -m pytest -q` aprovou 91 testes, `python scripts/validate_contracts.py` aprovou schemas e fixtures, `python -m compileall -q app` passou e `git diff --check` não reportou erros. Browser acceptance ficou `PASS WITH LIMITATIONS`: o navegador real do Codex bloqueou `http://127.0.0.1:8091/v1/incidents` com `net::ERR_BLOCKED_BY_CLIENT`; o endpoint e os cenários de contrato foram exercitados pela suíte FastAPI, mas não houve consumidor web local para clicar nesta branch.
+
+### FL-20260829-ROGERIO-008 — Priorizar impacto apenas dentro da mesma moeda sem FX implícito
+
+- **Timestamp:** 2026-08-29T22:20:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** product | data | quality
+- **Escopo:** `LUM2-36`, `TASK-INC-002`, `CTR-INC-001 v1`, `app/incidents/__init__.py`
+- **Links:** `docs/plans/system-plan.md` v2.0.4; `tests/test_incident_priority.py`
+- **Supersedes / superseded by:** não altera a fórmula de impacto local existente; substitui qualquer ordenação global implícita entre moedas.
+
+#### Contexto e pergunta
+
+O módulo calculava GMV em `amount_minor`, mas o ranking preliminar de candidatos não distinguia moedas. Comparar diretamente um valor em BRL com outro em MXN produziria uma prioridade numérica sem taxa, data ou fonte de câmbio.
+
+#### Decisão
+
+Calcular impacto com ticket médio e aprovações perdidas na moeda da janela e priorizar Incidents por `impact.amount_minor` somente dentro de buckets da mesma `currency`. Sem FX versionado, a saída expõe buckets independentes em vez de uma ordem global artificial.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Comparar `amount_minor` entre moedas | implementação curta | ranking financeiramente inválido | FACT: BRL e MXN possuem unidades diferentes | rejeitada |
+| Chamar uma API FX em tempo real | ranking global | nova dependência, latência e dados não reproduzíveis | ASSUMPTION: demo não possui feed FX confiável | fora do MVP |
+| Buckets por moeda com ordenação local | determinístico e auditável | UI não recebe um único ranking global | TEST: BRL/MXN podem ser validados sem câmbio | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `WindowMetrics` fornece `amount_minor` e `currency`; `Impact` preserva a moeda local.
+- **TEST:** NOT RUN no momento deste registro; serão cobertos BRL, MXN, duplicidade de candidato e ausência deliberada de FX.
+- **UNKNOWN:** a moeda de apresentação executiva se a demo exigir comparação internacional.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** priorização honesta e reproduzível dentro de cada mercado.
+- **Abrimos mão de:** ranking único de mercados diferentes.
+- **Risco residual:** o consumidor deve apresentar o bucket de moeda, não concatenar listas como se fossem comparáveis.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** nenhuma conversão ou nova dependência externa é adicionada a `CTR-INC-001`.
+- **Pessoas/branches:** API/UI devem consumir buckets explicitamente quando exibirem múltiplas moedas.
+- **Linear:** `LUM2-36` recebe evidência somente após testes e revisão.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** maior GMV em BRL aparece antes de menor GMV em BRL; MXN permanece separado.
+- **Caso difícil/adverso:** candidatos sobrepostos não duplicam GMV; zero tentativas falha explicitamente; não há FX silencioso.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** apresentar buckets sem conversão até uma decisão de FX versionada.
+
+#### Gatilhos de revisão
+
+Pedido de ranking global, nova moeda de apresentação, ou fonte FX auditável exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:32:00-03:00:** PASS: `python -m pytest -q` aprovou 94 testes; os testes específicos cobriram GMV local, não duplicação de perdas em candidatos correlacionados, buckets BRL/MXN e janela sem tentativas. `python scripts/validate_contracts.py`, `python -m compileall -q app` e `git diff --check` também passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve alteração de rota, UI ou fluxo executável no navegador.
+
+### FL-20260829-ROGERIO-009 — Exigir fingerprint causal exato para separar incidentes simultâneos
+
+- **Timestamp:** 2026-08-29T22:45:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** data | product | quality
+- **Escopo:** `LUM2-35`, `TASK-INC-001`, `CTR-DET-001`, `CTR-INC-001`, `app/incidents/__init__.py`
+- **Links:** `docs/plans/system-plan.md` v2.0.5; `tests/test_incident_correlation.py`
+- **Supersedes / superseded by:** substitui a compatibilidade parcial de slices para correlação de Incident.
+
+#### Contexto e pergunta
+
+O agrupamento existente aceitava candidates com uma dimensão compartilhada. Assim, um problema de provider no Brasil e uma queda de issuer no mesmo país podiam formar uma narrativa única mesmo com fingerprints causais diferentes.
+
+#### Decisão
+
+Correlacionar apenas candidates com mesmo `correlation_id`, janelas sobrepostas e fingerprint completo de `slice`. Métricas diferentes para o mesmo slice ainda se unem; causa com qualquer dimensão diferente permanece em Incident separado.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Compatibilidade parcial de slice | agrega possíveis relações pai-filho | pode mesclar causas simultâneas por país ou método | FACT: trial by fire inclui incidentes simultâneos | risco de narrativa falsa |
+| Agrupar só por correlation_id | implementação mínima | une todo o conteúdo da janela | FACT: correlation cobre janela, não causa | insuficiente |
+| Fingerprint exato de slice | determinístico e auditável | pode separar relação pai-filho até haver RCA explícito | TEST: provider BR e issuer MX serão independentes | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `slice` é a saída causal de `CTR-DET-001`; `correlation_id` sozinho representa a janela.
+- **TEST:** NOT RUN no momento deste registro; casos de mesmo slice, provider BR e issuer MX serão executados.
+- **UNKNOWN:** se o RCA futuro precisa ligar explicitamente uma hipótese pai e filha; isso exigirá contrato de relação, não heurística implícita.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** dois problemas simultâneos não viram uma causa narrativa falsa.
+- **Abrimos mão de:** deduzir hierarquia causal por sobreposição parcial.
+- **Risco residual:** um incidente real com slices complementares pode aparecer dividido até o RCA publicar vínculo explícito.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** não muda schema; muda a semântica da correlação do produtor de Incident.
+- **Pessoas/branches:** LUM2-36 recebe grupos independentes para priorização; memória/API/UI recebem IDs distintos.
+- **Linear:** LUM2-35 recebe evidência após testes e review.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** métricas approval/latency para o mesmo provider BR formam um Incident.
+- **Caso difícil/adverso:** provider BR e issuer MX simultâneos formam dois; mesma country isolada não basta para unir.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** expor incidents separados até existir vínculo causal explícito.
+
+#### Gatilhos de revisão
+
+RCA que publique relação pai-filho ou trial que demonstre fragmentação inadequada exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:55:00-03:00:** PASS: 97 testes completos aprovados; os casos específicos cobriram métricas múltiplas no mesmo slice, provider BR + issuer MX simultâneos e provider/issuer no mesmo país sem mesclagem indevida. Contratos, compilação e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve alteração de rota, UI ou fluxo executável no navegador.
 
 ## Prontidão para a banca
 

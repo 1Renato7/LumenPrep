@@ -2,10 +2,10 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.1.0
+- **Versão:** 2.1.1
 - **Data:** 2026-08-29
 - **Estado:** `PLAN READY`
-- **Change class:** `MINOR`; publica o frontend já planejado sobre a API v3 implementada, sem alterar contratos públicos.
+- **Change class:** `MINOR`; preserva o frontend 2.1.0 e publica extensões aditivas compatíveis de `CTR-INC-001 v1`, sem alterar `CTR-API-001 v3`.
 - **Fonte de verdade:** este arquivo; planos em `docs/plans/people/` são projeções.
 - **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
 - **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
@@ -15,6 +15,7 @@
 - **Changelog 2.0.1:** registra a implementação validada de histórico/stream mediado por servidor em `renato/tarefa44@602ae9d` como evidência do harness interno. Ela não implementa nem congela `CTR-TXN/TXL/API v3`; `TASK-DATA-009 / LUM2-62` deve adaptá-la à batch API comum antes de integração funcional.
 - **Changelog 2.0.2:** integra `renato/tarefa44@602ae9d` na `main` como `CMP-HARNESS-001`; `CTR-TXN/TXL/API v3` continuam sendo a única fronteira pública planejada, e `LUM2-61/62` continuam responsáveis pelo adapter e tráfego de fundo compatíveis.
 - **Changelog 2.1.0:** publica a pasta única `web/` com shell desktop/mobile, formulário, logs, detalhes e Incidents. O formulário consome a API v3; Logs, Detail e Incidents permanecem em fixtures explícitas até o adapter live de `LUM2-12`. Não confirma deploy/live acceptance.
+- **Changelog 2.1.1:** integra `feat/OBJ-ROGERIO-001-platform-core` sobre o frontend 2.1.0, preservando `web/` e adicionando a `CTR-INC-001 v1` hipóteses causais ordenadas, classe de recomendação humana, priorização local por moeda e correlação por fingerprint causal exato. Não adiciona adapter live ao frontend nem altera `CTR-API-001 v3`.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -180,7 +181,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | CTR-EVT-001 v1 | FROZEN | DATA/TXN → ING | canonical payment attempt event | quarantine/dedupe/watermark | schema existente |
 | CTR-AGG-001 v1 | FROZEN | AGG → DET/RCA | métricas calculadas | `INSUFFICIENT_VOLUME` | schema existente |
 | CTR-DET-001 v1 | FROZEN | DET → INC | candidatos numéricos | `NO_ANOMALY`, data quality | schema existente |
-| CTR-INC-001 v1 | FROZEN | INC → MEM/EXP/API | incidente auditável | `INCONCLUSIVE` válido | fixtures existentes |
+| CTR-INC-001 v1 | FROZEN, adendo 2.1.1 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação e impacto local priorizável | `INCONCLUSIVE` válido; moedas não recebem conversão implícita | fixtures existentes + testes de serialização/prioridade/correlação |
 | CTR-MEM-001 v1.1 | FROZEN | MEM → EXP/API | precedente tipado | `NO_PRECEDENT`, `MEMORY_UNAVAILABLE` | fixtures existentes |
 | CTR-LLM-001 v1 | FROZEN | EXP → API/WEB | explicação grounded | template determinístico | schema existente |
 | CTR-DEP-001 v1 | FROZEN | Railway/Vercel → team | URLs, env, health e CORS | local mode; no fake live | deployment plan |
@@ -195,6 +196,10 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 - Sample generation devolve somente TransactionInput, usa catálogo vigente e retorna a seed efetiva; gerar não persiste nem processa até `Submit batch`.
 - Outcome determinístico precede classificação; LLM não decide sucesso/falha nem calcula métricas.
 - RAG recebe somente Incident já derivado e não é chamado por transação individual.
+- `root_cause.alternatives` é uma lista ordenada por confiança decrescente; cada item é hipótese, não causa atual, e não altera `root_cause.status`.
+- `recommendation_class` só classifica a recomendação humana (`INVESTIGATE`, `MONITOR` ou `ESCALATE`); `execution` permanece obrigatoriamente `HUMAN_ONLY`.
+- Incidentes são ordenados por `impact.amount_minor` apenas dentro do bucket da mesma `currency`; sem FX versionado não há comparação global entre moedas.
+- Candidatos só compartilham Incident quando `correlation_id`, janela sobreposta e fingerprint completo de `slice` coincidem; similaridade parcial de escopo não é suficiente.
 - UI consome exclusivamente `NEXT_PUBLIC_API_BASE_URL`; não possui credencial de banco/agent.
 
 ## 8. Persistência, processamento e segurança
