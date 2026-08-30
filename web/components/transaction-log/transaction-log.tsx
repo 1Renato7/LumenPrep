@@ -229,7 +229,7 @@ function DiagnosticSummary({ record }: { record: TransactionRecord }) {
   const classification = record.classification;
   const outcome = record.outcome;
   if (record.processing.stage === "PIPELINE_FAILED") {
-    return <div className={`${styles.diagnostic} ${styles.technicalDiagnostic}`}><strong>Technical attention required</strong><span>Failure code: <code>{record.processing.failure_code ?? "Not provided"}</code></span><span>No business outcome or causal diagnosis was returned.</span><Link href="/incidents#technical-attention">View in Incidents</Link></div>;
+    return <div className={`${styles.diagnostic} ${styles.technicalDiagnostic}`}><strong>Processing issue requires review</strong><span>Failure code: <code>{record.processing.failure_code ?? "Not provided"}</code></span><span>No business outcome or causal diagnosis was returned.</span><Link href={`/transactions/${encodeURIComponent(record.transaction_id)}`}>Open transaction details</Link></div>;
   }
   if (!classification) {
     return <div className={styles.diagnostic}><strong>Analysis in progress</strong><span>Diagnosis becomes available after backend processing.</span></div>;

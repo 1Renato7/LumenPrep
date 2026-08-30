@@ -154,21 +154,14 @@ def _advance_locked(con, transaction_id: str) -> list[SuggestionJob]:
         adapted = _generate_outcome(transaction_id, json.loads(row[2]), row[3])
         con.execute("BEGIN TRANSACTION")
         transaction_started = True
-        # Make the current transaction eligible for evidence-authorized linking.
-        # API readers use the same CONNECTION_LOCK, so they cannot observe this
-        # provisional PROCESSING + classification state.
-        con.execute(
-            "UPDATE transaction_records SET classification_json = ? WHERE transaction_id = ?",
-            [json.dumps(adapted.classification), transaction_id],
-        )
         ingestion = ingest_event(adapted.event)
         if ingestion.status not in {"ACCEPTED", "DUPLICATE"}:
             raise RuntimeError(f"canonical event was {ingestion.status}")
-        derive_incidents_for_correlation(con, row[3], suggestion_jobs=suggestion_jobs)
-        authored_classification = con.execute(
-            "SELECT classification_json FROM transaction_records WHERE transaction_id = ?",
-            [transaction_id],
-        ).fetchone()[0]
+        # Persist the terminal result before deriving Incidents. A batch-level
+        # correlation can then make a decision from the complete terminal set,
+        # rather than creating a causal conclusion from an arbitrary prefix.
+        # API readers still cannot observe an intermediate state because this
+        # transaction is protected by the shared connection lock.
         con.execute(
             """UPDATE transaction_records
                SET status = ?, processing_json = ?, outcome_json = ?, classification_json = ?,
@@ -178,11 +171,12 @@ def _advance_locked(con, transaction_id: str) -> list[SuggestionJob]:
                 adapted.result,
                 json.dumps({"stage": "COMPLETE", "progress_percent": 100, "failure_code": None}),
                 json.dumps(adapted.outcome),
-                authored_classification,
+                json.dumps(adapted.classification),
                 now,
                 transaction_id,
             ],
         )
+        derive_incidents_for_correlation(con, row[3], suggestion_jobs=suggestion_jobs)
         con.execute("COMMIT")
         transaction_started = False
     except Exception as exc:  # a technical worker failure must never read as a business decline

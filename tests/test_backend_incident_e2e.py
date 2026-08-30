@@ -118,3 +118,53 @@ def test_batch_to_incident_to_grounded_detail_uses_no_fixture(monkeypatch):
     assert trigger_detail.status_code == 200
     assert trigger_detail.json()["status"] == "RESOLVED"
     assert trigger_detail.json()["incidents"][0]["evidence_ids"] == [f"evd_{anomaly_transaction_ids[-1]}"]
+
+
+def test_homogeneous_mapped_refusal_batch_creates_one_inconclusive_incident(monkeypatch):
+    monkeypatch.setattr(incidents_api.settings, "demo_mode", False)
+    client = TestClient(app)
+    payload = {
+        "schema_version": "1.0",
+        "idempotency_key": "homogeneous-timeout-68-batch",
+        "transactions": [
+            {
+                "merchant_id": "merchant_br_01",
+                "provider_id": "provider_alpha",
+                "issuer_bank": "bank_br_a",
+                "country": "BR",
+                "currency": "BRL",
+                "amount_minor": 12_990,
+                "payment_method_category": "CARD",
+                "card_brand": "VISA",
+                "card_type": "CREDIT",
+                "provider_response_code": "68",
+            }
+            for _ in range(100)
+        ],
+    }
+
+    response = client.post("/v1/transaction-batches", json=payload, headers={"Idempotency-Key": payload["idempotency_key"]})
+    assert response.status_code == 202
+    transaction_ids = response.json()["transaction_ids"]
+
+    batch = client.get(f"/v1/transaction-batches/{response.json()['batch_id']}")
+    assert batch.status_code == 200
+    assert {item["status"] for item in batch.json()["items"]} == {"FAILED"}
+    assert {item["outcome"]["normalized_decline_code"] for item in batch.json()["items"]} == {"PROVIDER_TIMEOUT"}
+
+    first = client.get(f"/v1/transactions/{transaction_ids[0]}/incidents")
+    last = client.get(f"/v1/transactions/{transaction_ids[-1]}/incidents")
+    assert first.status_code == last.status_code == 200
+    assert first.json()["status"] == last.json()["status"] == "RESOLVED"
+    first_incident = first.json()["incidents"][0]["incident"]
+    last_incident = last.json()["incidents"][0]["incident"]
+    assert first_incident["incident_id"] == last_incident["incident_id"]
+    assert first_incident["state"] == "INCONCLUSIVE"
+    assert first_incident["root_cause"]["status"] == "INCONCLUSIVE"
+    assert first_incident["root_cause"]["category"] is None
+    assert first_incident["metrics"]["eligible_attempts"] == 100
+    assert first_incident["metrics"]["decline_codes"] == ["PROVIDER_TIMEOUT"]
+
+    linked = client.get("/v1/incidents", params={"transaction_id": transaction_ids[50]})
+    assert linked.status_code == 200
+    assert [item["incident_id"] for item in linked.json()] == [first_incident["incident_id"]]

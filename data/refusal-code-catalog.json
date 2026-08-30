@@ -1,4 +1,5 @@
 [
+  {"mapping_id":"iso8583-timeout-68","provider_id":"*","issuer_bank":"*","card_brand":"*","response_code":"68","normalized_code":"PROVIDER_TIMEOUT","outcome":"FAILED","reason":"Response received too late","source":"ISO_8583","mapping_version":"2026.08.30"},
   {"mapping_id":"adyen-refusal-0","provider_id":"ADYEN","issuer_bank":"*","card_brand":"*","response_code":"0","normalized_code":"APPROVED","outcome":"SUCCEEDED","reason":"Authorised; refusal reason code must be ignored","source":"ADYEN_REFUSAL_REASON","mapping_version":"2026.08.30"},
   {"mapping_id":"adyen-refusal-2","provider_id":"ADYEN","issuer_bank":"*","card_brand":"*","response_code":"2","normalized_code":"GENERIC_ISSUER_DECLINE","outcome":"FAILED","reason":"Refused","source":"ADYEN_REFUSAL_REASON","mapping_version":"2026.08.30"},
   {"mapping_id":"adyen-refusal-4","provider_id":"ADYEN","issuer_bank":"*","card_brand":"*","response_code":"4","normalized_code":"ACQUIRER_ERROR","outcome":"FAILED","reason":"Acquirer Error","source":"ADYEN_REFUSAL_REASON","mapping_version":"2026.08.30"},

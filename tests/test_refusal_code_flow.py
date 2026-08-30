@@ -35,6 +35,16 @@ def test_mapped_response_code_is_persistable_transaction_fact():
     assert adapted.event["decline"]["raw_message"] == "Insufficient funds"
 
 
+def test_iso_8583_timeout_68_is_a_mapped_failure_not_an_unknown():
+    get_connection()
+    adapted = _generate_outcome("txn_refusal_68", _input("68"), "corr_refusal")
+
+    assert adapted.result == "FAILED"
+    assert adapted.outcome["normalized_decline_code"] == "PROVIDER_TIMEOUT"
+    assert adapted.classification["refusal_resolution"]["lookup_status"] == "MATCH_FOUND"
+    assert adapted.classification["refusal_resolution"]["source"] == "ISO_8583"
+
+
 def test_unknown_response_code_stays_unknown_without_invented_reason():
     get_connection()
     adapted = _generate_outcome("txn_refusal_unknown", _input("99999"), "corr_refusal")
