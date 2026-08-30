@@ -101,6 +101,7 @@ test("incident detail exposes diagnosis, evidence, action, memory trace, and lim
   assert.ok(Object.keys(detail.incident.root_cause.confidence_factors).length > 0);
   assert.ok(detail.incident.evidence.every((item) => item.evidence_id && item.statement && item.source_ref));
   assert.ok(detail.incident.recommendations.every((item) => item.execution === "HUMAN_ONLY"));
+  assert.equal(detail.incident.recurrence_first_detected_at, "2026-08-22T14:06:00Z");
   assert.ok(detail.memory.retrieval_trace.index_version);
   assert.equal(detail.explanation.incident_id, detail.incident.incident_id);
   assert.ok(detail.explanation.evidence_ids.length > 0);

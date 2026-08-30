@@ -110,6 +110,12 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 - Persistência local por `review_id` é idempotente; uma repetição com conteúdo diferente é conflito. Se Neo4j estiver indisponível, a API informa falha e a mesma revisão pode ser reenviada, sem perder o motivo durável.
 - A UI de detalhe envia a decisão explícita e mostra o resultado; ela nunca permite que o agente aprove ou recuse uma causa.
 
+## Adendo 2.8.0 — primeira ocorrência de recorrência
+
+- **Plano geral:** 2.8.0; **contratos:** `CTR-INC-001 v1` e `CTR-TXL-001 v1` aditivos; **decisão:** `DEC-036` / `FL-20260830-TEAM-039`.
+- A persistência calcula uma assinatura de recorrência por categoria causal, métrica e escopo completo, separada do fingerprint de entrega por janela. O primeiro `detected_at` dessa assinatura permanece estável nas ocorrências futuras.
+- A API devolve `recurrence_first_detected_at` no Incident e, nos logs de transação, em cada Incident relacionado. A interface deve exibir a data explicitamente, sem inferi-la de precedentes GraphRAG.
+
 ## Definition of Done
 
 Evals de grounding/no-answer/injection/leakage passam; review gate sem bloqueantes; integration guardian valida Incident/API/UI; browser acceptance conjunto comprova links e estados.

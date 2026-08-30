@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS incident_records (
     correlation_id VARCHAR NOT NULL,
     window_start TIMESTAMP NOT NULL,
     window_end TIMESTAMP NOT NULL,
+    recurrence_key VARCHAR,
+    recurrence_first_detected_at TIMESTAMP,
     state VARCHAR NOT NULL,
     payload_json VARCHAR NOT NULL,
     created_at TIMESTAMP NOT NULL,
@@ -140,6 +142,8 @@ _MIGRATION_SQL = """
 ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_owner VARCHAR;
 ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMP;
 ALTER TABLE refusal_code_catalog ADD COLUMN IF NOT EXISTS normalized_code VARCHAR;
+ALTER TABLE incident_records ADD COLUMN IF NOT EXISTS recurrence_key VARCHAR;
+ALTER TABLE incident_records ADD COLUMN IF NOT EXISTS recurrence_first_detected_at TIMESTAMP;
 """
 
 _connection: duckdb.DuckDBPyConnection | None = None

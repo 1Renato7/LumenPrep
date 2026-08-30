@@ -122,6 +122,10 @@ export interface TransactionClassification {
   confidence: number;
   evidence_ids: string[];
   related_incident_ids: string[];
+  related_incidents?: Array<{
+    incident_id: string;
+    recurrence_first_detected_at: string | null;
+  }>;
   refusal_resolution?: RefusalCodeResolution;
 }
 
@@ -199,9 +203,11 @@ export interface Incident {
   state: IncidentState;
   detected_at: string;
   estimated_started_at: string;
+  recurrence_first_detected_at?: string | null;
   title: string;
   scope: Record<string, string[]>;
-  metrics: Record<string, number | string | null>;
+  /** CTR-INC-001 permits scalar metrics and string dimensions such as decline codes. */
+  metrics: Record<string, number | string | string[] | null>;
   root_cause: {
     status: "SUPPORTED" | "INCONCLUSIVE";
     category: string | null;

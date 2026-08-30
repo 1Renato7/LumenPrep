@@ -61,6 +61,43 @@ def causal_fingerprint(incident: Incident | Mapping[str, Any]) -> str:
     return sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def recurrence_key(incident: Incident | Mapping[str, Any]) -> str | None:
+    """Identify the operational type of an Incident across distinct windows.
+
+    Delivery identity intentionally includes correlation and time window. A
+    recurrence must not: it is the same supported causal category, metric and
+    complete operational scope observed again later. An inconclusive Incident
+    has no named causal type and is therefore kept as its own first occurrence.
+    """
+    payload = incident.model_dump(mode="json") if isinstance(incident, Incident) else dict(incident)
+    root_cause = payload.get("root_cause", {})
+    category = root_cause.get("category") if isinstance(root_cause, Mapping) else None
+    if not isinstance(category, str) or not category:
+        return None
+    scope = payload.get("scope", {})
+    if not isinstance(scope, Mapping) or not scope:
+        raise ValueError("incident scope is required for a recurrence key")
+    normalized_scope = {
+        str(key): sorted(str(item) for item in value)
+        for key, value in sorted(scope.items())
+        if isinstance(value, list)
+    }
+    if not normalized_scope:
+        raise ValueError("incident scope is required for a recurrence key")
+    metrics = payload.get("metrics", {})
+    metric = metrics.get("metric") if isinstance(metrics, Mapping) else None
+    encoded = json.dumps(
+        {"category": category, "metric": str(metric or "UNSPECIFIED"), "scope": normalized_scope},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _utc_string(value: datetime) -> str:
+    return value.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 class DuckDBIncidentRepository:
     """Idempotent Incident store backed by the shared DuckDB connection."""
 
@@ -79,6 +116,19 @@ class DuckDBIncidentRepository:
         now = _now()
         with CONNECTION_LOCK:
             con = get_connection()
+            _backfill_recurrence_metadata(con)
+            key = recurrence_key(model)
+            detected_at = _as_utc_naive(model.detected_at)
+            first_detected_at = detected_at
+            if key is not None:
+                previous = con.execute(
+                    """SELECT MIN(COALESCE(recurrence_first_detected_at, window_end))
+                       FROM incident_records WHERE recurrence_key = ?""",
+                    [key],
+                ).fetchone()
+                if previous is not None and previous[0] is not None:
+                    first_detected_at = min(detected_at, previous[0])
+            model = model.model_copy(update={"recurrence_first_detected_at": _utc_string(first_detected_at)})
             existing = con.execute(
                 "SELECT incident_id, created_at FROM incident_records WHERE causal_fingerprint = ?", [fingerprint]
             ).fetchone()
@@ -97,13 +147,15 @@ class DuckDBIncidentRepository:
             payload_json = json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
             con.execute(
                 """INSERT INTO incident_records
-                   (incident_id, causal_fingerprint, correlation_id, window_start, window_end, state, payload_json, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   (incident_id, causal_fingerprint, correlation_id, window_start, window_end, recurrence_key, recurrence_first_detected_at, state, payload_json, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT (incident_id) DO UPDATE SET
                      causal_fingerprint = excluded.causal_fingerprint,
                      correlation_id = excluded.correlation_id,
                      window_start = excluded.window_start,
                      window_end = excluded.window_end,
+                     recurrence_key = excluded.recurrence_key,
+                     recurrence_first_detected_at = excluded.recurrence_first_detected_at,
                      state = excluded.state,
                      payload_json = excluded.payload_json,
                      updated_at = excluded.updated_at""",
@@ -113,6 +165,8 @@ class DuckDBIncidentRepository:
                     model.correlation_id,
                     _as_utc_naive(model.estimated_started_at),
                     _as_utc_naive(model.detected_at),
+                    key,
+                    first_detected_at,
                     model.state,
                     payload_json,
                     created_at,
@@ -153,19 +207,23 @@ class DuckDBIncidentRepository:
 
     def get(self, incident_id: str) -> Incident | None:
         with CONNECTION_LOCK:
-            row = get_connection().execute(
-                "SELECT payload_json FROM incident_records WHERE incident_id = ?", [incident_id]
+            con = get_connection()
+            _backfill_recurrence_metadata(con)
+            row = con.execute(
+                "SELECT payload_json, recurrence_first_detected_at FROM incident_records WHERE incident_id = ?", [incident_id]
             ).fetchone()
-        return Incident.model_validate_json(row[0]) if row else None
+        return _incident_from_row(row) if row else None
 
     def list(self, *, correlation_id: str | None = None) -> list[Incident]:
         where = "WHERE correlation_id = ?" if correlation_id is not None else ""
         values = [correlation_id] if correlation_id is not None else []
         with CONNECTION_LOCK:
-            rows = get_connection().execute(
-                f"SELECT payload_json FROM incident_records {where} ORDER BY window_end DESC, incident_id ASC", values
+            con = get_connection()
+            _backfill_recurrence_metadata(con)
+            rows = con.execute(
+                f"SELECT payload_json, recurrence_first_detected_at FROM incident_records {where} ORDER BY window_end DESC, incident_id ASC", values
             ).fetchall()
-        return [Incident.model_validate_json(row[0]) for row in rows]
+        return [_incident_from_row(row) for row in rows]
 
     def link_transaction(
         self, transaction_id: str, incident_id: str, *, evidence_ids: list[str], correlation_id: str
@@ -199,15 +257,17 @@ class DuckDBIncidentRepository:
 
     def list_for_transaction(self, transaction_id: str) -> list[Incident]:
         with CONNECTION_LOCK:
-            rows = get_connection().execute(
-                """SELECT records.payload_json
+            con = get_connection()
+            _backfill_recurrence_metadata(con)
+            rows = con.execute(
+                """SELECT records.payload_json, records.recurrence_first_detected_at
                    FROM transaction_incident_links AS links
                    JOIN incident_records AS records USING (incident_id)
                    WHERE links.transaction_id = ? AND links.correlation_id = records.correlation_id
                    ORDER BY records.window_end DESC, records.incident_id ASC""",
                 [transaction_id],
             ).fetchall()
-        return [Incident.model_validate_json(row[0]) for row in rows]
+        return [_incident_from_row(row) for row in rows]
 
     def record_review(
         self, *, review_id: str, incident_id: str, decision: str, reviewer_id: str,
@@ -253,3 +313,74 @@ def _review_row(review_id: str, row: tuple[Any, ...]) -> dict[str, Any]:
         "reason": row[3], "confirmed_cause": row[4], "playbook_id": row[5],
         "reviewed_at": row[6].replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+
+
+def _incident_from_row(row: tuple[Any, ...]) -> Incident:
+    model = Incident.model_validate_json(row[0])
+    first_detected_at = row[1]
+    if model.recurrence_first_detected_at is not None or first_detected_at is None:
+        return model
+    return model.model_copy(update={"recurrence_first_detected_at": _utc_string(first_detected_at)})
+
+
+def _backfill_recurrence_metadata(con: Any) -> None:
+    """Upgrade existing incident and transaction JSON without changing their IDs.
+
+    Railway volumes can contain records from before recurrence metadata existed.
+    The current store is small in the hackathon runtime, so a deterministic
+    backfill at repository access is safer than requiring an external migration
+    command and immediately makes legacy rows visible in the log.
+    """
+    rows = con.execute(
+        """SELECT incident_id, payload_json, window_end, recurrence_key,
+                  recurrence_first_detected_at FROM incident_records"""
+    ).fetchall()
+    if not rows:
+        return
+    parsed: list[tuple[str, Incident, datetime, str | None, datetime | None]] = []
+    earliest: dict[str, datetime] = {}
+    for incident_id, payload_json, window_end, stored_key, stored_first in rows:
+        model = Incident.model_validate_json(payload_json)
+        key = recurrence_key(model)
+        detected_at = _as_utc_naive(model.detected_at)
+        if key is not None:
+            earliest[key] = min(earliest.get(key, detected_at), detected_at)
+        parsed.append((incident_id, model, window_end, key, stored_first))
+
+    recurrence_dates: dict[str, str] = {}
+    for incident_id, model, window_end, key, stored_first in parsed:
+        first = earliest[key] if key is not None else _as_utc_naive(model.detected_at)
+        first_value = _utc_string(first)
+        recurrence_dates[incident_id] = first_value
+        if stored_key == key and stored_first == first and model.recurrence_first_detected_at == first_value:
+            continue
+        updated = model.model_copy(update={"recurrence_first_detected_at": first_value})
+        con.execute(
+            """UPDATE incident_records
+               SET recurrence_key = ?, recurrence_first_detected_at = ?, payload_json = ?
+               WHERE incident_id = ?""",
+            [key, first, json.dumps(updated.model_dump(mode="json"), sort_keys=True, separators=(",", ":")), incident_id],
+        )
+
+    transaction_rows = con.execute(
+        "SELECT transaction_id, classification_json FROM transaction_records WHERE classification_json IS NOT NULL"
+    ).fetchall()
+    for transaction_id, classification_json in transaction_rows:
+        try:
+            classification = json.loads(classification_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        related_ids = classification.get("related_incident_ids", [])
+        if not isinstance(related_ids, list):
+            continue
+        related_incidents = [
+            {"incident_id": incident_id, "recurrence_first_detected_at": recurrence_dates.get(incident_id)}
+            for incident_id in sorted({str(item) for item in related_ids if isinstance(item, str) and item})
+        ]
+        if classification.get("related_incidents") == related_incidents:
+            continue
+        classification["related_incidents"] = related_incidents
+        con.execute(
+            "UPDATE transaction_records SET classification_json = ? WHERE transaction_id = ?",
+            [json.dumps(classification, sort_keys=True), transaction_id],
+        )

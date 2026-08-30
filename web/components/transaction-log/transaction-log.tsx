@@ -182,7 +182,7 @@ function DiagnosticSummary({ record }: { record: TransactionRecord }) {
     <span>{classification.reason}</span>
     {outcome?.normalized_decline_code ? <span>Normalized decline: {outcome.normalized_decline_code}</span> : null}
     <span>Evidence: {classification.evidence_ids.length ? classification.evidence_ids.join(", ") : "None returned"}</span>
-    {classification.related_incident_ids.length ? <span>Incident: {classification.related_incident_ids.map((id) => <Link key={id} href={`/incidents/${encodeURIComponent(id)}`}>{id}</Link>)}</span> : <span>No related incident.</span>}
+    {classification.related_incident_ids.length ? <span>Incident: {classification.related_incident_ids.map((id, index) => { const related = classification.related_incidents?.find((item) => item.incident_id === id); return <span key={id}><Link href={`/incidents/${encodeURIComponent(id)}`}>{id}</Link>{related?.recurrence_first_detected_at ? <> · First occurrence: <time dateTime={related.recurrence_first_detected_at}>{formatBrasiliaDateTime(related.recurrence_first_detected_at)}</time></> : null}{index < classification.related_incident_ids.length - 1 ? "; " : ""}</span>; })}</span> : <span>No related incident.</span>}
   </div>;
 }
 

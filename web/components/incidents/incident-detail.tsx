@@ -61,7 +61,7 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
     <section className={`${styles.card} ${styles.executiveCard}`} aria-labelledby="executive-summary-title">
       <div className={styles.cardTop}><span className={styles.state}>{incident.state}</span><span className={inconclusive ? styles.causeInconclusive : styles.causeSupported}>{incident.root_cause.status}</span></div>
       <h2 id="executive-summary-title">Executive summary</h2><p className={styles.lead}>{explanation.executive_summary}</p>
-      <div className={styles.meta}><Field label="Detected" value={formatDate(incident.detected_at)} /><Field label="Estimated start" value={formatDate(incident.estimated_started_at)} /><Field label="Correlation ID" value={incident.correlation_id} /><Field label="Model" value={explanation.model_version} /></div>
+      <div className={styles.meta}><Field label="Detected" value={formatDate(incident.detected_at)} /><Field label="First occurrence" value={incident.recurrence_first_detected_at ? formatDate(incident.recurrence_first_detected_at) : "Not available"} /><Field label="Estimated start" value={formatDate(incident.estimated_started_at)} /><Field label="Correlation ID" value={incident.correlation_id} /><Field label="Model" value={explanation.model_version} /></div>
     </section>
 
     <section className={styles.twoColumn}>
@@ -75,7 +75,7 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
       <article className={`${styles.card} ${styles.impactCard}`}><p className={styles.label}>Business exposure</p><h2>{formatMoney(incident.impact.amount_minor, incident.impact.currency)}</h2><p className={styles.muted}>GMV at risk · {humanize(incident.impact.method)}</p><div className={styles.meta}><Field label="Lower bound" value={formatOptionalMoney(incident.impact.lower_bound_minor, incident.impact.currency)} /><Field label="Upper bound" value={formatOptionalMoney(incident.impact.upper_bound_minor, incident.impact.currency)} /></div>
         <h3>Operational summary</h3><p>{explanation.operations_summary}</p>
         <h3>Scope</h3><div className={styles.tagGroups}>{Object.entries(incident.scope).map(([dimension, values]) => <div key={dimension}><span className={styles.label}>{humanize(dimension)}</span><div className={styles.tags}>{values.map((value) => <span key={value}>{value}</span>)}</div></div>)}</div>
-        <h3>Metrics returned</h3><dl className={styles.metrics}>{Object.entries(incident.metrics).map(([name, value]) => <div key={name}><dt>{humanize(name)}</dt><dd>{value ?? "Not available"}</dd></div>)}</dl>
+        <h3>Metrics returned</h3><dl className={styles.metrics}>{Object.entries(incident.metrics).map(([name, value]) => <div key={name}><dt>{humanize(name)}</dt><dd>{formatMetricValue(value)}</dd></div>)}</dl>
       </article>
     </section>
 
@@ -150,6 +150,10 @@ function Field({ label, value }: { label: string; value: string }) { return <div
 function EvidenceIds({ ids }: { ids: string[] }) { return ids.length ? <ul className={styles.inlineIds}>{ids.map((id) => <li key={id}><code>{id}</code></li>)}</ul> : <p>No evidence IDs were returned.</p>; }
 function formatMoney(amountMinor: number, currency: string): string { return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(amountMinor / 100); }
 function formatOptionalMoney(amountMinor: number | null | undefined, currency: string): string { return amountMinor === null || amountMinor === undefined ? "Not provided" : formatMoney(amountMinor, currency); }
+export function formatMetricValue(value: IncidentDetailData["incident"]["metrics"][string]): string {
+  if (value === null || value === undefined) return "Not available";
+  return Array.isArray(value) ? value.join(", ") || "Not available" : String(value);
+}
 function formatDate(value: string): string { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)); }
 function humanize(value: string): string { return value.toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase()); }
 function BackIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /><path d="M9 12h10" /></svg>; }

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { formatMetricValue } from "../../components/incidents/incident-detail";
+
 import batchAcceptedFixture from "../../../contracts/fixtures/transaction-batch-accepted.json";
 import catalogFixture from "../../../contracts/fixtures/transaction-catalog.json";
 import explanationFixture from "../../../contracts/fixtures/explanation-bundle.json";
@@ -144,6 +146,7 @@ test("accepts string-array incident metrics allowed by CTR-INC-001", () => {
   });
 
   assert.deepEqual(incident.metrics.decline_codes, ["DO_NOT_HONOR", "INSUFFICIENT_FUNDS", "SUSPECTED_FRAUD"]);
+  assert.equal(formatMetricValue(incident.metrics.decline_codes), "DO_NOT_HONOR, INSUFFICIENT_FUNDS, SUSPECTED_FRAUD");
 });
 
 test("submits CTR-HRV-001 to the incident review route and parses its audit response", async () => {

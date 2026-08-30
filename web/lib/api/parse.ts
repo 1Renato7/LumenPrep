@@ -216,9 +216,16 @@ function parseOutcome(value: unknown): TransactionOutcome | null {
 
 function parseClassification(value: unknown): TransactionClassification | null {
   if (value === null) return null;
-  const classification = exactObject(value, ["category", "reason", "confidence", "evidence_ids", "related_incident_ids"], ["refusal_resolution"], "TransactionClassification");
+  const classification = exactObject(value, ["category", "reason", "confidence", "evidence_ids", "related_incident_ids"], ["refusal_resolution", "related_incidents"], "TransactionClassification");
   const refusal = classification.refusal_resolution === undefined ? undefined : exactObject(classification.refusal_resolution, ["lookup_status", "provider_id", "issuer_bank", "card_brand", "response_code", "outcome", "normalized_code", "reason", "source", "mapping_version"], ["observed_response_code"], "RefusalCodeResolution");
-  return { category: enumValue(classification.category, classificationCategories, "TransactionClassification.category"), reason: string(classification.reason, "TransactionClassification.reason"), confidence: number(classification.confidence, "TransactionClassification.confidence", 0, 1), evidence_ids: stringArray(classification.evidence_ids, "TransactionClassification.evidence_ids"), related_incident_ids: stringArray(classification.related_incident_ids, "TransactionClassification.related_incident_ids"), ...(refusal === undefined ? {} : { refusal_resolution: { lookup_status: enumValue(refusal.lookup_status, new Set(["MATCH_FOUND", "NOT_FOUND", "AMBIGUOUS"]), "RefusalCodeResolution.lookup_status") as "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS", provider_id: string(refusal.provider_id, "RefusalCodeResolution.provider_id"), issuer_bank: string(refusal.issuer_bank, "RefusalCodeResolution.issuer_bank"), card_brand: string(refusal.card_brand, "RefusalCodeResolution.card_brand"), response_code: string(refusal.response_code, "RefusalCodeResolution.response_code"), outcome: enumValue(refusal.outcome, outcomeResults, "RefusalCodeResolution.outcome"), normalized_code: nullableString(refusal.normalized_code, "RefusalCodeResolution.normalized_code"), reason: nullableString(refusal.reason, "RefusalCodeResolution.reason"), source: nullableString(refusal.source, "RefusalCodeResolution.source"), mapping_version: nullableString(refusal.mapping_version, "RefusalCodeResolution.mapping_version") } }) } as TransactionClassification;
+  const relatedIncidents = classification.related_incidents === undefined ? undefined : (() => {
+    if (!Array.isArray(classification.related_incidents)) fail("TransactionClassification.related_incidents must be an array.", classification.related_incidents);
+    return classification.related_incidents.map((item, index) => {
+      const related = exactObject(item, ["incident_id", "recurrence_first_detected_at"], [], `TransactionClassification.related_incidents[${index}]`);
+      return { incident_id: string(related.incident_id, `TransactionClassification.related_incidents[${index}].incident_id`), recurrence_first_detected_at: nullableString(related.recurrence_first_detected_at, `TransactionClassification.related_incidents[${index}].recurrence_first_detected_at`) };
+    });
+  })();
+  return { category: enumValue(classification.category, classificationCategories, "TransactionClassification.category"), reason: string(classification.reason, "TransactionClassification.reason"), confidence: number(classification.confidence, "TransactionClassification.confidence", 0, 1), evidence_ids: stringArray(classification.evidence_ids, "TransactionClassification.evidence_ids"), related_incident_ids: stringArray(classification.related_incident_ids, "TransactionClassification.related_incident_ids"), ...(relatedIncidents === undefined ? {} : { related_incidents: relatedIncidents }), ...(refusal === undefined ? {} : { refusal_resolution: { lookup_status: enumValue(refusal.lookup_status, new Set(["MATCH_FOUND", "NOT_FOUND", "AMBIGUOUS"]), "RefusalCodeResolution.lookup_status") as "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS", provider_id: string(refusal.provider_id, "RefusalCodeResolution.provider_id"), issuer_bank: string(refusal.issuer_bank, "RefusalCodeResolution.issuer_bank"), card_brand: string(refusal.card_brand, "RefusalCodeResolution.card_brand"), response_code: string(refusal.response_code, "RefusalCodeResolution.response_code"), outcome: enumValue(refusal.outcome, outcomeResults, "RefusalCodeResolution.outcome"), normalized_code: nullableString(refusal.normalized_code, "RefusalCodeResolution.normalized_code"), reason: nullableString(refusal.reason, "RefusalCodeResolution.reason"), source: nullableString(refusal.source, "RefusalCodeResolution.source"), mapping_version: nullableString(refusal.mapping_version, "RefusalCodeResolution.mapping_version") } }) } as TransactionClassification;
 }
 
 export function parseTransactionRecord(value: unknown): TransactionRecord {
@@ -245,7 +252,7 @@ export function parseTransactionList(value: unknown): TransactionList {
 }
 
 export function parseIncident(value: unknown): Incident {
-  const incident = exactObject(value, ["schema_version", "incident_id", "state", "detected_at", "estimated_started_at", "title", "scope", "metrics", "root_cause", "impact", "evidence", "recommendations", "limitations", "correlation_id"], ["memory_matches"], "Incident");
+  const incident = exactObject(value, ["schema_version", "incident_id", "state", "detected_at", "estimated_started_at", "title", "scope", "metrics", "root_cause", "impact", "evidence", "recommendations", "limitations", "correlation_id"], ["memory_matches", "recurrence_first_detected_at"], "Incident");
   if (incident.schema_version !== "1.0") fail("Incident.schema_version must be 1.0.", value);
   const states = new Set(["DETECTED", "INVESTIGATING", "SUPPORTED", "INCONCLUSIVE", "RECOVERED", "HUMAN_CONFIRMED", "CLOSED"]);
   const scope = object(incident.scope, "Incident.scope");
@@ -286,6 +293,7 @@ export function parseIncident(value: unknown): Incident {
     state: enumValue(incident.state, states, "Incident.state") as Incident["state"],
     detected_at: string(incident.detected_at, "Incident.detected_at"),
     estimated_started_at: string(incident.estimated_started_at, "Incident.estimated_started_at"),
+    ...(incident.recurrence_first_detected_at === undefined ? {} : { recurrence_first_detected_at: nullableString(incident.recurrence_first_detected_at, "Incident.recurrence_first_detected_at") }),
     title: string(incident.title, "Incident.title"),
     scope: scope as Incident["scope"],
     metrics: metrics as Incident["metrics"],

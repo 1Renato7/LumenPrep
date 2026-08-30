@@ -193,6 +193,7 @@ class Incident(BaseModel):
     state: Literal["DETECTED", "INVESTIGATING", "SUPPORTED", "INCONCLUSIVE", "RECOVERED", "HUMAN_CONFIRMED", "CLOSED"]
     detected_at: str
     estimated_started_at: str
+    recurrence_first_detected_at: str | None = None
     title: str
     scope: dict[str, list[str]]
     metrics: dict[str, Any]
@@ -289,7 +290,7 @@ def to_incident(
     )
 
 
-from .repository import DuckDBIncidentRepository, IncidentIdConflictError, ReviewIdConflictError, causal_fingerprint  # noqa: E402
+from .repository import DuckDBIncidentRepository, IncidentIdConflictError, ReviewIdConflictError, causal_fingerprint, recurrence_key  # noqa: E402
 
 __all__ = [
     "CorrelatedCandidates",
@@ -306,5 +307,6 @@ __all__ = [
     "compute_impact",
     "correlate_candidates",
     "prioritize_incidents_by_local_impact",
+    "recurrence_key",
     "to_incident",
 ]

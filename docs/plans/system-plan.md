@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.7.0
+- **Versão:** 2.8.0
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -28,6 +28,7 @@
 - **Changelog 2.5.1:** após o trial by fire local, restringe a categoria publicada pelo agente às categorias que já pertencem ao RCA atual. Precedentes recuperados continuam sendo contexto citável, mas não podem introduzir uma nova categoria causal.
 - **Changelog 2.6.1:** reduz o bucket-base de agregação, harness e detecção de cinco para um minuto. A janela de observação continua em 60 minutos, agora formada por 60 buckets fechados; o baseline continua estritamente anterior e o limiar de amostra não muda.
 - **Changelog 2.7.0:** adiciona `CTR-HRV-001 v1`, a decisão humana idempotente sobre um Incident. Aprovação promove somente um precedente com causa, playbook, evidências e motivo do revisor; recusa persiste motivo auditável no DuckDB/Neo4j, mas não entra na recuperação GraphRAG.
+- **Changelog 2.8.0:** adiciona ao `CTR-INC-001 v1` o campo aditivo `recurrence_first_detected_at`, calculado por tipo causal (categoria, métrica e escopo completo) sem misturar janelas ou correlações. O `CTR-TXL-001 v1` expõe a mesma data junto de cada Incident relacionado, para que o log mostre a origem da recorrência.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -120,6 +121,7 @@ O MVP vence quando uma pessoa:
 | DEC-033 | DECIDED | Detectar `PAYMENT_CONVERSION` em observação móvel de 60 min formada por 60 buckets fechados de 1 min; exigir ao menos 10 `unique_payments`, três observações históricas anteriores do mesmo slice e queda de pelo menos 15 p.p. cuja bound superior de Wilson fique abaixo do baseline | aumenta a cadência com custo de mais agregações; preserva pagamento único, ausência de future leakage e deduplicação | `FL-20260830-TEAM-037` |
 | DEC-034 | DECIDED | Notificação in-app é criada após o upsert idempotente do Incident e é marcada lida no backend; não há canais externos neste incremento | refresh preserva estado e redelivery não duplica badge/card; não há entrega fora do produto | `FL-20260830-TEAM-036` |
 | DEC-035 | DECIDED | Uma decisão humana é registrada por `review_id`; `APPROVED` promove o Incident como precedente, enquanto `REJECTED` grava o motivo mas é excluída do retrieval | mantém o GraphRAG útil sem apagar divergências humanas | `FL-20260830-TEAM-038` |
+| DEC-036 | DECIDED | Recorrência operacional é identificada por categoria causal, métrica e escopo completo, ignorando janela e correlation ID; o primeiro `detected_at` é persistido e propagado ao log de transações somente para causas `SUPPORTED` | expõe duração real da recorrência sem agrupar incidentes simultâneos de escopos ou tipos diferentes nem apresentar hipótese inconclusiva como causa no log | `FL-20260830-TEAM-039` |
 
 ## 5. Arquitetura 2.0
 
@@ -190,7 +192,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | ID/versão | Estado | Produtor → consumidores | Propósito | Erros/fallback | Evidência |
 | --- | --- | --- | --- | --- | --- |
 | CTR-TXN-001 v1 | FROZEN / IMPLEMENTED ON MAIN | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | endpoints, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
-| CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome e classificação | stale/unknown explícitos | worker, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
+| CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome, classificação e a primeira ocorrência de cada Incident relacionado | stale/unknown explícitos; campo aditivo pode estar ausente em registros legados até a migração local | worker, schemas e fixtures; validação de recorrência em `FL-20260830-TEAM-039` |
 | CTR-API-001 v3 | FROZEN / IMPLEMENTED ON MAIN | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | endpoints e OpenAPI em `origin/main@103073b`; CORS/deploy pendentes |
 | CTR-TDI-001 v1 | IMPLEMENTED / READY FOR REVIEW | API → WEB | detalhe grounded de uma transação e seus Incidents autorizados | `404` para transação inexistente; `NO_INCIDENT` e `PARTIAL` explícitos | schema, fixture, OpenAPI e testes HTTP na branch `codex/integrate-grounded-transactions` |
 | CTR-SCN-001 v2 | INTERNAL MIGRATION PENDING | DATA/HARNESS → DATA | injeção e ground truth apenas para teste | nunca exposto na UI pública | scenario draft `cc24c7a`; código atual será adaptado pelo harness |
@@ -199,7 +201,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | CTR-DET-001 v1 | FROZEN | DET → INC | candidatos numéricos | `NO_ANOMALY`, data quality | schema existente |
 | CTR-DET-002 v2 | FROZEN / PROPOSED | DET → INC/AGENT/API/WEB | candidato `PAYMENT_CONVERSION`, com janela observada, baseline anterior, `unique_payments` e `estimated_lost_conversions` | baixa amostra, baseline insuficiente ou janela aberta não produzem candidato; redelivery preserva ID | `contracts/v2/payment-conversion-candidate.schema.json`, fixture e testes de janela/revisão |
 | CTR-NOT-001 v1 | FROZEN / PROPOSED | INC repository → API → WEB | notificação in-app persistente por Incident criado, com leitura backend-authoritativa | sem canais externos; leitura repetida é no-op; mesma chave de Incident não duplica | `notification_records`, OpenAPI, fixture, API/web tests |
-| CTR-INC-001 v1 | FROZEN, adendo 2.1.1 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação e impacto local priorizável | `INCONCLUSIVE` válido; moedas não recebem conversão implícita | fixtures existentes + testes de serialização/prioridade/correlação |
+| CTR-INC-001 v1 | FROZEN, adendos 2.1.1/2.8.0 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação, impacto local priorizável e data da primeira ocorrência do mesmo tipo causal | `INCONCLUSIVE` válido; moedas não recebem conversão implícita; campo de recorrência é aditivo | fixtures existentes + testes de serialização/prioridade/correlação |
 | CTR-MEM-001 v1.1 | FROZEN / RUNTIME READY FOR REVIEW | MEM → EXP/API | precedente tipado via adapter Neo4j opcional | `NO_PRECEDENT`, `MEMORY_UNAVAILABLE`; fallback local explícito | Compose, bootstrap, runtime e testes de fallback na branch `codex/neo4j-docker-runtime` |
 | CTR-LLM-001 v1 | FROZEN | EXP → API/WEB | explicação grounded | template determinístico | schema existente |
 | CTR-DEP-001 v1 | FROZEN | Railway/Vercel → team | URLs, env, health e CORS | local mode; no fake live | deployment plan |

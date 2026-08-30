@@ -4825,3 +4825,73 @@ Adicionar autenticação real, múltiplas revisões concorrentes ou uso de dados
 - **Code Review Gate:** **PASS WITH NOTE**. `review_id` é idempotente no DuckDB e preservado pela tela para retry; caso o espelho Neo4j falhe, a revisão local sobrevive e o mesmo payload pode ser reenviado. Nota: `reviewer_id` ainda é uma declaração do cliente até a autenticação corporativa existir.
 - **Integration Contract Guardian (INTEGRATION):** **READY WITH WARNING**. Schema, fixture, OpenAPI, persistência, API, cliente e mock compartilham `CTR-HRV-001 v1`; a constraint `HumanReview.review_id` foi adicionada ao bootstrap. A aplicação dessa constraint no Aura e o smoke do endpoint público permanecem pós-publicação.
 - **2026-08-30T08:45:00-03:00 — publicação:** `7b4ead0` foi publicado na `main`; o OpenAPI do Railway confirmou `/v1/incidents/{incident_id}/review`. Um `POST` com recusa sintética para `nonexistent-smoke-incident` retornou **404** como esperado, antes de persistir qualquer revisão. O Aura confirmou `human_review_id` ativo. Nenhuma aprovação ou recusa de incidente real foi criada durante a validação.
+
+### FL-20260830-TEAM-039 — Preservar a primeira ocorrência por tipo causal
+
+- **Timestamp:** 2026-08-30T09:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** product | data | contract | UX | operations
+- **Escopo:** `DEC-036`, `CTR-INC-001 v1`, `CTR-TXL-001 v1`, DuckDB, API e logs web
+- **Links:** `docs/plans/system-plan.md` 2.8.0
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O log precisava tornar visível quando um tipo de incidente começou pela primeira vez, mesmo que novas janelas e novas correlações produzam Incidents posteriores semelhantes.
+
+#### Decisão
+
+Persistir `recurrence_first_detected_at` por assinatura formada por categoria causal, métrica e escopo completo. A assinatura não inclui janela nem `correlation_id`; a entrega continua idempotente pelo fingerprint causal com janela. O Incident e cada referência relacionada no log recebem a mesma data.
+
+#### Critérios e por que agora
+
+A data precisa expressar uma recorrência operacional verificável no produto, não uma aproximação por título nem uma inferência do GraphRAG.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Usar somente o precedente GraphRAG mais antigo | reaproveita Neo4j | depende de aprovação humana e de similaridade, podendo omitir o primeiro incidente observado | FACT: GraphRAG é memória histórica, não o store corrente | não responde à recorrência operacional atual |
+| Agrupar apenas por título | implementação curta | títulos podem mudar ou representar escopos diferentes | ASSUMPTION: título não é chave estável | risco de falso agrupamento |
+| Categoria + métrica + escopo completo | determinístico e explica o “mesmo tipo” | não agrupa variações de escopo ou categoria inconclusiva | FACT: o RCA já fornece esses fatos estruturados | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o fingerprint atual inclui janela e `correlation_id`, portanto deduplica entrega mas não representa recorrência entre eventos.
+- **TEST:** NOT RUN no momento do registro; deve cobrir primeira ocorrência, recorrência em nova correlação, escopo/tipo distintos e leitura legada.
+- **UNKNOWN:** uma política futura pode querer agrupar escopos parcialmente compatíveis; isso exigirá versão nova, não relaxamento silencioso desta assinatura.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** início consistente e auditável da recorrência nos logs.
+- **Abrimos mão de:** tratar incidentes parcialmente parecidos como a mesma recorrência.
+- **Dívida/limitação:** categoria inconclusiva não deve declarar uma recorrência causal forte; ela fica isolada até haver categoria suportada.
+- **Risco residual:** correção posterior do RCA pode mover o tipo causal de uma janela; a ocorrência original preserva o que foi persistido e não reescreve o histórico.
+
+#### Consequências e propagação
+
+- **Produto/demo:** logs e cards de Incident mostram a primeira ocorrência.
+- **Arquitetura/contratos:** campos aditivos em `CTR-INC-001 v1` e `CTR-TXL-001 v1`; migration DuckDB retrocompatível.
+- **Pessoas/branches:** Team coordena os arquivos compartilhados desta mudança.
+- **Plano/Linear:** plano geral e projeção Altoé atualizados; Linear não solicitado.
+- **Testes/observabilidade:** repositório, API/contrato, cliente e browser devem provar a data e a separação de assinaturas.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** duas janelas do mesmo tipo e escopo mostram o menor `detected_at`; outro escopo/tipo mostra sua própria data.
+- **Caminho feliz:** criar primeira ocorrência e recorrência, abrir o log e observar a origem.
+- **Caso difícil/adverso:** redelivery, correlação diferente e tipos/escopos próximos não alteram a primeira data errada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** registros legados recebem a data de sua própria detecção até o backfill calcular a assinatura.
+
+#### Gatilhos de revisão
+
+Agrupamento por similaridade parcial, revisão retroativa de causa ou necessidade de contar episódios exige nova política versionada.
+
+#### Adendo de validação
+
+- **2026-08-30T09:20:00-03:00 — persistência, API e contratos:** `uv run --extra dev --extra neo4j pytest tests/test_backend_incident_e2e.py tests/test_incident_repository.py tests/test_incident_pipeline.py tests/test_incident_transaction_filter.py tests/test_incidents_api.py tests/test_transactions_api.py tests/test_api_routing.py -q` — **PASS**; `uv run python scripts/validate_contracts.py` — **OK**. A prova de repositório cobre nova correlação e janela com mesma assinatura, além de escopo distinto.
+- **2026-08-30T09:20:00-03:00 — frontend:** testes — **40 passed, 1 skip**; lint — **PASS**; `next build` — **PASS**. A aceitação visual local, com uma base sintética isolada, mostrou o card de Incident com `First occurrence: 22 de ago. de 2026, 11:06` e o log `txn_recurrence_demo` com o mesmo vínculo e `First occurrence: 22/08/2026, 11:06:00`; não houve erros de console.
+- **Regra estabilizada:** grupos `INCONCLUSIVE` permanecem observações persistidas, mas não são vinculados como causa em cada transação. Assim o log não apresenta uma segunda hipótese como uma recorrência causal concorrente.

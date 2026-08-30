@@ -234,7 +234,15 @@ def _category_from_decline_profile(profile: dict[str, int], fallback: str | None
 
 
 def _link_matching_transactions(con, repository: DuckDBIncidentRepository, incident: dict[str, Any]) -> None:
-    """Link only records with matching correlation, scope and existing evidence."""
+    """Link only supported causes with matching correlation, scope and evidence.
+
+    An INCONCLUSIVE detector group is retained as an operational observation,
+    but it is not authored as a causal Incident on every transaction. That
+    keeps the log's causal links stable and prevents a second, non-diagnostic
+    card from being presented as a confirmed recurrence.
+    """
+    if incident.get("state") != "SUPPORTED":
+        return
     rows = con.execute(
         "SELECT transaction_id, input_json, classification_json, correlation_id FROM transaction_records WHERE correlation_id = ?",
         [incident["correlation_id"]],
@@ -257,9 +265,20 @@ def _link_matching_transactions(con, repository: DuckDBIncidentRepository, incid
             correlation_id=correlation_id,
         )
         related = [item for item in classification.get("related_incident_ids", []) if isinstance(item, str)]
-        if incident["incident_id"] not in related:
+        is_new_link = incident["incident_id"] not in related
+        if is_new_link:
             related.append(incident["incident_id"])
             classification["related_incident_ids"] = sorted(related)
+            existing_recurrences = classification.get("related_incidents", [])
+            retained = [
+                item for item in existing_recurrences
+                if isinstance(item, dict) and item.get("incident_id") != incident["incident_id"]
+            ] if isinstance(existing_recurrences, list) else []
+            retained.append({
+                "incident_id": incident["incident_id"],
+                "recurrence_first_detected_at": incident.get("recurrence_first_detected_at"),
+            })
+            classification["related_incidents"] = sorted(retained, key=lambda item: str(item["incident_id"]))
             con.execute(
                 "UPDATE transaction_records SET classification_json = ? WHERE transaction_id = ?",
                 [json.dumps(classification, sort_keys=True), transaction_id],
