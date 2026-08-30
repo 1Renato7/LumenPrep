@@ -18,6 +18,7 @@ TrialId = Literal["deterministic", "graph_enriched"]
 TrialFlow = Literal["DETERMINISTIC", "GRAPH_ENRICHED"]
 
 _TRIAL_COUNT = 25
+_TRIAL_SUCCESS_COUNT = 5
 _BASELINE_COUNT = 12
 # A single 12-item healthy window is the smallest deterministic reference that
 # clears the detector's low-sample guard. Keeping it small makes the live demo
@@ -49,7 +50,7 @@ _TRIALS: dict[str, LiveDemoTrial] = {
         trial_id="deterministic",
         flow="DETERMINISTIC",
         title="Deterministic detection",
-        description="A fixed approval decline is detected and diagnosed from the current batch and its own baseline.",
+        description="Five approvals and twenty fixed declines are compared with this trial's own healthy baseline.",
         response_code="insufficient_funds",
         start_offset_minutes=0,
     ),
@@ -57,7 +58,7 @@ _TRIALS: dict[str, LiveDemoTrial] = {
         trial_id="graph_enriched",
         flow="GRAPH_ENRICHED",
         title="Graph-enriched investigation",
-        description="The deterministic engine persists the Incident first; precedent retrieval then enriches the human investigation.",
+        description="Five approvals and twenty fixed declines create the Incident; precedent retrieval then enriches the investigation.",
         response_code="do_not_honor",
         start_offset_minutes=10,
     ),
@@ -124,11 +125,19 @@ def _submit(transactions: list[TransactionInput], *, idempotency_key: str) -> di
 def _transactions_for(
     trial: LiveDemoTrial, *, phase: Literal["baseline", "trial"], occurred_at: datetime
 ) -> list[TransactionInput]:
-    response_code = "approved" if phase == "baseline" else trial.response_code
     occurred_at_text = occurred_at.isoformat().replace("+00:00", "Z")
     count = _BASELINE_COUNT if phase == "baseline" else _TRIAL_COUNT
     return [
-        _transaction_for(trial, index=index, response_code=response_code, occurred_at=occurred_at_text)
+        _transaction_for(
+            trial,
+            index=index,
+            response_code=(
+                "approved"
+                if phase == "baseline" or index % (_TRIAL_COUNT // _TRIAL_SUCCESS_COUNT) == 0
+                else trial.response_code
+            ),
+            occurred_at=occurred_at_text,
+        )
         for index in range(count)
     ]
 

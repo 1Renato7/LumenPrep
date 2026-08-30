@@ -5648,3 +5648,24 @@ Foram solicitados dois botões com 25 transações predeterminadas e `provider_r
 - **Derivar Incident por linha:** rejeitado para o trial, pois repetia o cubo de análise 25 vezes; o worker persiste cada transação normalmente e deriva ao fechar o batch.
 - **Validação:** testes focados confirmaram baseline idempotente, 25 códigos e um Incident por trial; no navegador os dois botões retornaram batches distintos, o log mostrou as 25 falhas e o fluxo de grafo recuperou o precedente histórico. Console sem erros de aplicação.
 - **Risco residual:** há concorrência de início, mas não paralelismo de banco/CPU; multi-réplica exige uma fila e persistência próprias.
+
+### FL-20260830-TEAM-046 — Mostrar tráfego saudável no lote degradado da demo
+
+- **Timestamp:** 2026-08-30T12:30:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** demo | data | UX | quality
+- **Escopo:** `CTR-DEMO-002 v1` e inputs sintéticos fixos
+- **Links:** `docs/plans/system-plan.md` v2.9.4; `tests/test_live_demo_trials.py`
+
+#### Contexto, alternativas e decisão
+
+O lote anterior tinha 25 recusas para maximizar a certeza visual do Incident, mas fazia a demo parecer uma falha total e não uma degradação realista. Manter as 25 recusas preservaria a maior margem estatística, enquanto tornar os resultados aleatórios destruiria a repetibilidade. A decisão é fixa: cada botão produz cinco aprovações e vinte recusas distribuídas no mesmo lote, além de seu baseline saudável exclusivo.
+
+#### Trade-offs e validação
+
+- **Ganhamos:** logs demonstram simultaneamente sucessos, recusas, código do provider e Incident.
+- **Abrimos mão de:** queda de aprovação de 100% para 20%; a diferença em relação ao baseline ainda excede o limiar do detector.
+- **Validação requerida:** cada trial deve manter exatamente 5 `SUCCEEDED`, 20 `FAILED`, os dois códigos explícitos e um único Incident; o fluxo de grafo continua recuperando somente contexto histórico.
+- **Fallback:** reverter a distribuição fixa para o cenário anterior sem alterar endpoints, schema ou flag.

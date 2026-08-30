@@ -72,9 +72,13 @@ def test_each_trial_builds_an_idempotent_baseline_and_one_incident(isolated_tria
         [first["batch_id"]],
     ).fetchall()
     assert len(rows) == 25
-    assert {json.loads(row[0])["provider_response_code"] for row in rows} == ({"insufficient_funds"} if trial_id == "deterministic" else {"do_not_honor"})
-    assert {row[1] for row in rows} == {"FAILED"}
-    assert {json.loads(row[2])["provider_response_code"] for row in rows} == ({"insufficient_funds"} if trial_id == "deterministic" else {"do_not_honor"})
+    failure_code = "insufficient_funds" if trial_id == "deterministic" else "do_not_honor"
+    assert [json.loads(row[0])["provider_response_code"] for row in rows].count("approved") == 5
+    assert [json.loads(row[0])["provider_response_code"] for row in rows].count(failure_code) == 20
+    assert [row[1] for row in rows].count("SUCCEEDED") == 5
+    assert [row[1] for row in rows].count("FAILED") == 20
+    assert [json.loads(row[2])["provider_response_code"] for row in rows].count("approved") == 5
+    assert [json.loads(row[2])["provider_response_code"] for row in rows].count(failure_code) == 20
 
     incidents = isolated_trial_store.execute(
         "SELECT incident_id FROM incident_records WHERE correlation_id = ?",
