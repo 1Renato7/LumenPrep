@@ -36,11 +36,10 @@ class MemoryRepositorySelectionTest(unittest.TestCase):
         self.assertIsInstance(primary, Neo4jIncidentRepository)
         self.assertIs(primary.driver, fake_driver)
 
-    def test_demo_mode_includes_evaluation_memory(self) -> None:
+    def test_operational_memory_includes_evaluation_precedents(self) -> None:
         fake_driver = object()
         with (
             patch.object(incidents.settings, "neo4j_uri", "bolt://localhost:7687"),
-            patch.object(incidents.settings, "demo_mode", True),
             patch.object(incidents, "_neo4j_driver_instance", return_value=fake_driver),
         ):
             primary = incidents._memory_repository()

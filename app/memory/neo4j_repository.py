@@ -19,7 +19,7 @@ class Neo4jIncidentRepository:
         *,
         database: str = "neo4j",
         timeout_seconds: float = 2.0,
-        include_evaluation: bool = False,
+        include_evaluation: bool = True,
     ) -> None:
         self.driver = driver
         self.database = database

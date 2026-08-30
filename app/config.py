@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     neo4j_user: str | None = None
     neo4j_password: str | None = None
     neo4j_database: str = "neo4j"
-    graphrag_evaluation_mode: bool = False
 
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.6-terra"
