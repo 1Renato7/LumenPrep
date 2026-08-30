@@ -40,6 +40,18 @@ Neo4j adapter, constraints, seed Mastercard, recuperação estruturada, rerank o
 - Adicionar caso com múltiplas transações relacionadas ao mesmo Incident.
 - Confirmar que sample seed/config interna não vaza para retrieval ou resposta.
 
+### TASK-MEM-009 / LUM2-64 — evals do fluxo transacional 2.0
+
+- Estender os evals do detalhe `CTR-TDI-001 v1` para falha sem Incident,
+  isolamento de evidência entre transações, seed/configuração interna ausentes e
+  memória indisponível com ExplanationBundle determinístico.
+- **Pronto agora:** testes controlados que usam batch/transaction records e não
+  importam o harness de background traffic.
+- **Pendente de LUM2-62/61/48:** validação ponta a ponta do tráfego de fundo
+  real e do outcome adapter após os owners publicarem a cadeia integrada.
+- **Teste:** `tests/test_transaction_memory_evals.py`, além das regressões de
+  `test_incident_transaction_filter.py` e `test_transaction_grounding.py`.
+
 ## Nova microtarefa
 
 ### TASK-EXP-004 — Trace transaction-to-incident grounded

@@ -2339,6 +2339,26 @@ relaxar a regra.
   o endpoint foi coberto por testes HTTP e continua pendente de aceite visual
   no ambiente de integração.
 
+### FL-20260829-ALTOE-008 — Avaliar o detalhe transacional sem expor dados internos
+
+- **Timestamp:** 2026-08-29T22:58:09-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Gabriel Altoé
+- **Escopo:** `TASK-MEM-009 / LUM2-64`, `CTR-TDI-001 v1`
+- **Contexto:** a extensão transacional de memória precisa provar tanto o
+  isolamento entre transações quanto a separação entre dados públicos e os
+  controles internos do gerador.
+- **Decisão:** avaliar a rota pública com registros de transação controlados,
+  sem importar ou alterar o harness de background traffic ainda bloqueado.
+  Os casos verificam falha sem Incident, duas transações no mesmo Incident com
+  evidências isoladas, ausência de seed/configuração/ground truth e
+  `MEMORY_UNAVAILABLE` preservando causa atual e ExplanationBundle
+  determinístico.
+- **Trade-off:** esta evidência não substitui o ensaio ponta a ponta com tráfego
+  de fundo; ele permanece dependente de `LUM2-62`, `LUM2-61` e `LUM2-48`.
+- **Validação concluída:** `18` testes de grounding/API passaram e
+  `scripts/validate_contracts.py` retornou `OK`.
+
 ## Rogério
 
 <!-- ROGERIO: faça append de novas entradas imediatamente antes da próxima seção. -->
