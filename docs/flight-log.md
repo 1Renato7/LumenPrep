@@ -3368,6 +3368,90 @@ Necessidade de mais de uma réplica, falha do Volume, autenticação por cookie,
 - **2026-08-29T21:34:00-03:00:** durante o smoke local, um Volume legado sem `lease_owner`/`lease_expires_at` fez a reconciliação retornar `BinderException` e o health ficou `503`. Foi adicionada migração DuckDB aditiva e idempotente (`ADD COLUMN IF NOT EXISTS`) antes da reconciliação; não altera contrato público nem apaga registros. PASS: `python -m pytest -q tests/test_deploy_runtime.py` executou 5 testes, incluindo upgrade de schema legado e persistência de batch em arquivo através de restart; `python -m pytest -q` executou 78 testes. `railway.toml` foi validado por `tomllib` e `git diff --check` passou. Docker não está instalado localmente; o build de imagem e o smoke Railway com Volume/origins reais permanecem `NOT RUN`. O navegador embutido bloqueou `localhost`/`127.0.0.1` antes de carregar a API; CORS foi validado por TestClient, sem declarar browser acceptance executado.
 - **2026-08-29T21:38:00-03:00:** `code-review-gate` classificou o diff de `LUM2-60` como `PASS` após rejeitar origins CORS com path. `integration-contract-guardian` em modo `INTEGRATION` classificou o checkpoint local como `READY WITH WARNINGS`: nenhum schema/contrato público foi alterado, `scripts/validate_contracts.py`, `compileall`, `git diff --check` e a suíte de 78 testes passaram, e os IDs do Flight Log são únicos. Warning bloqueante apenas para encerrar a issue: build/deploy Railway, Volume e browser consumer reais continuam sem evidência local.
 
+### FL-20260830-ROGERIO-032 — Isolar a avaliação causal e canonicalizar fatos opcionais antes da simulação
+
+- **Timestamp:** 2026-08-30T12:30:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** Team
+- **Participantes:** Rogério
+- **Categoria:** quality | data | AI/RAG | operations
+- **Escopo:** `CTR-EVAL-001 v1`, `app/evaluation/`, `scripts/run_conversion_evaluation.py`, adaptador de outcomes
+- **Links:** `CTR-EVAL-001 v1`, `CTR-AGT-002 v1`, `tests/test_conversion_evaluation.py`, `tests/test_transaction_flow_evaluation.py`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A avaliação exigida usa CSVs sintéticos com outcomes controlados, enquanto a API pública recebe apenas fatos e deriva outcomes próprios. Era necessário medir causalidade sem expor artefatos internos, sem criar rota de avaliação e sem fazer um fallback de memória parecer Graph RAG validado.
+
+#### Decisão
+
+Adicionar um harness interno que aceita somente pacotes de agente e CSVs abaixo de `datasets/`, calcula comparações pré/pós e recortes de forma determinística, gera bundles nativos e declara `fallback_used=true`. Canonicalizar o campo opcional `provider_response_code` na seed para que uma transação gerada e a mesma transação validada pela API tenham outcome idêntico.
+
+#### Critérios e por que agora
+
+O contrato do adaptador proíbe enviar o CSV diretamente à API transacional e exige que a ausência de Graph RAG seja verificável. A suíte completa também revelou que a serialização opcional mudava uma latência para fatos idênticos, invalidando a invariância de transporte.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Enviar CSV à API pública | usa a rota existente | recalcula outcomes e perde o sinal controlado | FACT: contrato do adaptador | viola equivalência da avaliação |
+| Criar endpoint de avaliação | simplifica a execução | expõe uma superfície não operacional e mistura responsabilidades | FACT: `CTR-EVAL-001` é interno | rejeitada |
+| Harness interno isolado | preserva dados, contratos públicos e auditoria | não comprova Graph RAG sem Neo4j | TEST: adapter report | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **TEST:** `tests/test_conversion_evaluation.py`, `tests/test_transaction_flow_evaluation.py` e `tests/test_transaction_outcomes.py` — 12 passed.
+- **TEST:** bateria sintética seed `20260830` — 40/40, 100% normalizado, usando o scorer oficial.
+- **FACT:** `lumenprep-adapter-report.json` registra 0/20 Graph RAG confirmado; o modo degradado foi explícito.
+- **UNKNOWN:** prova de Neo4j/Graph RAG real requer instância configurada; não foi simulada.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** diagnóstico reproduzível, causal e sem vazamento de artefato interno.
+- **Abrimos mão de:** usar a API pública como atalho de avaliação.
+- **Dívida/limitação:** o harness é uma adaptação offline e não substitui o detector streaming de produção.
+- **Risco residual:** regras de recorte precisam ser reavaliadas com novas seeds e distribuições antes de generalização operacional.
+
+#### Consequências e propagação
+
+- **Produto/demo:** nenhuma rota, tela ou ação de pagamento nova.
+- **Arquitetura/contratos:** adiciona somente `CTR-EVAL-001 v1` interno; contratos públicos permanecem congelados.
+- **Pessoas/branches:** Rogério coordena `app/`, scripts e documentação; web não é alterada.
+- **Plano/Linear:** plano geral atualizado; Linear não alterado por falta de autorização.
+- **Testes/observabilidade:** normalizador e scorer oficiais são o checkpoint externo; trace degradado não pode ser omitido.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** os mesmos pacotes e seed produzem bundles e respostas repetíveis sem acesso a metadados internos.
+- **Caminho feliz:** geração → runner → normalizador → scorer devolve 40/40.
+- **Caso difícil/adverso:** controles retornam sem irregularidade e sinais concorrentes retornam incerteza; um `null` opcional não muda outcome.
+- **Resultado observado:** PASS para avaliação causal e testes focados; Graph RAG: NOT RUN/UNAVAILABLE de forma explícita.
+- **Fallback:** `MEMORY_UNAVAILABLE`/`fallback_used=true`, sem inventar precedente ou ação.
+
+#### Gatilhos de revisão
+
+Mudança no pacote de avaliação, schema de entrada, métrica temporal, política de memória ou uma seed que revele falsa atribuição exige nova rodada e adendo.
+
+#### Adendos
+
+- **Code Review Gate:** pendente da revisão final do diff.
+- **Browser acceptance:** pendente do fluxo web local; o harness não possui UI própria.
+- **Integration Contract Guardian (INTEGRATION):** pendente da checagem final de compatibilidade.
+
+- **2026-08-30T12:55:00-03:00 — evidência final:** `python -m pytest -q --basetemp artifacts\\pytest-full-final-20260830` — **259 passed**; `scripts/validate_contracts.py` e `compileall` passaram. A bateria oficial seed `20260830` marcou **40/40 (100%)**, estrito 100% e parcial 100%.
+- **Code Review Gate:** PASS. Revisados o isolamento de caminhos do runner, ausência de rota pública, declaração explícita de fallback, recortes/controles/incerteza e canonicalização da seed. Não há achado bloqueante no diff.
+- **Browser acceptance:** PASS WITH LIMITATIONS. Em navegador local, `Generate samples` → `Submit batch` → Logs → detalhe `NO_INCIDENT` → `/incidents` funcionou contra FastAPI real, com CORS preflight e console sem erros. `npm run lint` e `npm run build` passaram; `npm test` fora do sandbox passou com 42 testes e 1 skip. A tela de Incident suportado não foi materializada nesta execução.
+- **Integration Contract Guardian (INTEGRATION):** READY WITH WARNINGS. `CTR-EVAL-001 v1` está registrado como interno e não altera schemas, endpoints, consumidores web ou migrations. O adapter report registra 0/20 traces Graph RAG confirmados porque Neo4j não estava configurado; Docker Desktop também não estava ativo para uma prova local. O gate final não é `PASS` até comprovar Graph RAG sem fallback.
+
+- **2026-08-30T13:20:00-03:00 — adendo de prova Graph RAG:** o runner agora oferece `--require-graph-rag`. Nessa opção, ele cria o runtime Neo4j já adotado pelo projeto, propaga o trace nativo e falha se `fallback_used=true` ou `memory_status=MEMORY_UNAVAILABLE`; portanto não pode transformar fallback em confirmação. Os testes cobrem tanto trace primário sem precedente quanto a rejeição do fallback. A prova de 20/20 continua pendente somente porque o daemon Docker/Neo4j local está indisponível.
+
+- **2026-08-30T13:35:00-03:00 — gates finais desta rodada:** `pytest -q --basetemp artifacts\\pytest-full-graph-gate-20260830` — **261 passed**; `compileall`, `validate_contracts.py` e `git diff --check` passaram. A bateria oficial seed `20260830` foi repetida e manteve **40/40 (100%)**. `docker info` confirmou que o cliente não alcança `//./pipe/docker_engine`; por isso a execução de `--require-graph-rag` contra Neo4j real permanece bloqueada e o gate final não pode ser marcado `PASS`.
+
+- **2026-08-30T14:00:00-03:00 — prova remota Graph RAG:** o deploy Railway pode comprovar Neo4j sem Docker local. Foi adicionado `scripts/probe_railway_graph_rag.py`, um leitor HTTPS sem credenciais, sem retries e sem escrita que exige health saudável, Neo4j configurado e ao menos um Incident com `fallback_used=false`. A avaliação causal continua isolada no harness: o probe não recebe nem envia CSVs, ground truth ou dados de pagamento. O resultado remoto permanece `NOT RUN` até a URL pública do serviço Railway estar disponível nesta sessão.
+
+- **2026-08-30T14:15:00-03:00 — Graph RAG Railway confirmado:** após autorização, um batch de 100 transações exclusivamente sintéticas com resposta `68` materializou `inc_homogeneous_49f565ea1615409c`. O probe HTTPS somente leitura confirmou `memory_status=NO_PRECEDENT`, `candidate_count=6`, `index_version=structured-v1` e `fallback_used=false`. A ausência de precedente é um resultado de memória válido; o trace prova que a consulta usou Neo4j primário, sem Docker local e sem transformar memória em causa ou remediação.
+
 ## Renato
 
 <!-- RENATO: faça append de novas entradas ao final desta seção. -->

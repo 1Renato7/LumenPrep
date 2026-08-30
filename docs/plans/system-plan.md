@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.9.3
+- **Versão:** 2.10.3
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -33,6 +33,10 @@
 - **Changelog 2.9.1:** atualiza os defaults internos do agente para `gpt-5.6-sol` e `reasoning.effort=medium`, sem alterar `CTR-AGT-RUN-001 v1`, Responses API, fallback determinístico, política de não retry ou autoridade `HUMAN_ONLY`.
 - **Changelog 2.9.2:** Logs e Incidents ordenam defensivamente data/hora de forma decrescente na interface (`updated_at` e `detected_at`, respectivamente), com o horário de Brasília visível nos cards de Incident. Nenhum contrato de API muda.
 - **Changelog 2.9.3:** adiciona `CTR-DEMO-002 v1`, dois trials live e reversíveis, cada um com baseline próprio e 25 transações sintéticas fixas com `provider_response_code`. A recuperação de precedente do segundo trial acontece somente após a persistência do Incident; os dois disparos são independentes, mas o worker DuckDB continua serializado com segurança.
+- **Changelog 2.10.3:** adiciona um probe remoto e somente leitura da API Railway para registrar uma recuperação Graph RAG primária. Ele consulta health, Incidents e trace existente, sem enviar datasets de avaliação, dados de pagamento ou comandos de escrita.
+- **Changelog 2.10.1:** `CTR-EVAL-001 v1` ganha a opção estrita `--require-graph-rag`: ela usa o runtime Neo4j configurado e encerra a execução se o trace tiver fallback ou memória indisponível. O modo padrão segue isolado e declara o fallback.
+- **Changelog 2.10.0:** adiciona `CTR-EVAL-001 v1`, um harness interno e isolado para a bateria sintética de diagnóstico causal. Ele lê somente `agent_packages/` e o CSV referenciado em `datasets/`, produz bundles nativos para o adaptador oficial e nunca abre endpoint, persiste no DuckDB operacional ou consulta artefatos internos de avaliação.
+- **Changelog 2.10.2:** complementa `CTR-INC-001 v1` com a agregação operacional de um lote terminal homogêneo: doze ou mais recusas mapeadas, de mesmo código e escopo, formam um único Incident `INCONCLUSIVE` vinculado às transações participantes. O código de resposta é evidência do sintoma; sem variação no lote, ele não autoriza atribuir uma causa raiz.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -108,7 +112,7 @@ O MVP vence quando uma pessoa:
 
 - Preserva o dashboard de incidentes, métricas, causa atual, memória e recomendações humanas.
 - Lista cards por `detected_at` mais recente primeiro e exibe o horário de detecção em Brasília.
-- Inclui uma fila de atenção técnica para `UNKNOWN`, sem fabricar `incident_id`, causa ou recommendation antes da correlação do backend.
+- Não há triagem operacional própria: `UNKNOWN` permanece acessível pelo log, sem fabricar `incident_id`, causa ou recommendation na UI. Um lote terminal homogêneo de recusas **mapeadas** vira Incident operacional `INCONCLUSIVE` pelo backend.
 - `SUPPORTED|INCONCLUSIVE` e `MATCH_FOUND|NO_PRECEDENT|MEMORY_UNAVAILABLE` continuam eixos independentes.
 
 ## 4. Decisões materiais
@@ -127,6 +131,7 @@ O MVP vence quando uma pessoa:
 | DEC-034 | DECIDED | Notificação in-app é criada após o upsert idempotente do Incident e é marcada lida no backend; não há canais externos neste incremento | refresh preserva estado e redelivery não duplica badge/card; não há entrega fora do produto | `FL-20260830-TEAM-036` |
 | DEC-035 | DECIDED | Uma decisão humana é registrada por `review_id`; `APPROVED` promove o Incident como precedente, enquanto `REJECTED` grava o motivo mas é excluída do retrieval | mantém o GraphRAG útil sem apagar divergências humanas | `FL-20260830-TEAM-038` |
 | DEC-036 | DECIDED | Recorrência operacional é identificada por categoria causal, métrica e escopo completo, ignorando janela e correlation ID; o primeiro `detected_at` é persistido e propagado ao log de transações somente para causas `SUPPORTED` | expõe duração real da recorrência sem agrupar incidentes simultâneos de escopos ou tipos diferentes nem apresentar hipótese inconclusiva como causa no log | `FL-20260830-TEAM-039` |
+| DEC-037 | DECIDED | Um lote terminal com ao menos 12 recusas mapeadas de mesmo código e escopo cria um Incident operacional `INCONCLUSIVE`, com todas as transações autorizadamente vinculadas; resposta/código homogêneo é sintoma, não prova de uma variável causal | torna o surto visível sem exigir baseline histórico nem inventar `ISSUER_OUTAGE`/`PROVIDER_DEGRADATION`; o vínculo é limitado ao mesmo `correlation_id`, código, escopo e evidência por transação | `FL-20260830-TEAM-041` |
 
 ## 5. Arquitetura 2.0
 
@@ -198,6 +203,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | --- | --- | --- | --- | --- | --- |
 | CTR-TXN-001 v1 | FROZEN / IMPLEMENTED ON MAIN | WEB ↔ API/TXN/DATA | catálogo, sample generation e batch 1..100 sem outcome/métricas | `422`, `409`, `503`; idempotência e seed | endpoints, schemas e fixtures em `origin/main@103073b`; smoke Railway pendente |
 | CTR-TXL-001 v1 | FROZEN / IMPLEMENTED ON MAIN | TXN/worker → API/WEB | record/list, lifecycle, outcome, classificação e a primeira ocorrência de cada Incident relacionado | stale/unknown explícitos; campo aditivo pode estar ausente em registros legados até a migração local | worker, schemas e fixtures; validação de recorrência em `FL-20260830-TEAM-039` |
+| `DEC-037` behavior | COMPATÍVEL / IMPLEMENTADO | worker → `CTR-TXL-001`/`CTR-INC-001` | um `INCONCLUSIVE` é vinculado somente ao lote terminal homogêneo de recusa mapeada | mesmo `correlation_id`, código, escopo e evidência por transação; não cria causa ou schema novo | regressões de código 68 e controles mistos/abaixo do limiar |
 | CTR-API-001 v3 | FROZEN / IMPLEMENTED ON MAIN | API → WEB | health, batch, logs, detail, metrics e incidents | timeout e códigos tipados | endpoints e OpenAPI em `origin/main@103073b`; CORS/deploy pendentes |
 | CTR-TDI-001 v1 | IMPLEMENTED / READY FOR REVIEW | API → WEB | detalhe grounded de uma transação e seus Incidents autorizados | `404` para transação inexistente; `NO_INCIDENT` e `PARTIAL` explícitos | schema, fixture, OpenAPI e testes HTTP na branch `codex/integrate-grounded-transactions` |
 | CTR-SCN-001 v2 | INTERNAL MIGRATION PENDING | DATA/HARNESS → DATA | injeção e ground truth apenas para teste | nunca exposto na UI pública | scenario draft `cc24c7a`; código atual será adaptado pelo harness |
@@ -207,6 +213,7 @@ Hotspots: Rogério coordena `contracts/v1/`, OpenAPI, DuckDB migrations, depende
 | CTR-DET-002 v2 | FROZEN / PROPOSED | DET → INC/AGENT/API/WEB | candidato `PAYMENT_CONVERSION`, com janela observada, baseline anterior, `unique_payments` e `estimated_lost_conversions` | baixa amostra, baseline insuficiente ou janela aberta não produzem candidato; redelivery preserva ID | `contracts/v2/payment-conversion-candidate.schema.json`, fixture e testes de janela/revisão |
 | CTR-NOT-001 v1 | FROZEN / PROPOSED | INC repository → API → WEB | notificação in-app persistente por Incident criado, com leitura backend-authoritativa | sem canais externos; leitura repetida é no-op; mesma chave de Incident não duplica | `notification_records`, OpenAPI, fixture, API/web tests |
 | CTR-INC-001 v1 | FROZEN, adendos 2.1.1/2.8.0 | INC → MEM/EXP/API/WEB | incidente auditável com hipóteses alternativas, recomendação, impacto local priorizável e data da primeira ocorrência do mesmo tipo causal | `INCONCLUSIVE` válido; moedas não recebem conversão implícita; campo de recorrência é aditivo | fixtures existentes + testes de serialização/prioridade/correlação |
+| `CTR-INC-001 v1` addendum 2.10.2 | COMPATÍVEL | INC → MEM/EXP/API/WEB | Incident de surto homogêneo por lote | requer recusa mapeada, mesmo código/escopo/correlação e pelo menos 12 participantes; não promove categoria causal | testes de serialização, vínculo e E2E batch |
 | CTR-MEM-001 v1.1 | FROZEN / RUNTIME READY FOR REVIEW | MEM → EXP/API | precedente tipado via adapter Neo4j opcional | `NO_PRECEDENT`, `MEMORY_UNAVAILABLE`; fallback local explícito | Compose, bootstrap, runtime e testes de fallback na branch `codex/neo4j-docker-runtime` |
 | CTR-LLM-001 v1 | FROZEN | EXP → API/WEB | explicação grounded | template determinístico | schema existente |
 | CTR-DEP-001 v1 | FROZEN | Railway/Vercel → team | URLs, env, health e CORS | local mode; no fake live | deployment plan |
@@ -351,6 +358,7 @@ Checkpoints:
 | `CTR-TDI-001 v1` | API → web | `FROZEN`; `RESOLVED`, `PARTIAL` e `NO_INCIDENT` são explícitos; `404` somente para transação inexistente. | fixture, OpenAPI e teste HTTP; Checkpoint 2/3 |
 | `CTR-MEM-001 v1.1` / `CTR-LLM-001 v1` | memory/explanation → API/web | `FROZEN`; precedente não confirma causa atual; indisponibilidade produz fallback limitado e honesto. | evals grounded e memory-down; Checkpoint 3 |
 | `CTR-SCN-001 v1` | harness interno → simulation | `FROZEN INTERNAL`; não vira endpoint web nem recebe v2 nesta fatia. Ground truth segue isolado. | scenario tests; fora do caminho live |
+| `CTR-EVAL-001 v1` | `agent_packages/` + `datasets/` → runner interno → bundles nativos | `FROZEN INTERNAL`; o modo padrão só resolve CSVs abaixo de `datasets/`, não cria rota/API e registra `fallback_used=true`. A opção explícita `--require-graph-rag` usa o runtime Neo4j e falha se o trace usar fallback ou se a memória estiver indisponível. | `tests/test_conversion_evaluation.py`; normalização e scorer externos; fora do caminho live |
 
 Qualquer mudança de schema, endpoint, estado terminal, erro, timeout ou semântica acima exige `CHANGE CONTROL`: atualizar primeiro este plano, informar a outra lane, versionar/migrar se incompatível e só então implementar.
 

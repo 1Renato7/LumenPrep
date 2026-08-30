@@ -91,11 +91,12 @@ def adapt_transaction(
 
 
 def _seed(transaction: Mapping[str, Any], seed_context: str, config_fingerprint: str) -> int:
-    # ``scenario_effects`` is an internal, optional demo control. Pydantic
-    # materializes its absent value as ``None`` while raw synthetic inputs omit
-    # the key. Those two representations are the same transaction facts and
-    # must derive the same deterministic outcome.
+    # Pydantic materializes this optional provider fact as ``None``, while the
+    # internal generator omits it. Both forms are the same transaction facts.
+    # Keep the historical treatment of ``scenario_effects`` below so existing
+    # deterministic outcomes retain their seed material.
     normalized = dict(transaction)
+    normalized.setdefault("provider_response_code", None)
     if normalized.get("scenario_effects") is None:
         normalized.pop("scenario_effects", None)
     material = json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str)

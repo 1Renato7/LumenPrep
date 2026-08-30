@@ -44,6 +44,7 @@ const samples: TransactionSampleResponse = {
       payment_method_category: "CARD",
       card_brand: "MASTERCARD",
       card_type: "CREDIT",
+      provider_response_code: "00",
     },
     {
       merchant_id: "merchant_mx_01",
@@ -54,6 +55,7 @@ const samples: TransactionSampleResponse = {
       amount_minor: 7990,
       payment_method_category: "DIGITAL_WALLET",
       card_type: "NOT_APPLICABLE",
+      provider_response_code: "00",
     },
   ],
   correlation_id: "corr_sample_test",
@@ -145,4 +147,13 @@ test("a 422 field issue identifies its row and preserves editable row values", (
     [{ rowIndex: 1, field: "issuer_bank", message: "Issuer bank is unavailable." }],
   );
   assert.deepEqual(state.rows.map((row) => row.values), before);
+});
+
+test("provider response code is required before submitting a batch", () => {
+  const state = replaceRowsWithSamples(createInitialFormState(), samples);
+  const withoutResponseCode = updateTransactionField(state, state.rows[0].id, "provider_response_code", "   ");
+
+  assert.deepEqual(validateTransactionRows(withoutResponseCode.rows, catalog), [
+    { rowIndex: 0, field: "provider_response_code", message: "provider response code is required." },
+  ]);
 });
