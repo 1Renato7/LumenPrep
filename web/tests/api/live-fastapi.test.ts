@@ -22,6 +22,9 @@ test("live FastAPI supports the frontend transaction and incident journey", { sk
   const batch = await pollTransactions(client, { batchId: accepted.batch_id, intervalMs: 50 });
   assert.equal(batch.items.length, 2);
   assert.equal(batch.items.some((record) => record.status === "PROCESSING"), false);
+  assert.equal(batch.items.some((record) => record.status === "UNKNOWN"), false);
+  assert.equal(batch.items.every((record) => record.processing.stage === "COMPLETE"), true);
+  assert.equal(batch.items.every((record) => record.outcome !== null), true);
 
   const detail = await client.getTransaction(accepted.transaction_ids[0]);
   assert.equal(detail.batch_id, accepted.batch_id);

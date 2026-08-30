@@ -4,7 +4,7 @@ Este runbook cobre `TASK-DEPLOY-API-001` / `LUM2-60`. A API FastAPI e o lifecycl
 
 ## Arquivos versionados
 
-- `Dockerfile`: fixa Python 3.14.4, inicia `uvicorn main:app` em `$PORT` e define `LUMEN_DATA_DIR=/data` e `DUCKDB_PATH=/data/lumen.duckdb`.
+- `Dockerfile`: fixa Python 3.14.4, instala o `uv.lock` congelado com o extra Neo4j, cria `/data` para smoke sem Volume, inicia `uvicorn main:app` em `$PORT` e define `LUMEN_DATA_DIR=/data` e `DUCKDB_PATH=/data/lumen.duckdb`.
 - `railway.toml`: usa o Dockerfile, testa `GET /v1/health` durante o deploy e reinicia apenas em falha.
 - `app/api/health.py`: devolve `200` somente quando DuckDB e a reconciliação inicial do worker estão prontos; Neo4j/OpenAI são opcionais.
 
@@ -17,15 +17,17 @@ Este runbook cobre `TASK-DEPLOY-API-001` / `LUM2-60`. A API FastAPI e o lifecycl
    - `LUMEN_DATA_DIR=/data`
    - `DUCKDB_PATH=/data/lumen.duckdb`
    - `CORS_ALLOWED_ORIGINS=https://<dominio-vercel-production>,https://<dominio-vercel-preview>,http://localhost:3000`
-   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` somente se o grafo estiver disponível.
+   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` e, quando necessário, `NEO4J_DATABASE` somente se o grafo estiver disponível. Bootstrap e runtime leem o mesmo database; o default é `neo4j`.
    - `OPENAI_API_KEY` somente se a explicação generativa for usada; o template determinístico permanece disponível sem ela.
 
 `CORS_ALLOWED_ORIGINS` aceita uma lista separada por vírgulas de origins HTTP(S) completos. Não use `*`, paths, secrets ou domínios fictícios: substitua os placeholders pelas URLs reais entregues pela Vercel.
 
+Quando um grafo novo for provisionado, execute uma vez no ambiente configurado `python -m app.memory.neo4j_bootstrap`. O bootstrap é idempotente, cria as constraints e semeia o precedente determinístico; nunca coloque a senha na linha de comando ou no repositório.
+
 ## Verificação de deploy
 
 1. Aguarde o Railway aprovar o health check em `GET /v1/health`.
-2. Confirme resposta `200` com `dependencies.duckdb == "ready"` e `dependencies.worker.status == "ready"`.
+2. Confirme resposta `200` com `dependencies.duckdb == "ready"` e `dependencies.worker.status == "ready"`. Se Neo4j estiver configurado, consulte um Incident de smoke e confirme `memory.retrieval_trace.fallback_used == false`; o campo `configured` do health sozinho não prova conectividade.
 3. Da Vercel autorizada, faça `OPTIONS /v1/transaction-batches` com `Origin`, `Content-Type` e `Idempotency-Key`; a resposta deve expor somente aquela origin.
 4. Repita com uma origin aleatória: ela não pode receber `Access-Control-Allow-Origin`.
 5. Envie um batch, reinicie/redeploye o serviço e confirme que o mesmo `transaction_id` e seu lifecycle continuam disponíveis pelo Volume.

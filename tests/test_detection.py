@@ -116,3 +116,37 @@ def test_candidate_output_validates_against_ctr_det_schema() -> None:
     assert candidates
     for candidate in candidates:
         assert list(validator.iter_errors(candidate.model_dump())) == []
+
+
+def test_candidate_identity_separates_currencies_in_same_correlation_and_window() -> None:
+    brl_history = [window.model_copy(update={"dimensions": {**window.dimensions, "currency": "BRL"}}) for window in _seasonal_history()]
+    mxn_history = [
+        window.model_copy(
+            update={
+                "dimensions": {**window.dimensions, "currency": "MXN"},
+                "currency": "MXN",
+            }
+        )
+        for window in _seasonal_history()
+    ]
+    start = datetime(2026, 8, 3, 10, tzinfo=timezone.utc)
+    anomaly = _window(
+        start,
+        approval_rate=0.60,
+        latency_p95_ms=200.0,
+        timeout_rate=0.10,
+        correlation_id="corr-mixed-currency",
+    )
+    brl = anomaly.model_copy(update={"dimensions": {**anomaly.dimensions, "currency": "BRL"}})
+    mxn = anomaly.model_copy(
+        update={"dimensions": {**anomaly.dimensions, "currency": "MXN"}, "currency": "MXN"}
+    )
+
+    candidates = detect_candidates(
+        [*brl_history, *mxn_history, brl, mxn],
+        low_sample_attempts=LOW_SAMPLE_ATTEMPTS,
+    )
+
+    assert len(candidates) == 6
+    assert len({candidate.candidate_id for candidate in candidates}) == 6
+    assert {candidate.slice["currency"] for candidate in candidates} == {"BRL", "MXN"}

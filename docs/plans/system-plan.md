@@ -2,21 +2,22 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.2.0
+- **Versão:** 2.2.1
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
-- **Change class:** `RECOVERY`; preserva contratos públicos e concentra a integração real de pipeline, persistência e deploy sem alterar `CTR-API-001 v3`.
+- **Change class:** `INTEGRATION`; preserva contratos públicos e consolida pipeline, persistência, frontend live e runtime de deploy sem alterar `CTR-API-001 v3`.
 - **Fonte de verdade:** este arquivo; planos em `docs/plans/people/` são projeções.
 - **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
 - **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
 - **Base implementada preservada:** runtime Python 3.14.4, Docker/Railway, ingestion, aggregation, detection, simulation, incidents, memory/explanation e API já presentes na `main` em 2026-08-29; a revisão 2.0 estende essa base.
-- **Escopo desta publicação na `main`:** API/worker transaction-first, schemas e fixtures v3 estão implementados; `web/` é publicado como frontend compartilhado com mocks explícitos. Railway, Vercel, CORS e acceptance live continuam pendentes.
+- **Escopo desta integração:** API/worker transaction-first e `web/` estão conectados pelo client live, com mocks apenas em modo explícito. Railway, Vercel, CORS e acceptance deployed continuam pendentes até prova no ambiente real.
 - **Changelog 2.0.0:** substitui o construtor público de efeitos por entrada de uma ou várias transações; métricas, outcomes, classificação e anomalias passam a ser derivados pelo backend; Streamlit vira protótipo/fallback; o gerador existente vira harness interno.
 - **Changelog 2.0.1:** registra a implementação validada de histórico/stream mediado por servidor em `renato/tarefa44@602ae9d` como evidência do harness interno. Ela não implementa nem congela `CTR-TXN/TXL/API v3`; `TASK-DATA-009 / LUM2-62` deve adaptá-la à batch API comum antes de integração funcional.
 - **Changelog 2.0.2:** integra `renato/tarefa44@602ae9d` na `main` como `CMP-HARNESS-001`; `CTR-TXN/TXL/API v3` continuam sendo a única fronteira pública planejada, e `LUM2-61/62` continuam responsáveis pelo adapter e tráfego de fundo compatíveis.
 - **Changelog 2.1.0:** publica a pasta única `web/` com shell desktop/mobile, formulário, logs, detalhes e Incidents. O formulário consome a API v3; Logs, Detail e Incidents permanecem em fixtures explícitas até o adapter live de `LUM2-12`. Não confirma deploy/live acceptance.
 - **Changelog 2.1.1:** integra `feat/OBJ-ROGERIO-001-platform-core` sobre o frontend 2.1.0, preservando `web/` e adicionando a `CTR-INC-001 v1` hipóteses causais ordenadas, classe de recomendação humana, priorização local por moeda e correlação por fingerprint causal exato. Não adiciona adapter live ao frontend nem altera `CTR-API-001 v3`.
 - **Changelog 2.2.0:** replaneja a recuperação de integração a partir de `main@613df52`, depois de confirmar que os incrementos de Neo4j, RCA, grounding e Parquet já estão na base. A execução restante é concentrada em duas lanes: Rogério integra core/dados/backend; André integra produto/deploy web. Nenhum contrato público recebe nova versão nesta revisão; o objetivo é tornar real a cadeia já contratada.
+- **Changelog 2.2.1:** integra as duas lanes sobre `main@23b9061`: o frontend deixa de usar fixtures no runtime live e consome batch/log/detail/Incidents reais; o pipeline terminal passa a ser atômico no DuckDB, inclui a transação gatilho no vínculo de Incident e isola janelas por correlação/moeda; o Docker usa `uv.lock` congelado com o extra Neo4j e inclui a configuração do simulator. Contratos públicos permanecem congelados. Deploy e acceptance online continuam condicionados à evidência real.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -288,7 +289,7 @@ Checkpoints:
 - A incompatibilidade pública é deliberadamente versionada em `CTR-API-001 v3`; não existe adapter silencioso para endpoints `/demo/scenarios`.
 - A fatia ponta a ponta precede polimento, RAG adicional ou pitch.
 - Linear está sincronizado com a revisão 2.0; issues concluídas foram preservadas e novas necessidades receberam novos IDs.
-- **Integração da branch:** `web/` foi publicada na main como superfície de integração. Continua `NOT READY FOR LIVE ACCEPTANCE`: a próxima fatia é conectar logs/detail/incidents ao Railway, validar CORS/Vercel e executar browser acceptance permitido antes de marcar tarefas live como concluídas.
+- **Integração das lanes:** `web/` consome a API real e a cadeia batch → worker → Incident → detail está integrada localmente. Estado `READY WITH WARNINGS`: contratos, suites e build local são gates obrigatórios desta publicação; Railway Volume/restart/CORS, Vercel e browser acceptance deployed permanecem bloqueios explícitos de CP4/CP5, não claims concluídos.
 
 ## 14. Fontes operacionais
 
@@ -377,7 +378,7 @@ André: mock explícito → client live → Logs/Detail → Incidents → browse
 5. **CP4 — deploy:** Railway Volume/restart/CORS e Vercel→Railway; browser gate.
 6. **CP5 — freeze:** suites, E2E, holdout/evidência ou corte explícito, demo dupla e docs reconciliados.
 
-**Simulação de handoff:** Pessoa A pode iniciar A1 com a base atual. Pessoa B pode iniciar pelo mock localizado. O único acoplamento é o handoff A4/A5; ele usa contratos já congelados, portanto não cria ciclo. Um merge futuro deverá seguir CP1 → CP3 → CP4, com testes da lane, smoke de contrato, revisão de diff e guardian em modo `INTEGRATION`; esta revisão não executa merge, rebase ou push.
+**Handoff observado:** Pessoa A entregou API/repository/pipeline em `main@23b9061`; Pessoa B integrou o client live sem alterar contratos públicos. A integração preserva o grafo acíclico e mantém fixtures somente no modo explicitamente offline. A publicação deve repetir suites, smoke local, revisão do diff e guardian em modo `INTEGRATION`; CP4 só fecha com URLs e evidências deployed.
 
 **Resultado do Integration Contract Guardian — `PLAN READY` para implementação.** Há owner único para cada hotspot, contratos públicos congelados, mock explícito para a UI, sequência acíclica e critérios verificáveis. URLs reais de Railway/Vercel são pré-requisito apenas do CP4, não bloqueiam A1–A5 nem B1–B4.
 
@@ -391,3 +392,15 @@ André: mock explícito → client live → Logs/Detail → Incidents → browse
 | `TASK-PIPE-004` | concluída localmente | teste público batch → terminal → Incident `INCONCLUSIVE` → TDI grounded, sem fixture, passou. Suite completa: 168 testes. |
 | `TASK-INT-003` | parcialmente concluída / holdout bloqueado | benchmark existente lido: 8.256 eventos, 90 partições e digest `d3fb…5d2461`; não será repetido. O conjunto de avaliação confirma invariantes, mas `root_cause_accuracy`, `scope_exact_match`, `false_incidents` e abstention estatística são `NOT RUN` sem ground truth de holdout. |
 | `TASK-DEP-002` | bloqueada externamente | requer serviço Railway, Volume, domínio e origins reais para CORS/restart/health. |
+
+### Evidências da integração de Pessoa B
+
+| Task | Estado | Evidência honesta |
+| --- | --- | --- |
+| `TASK-WEB-001..004` | concluída localmente | factory live/offline explícita, Logs/Detail/Incidents ligados a `CTR-API-001 v3` e `CTR-TDI-001 v1`; runtime live não importa fixture, polling é cancelável e API indisponível produz erro honesto. |
+| `TASK-WEB-005` | concluída localmente | suite web live 35/35 contra a imagem final exige `COMPLETE`, outcome e ausência de `UNKNOWN`; o E2E Python prova a transação gatilho ligada ao Incident persistido. |
+| `TASK-DEP-003` / `TASK-QA-001` | parcial local / pendente externo | build e browser local passaram em desktop/mobile, incluindo sample → submit → log/detail/Incidents, Neo4j sem fallback e console limpo. Vercel → Railway, allowlist CORS real, persistência/restart e browser deployed exigem URLs externas. |
+
+### Parecer do Integration Contract Guardian — INTEGRATION 2.2.1
+
+**Estado: `READY WITH WARNINGS`.** Não há mudança de schema, endpoint ou semântica pública. Produtores e consumidores usam as mesmas fixtures/OpenAPI; janelas preservam correlação/moeda e a conclusão terminal é atômica entre canonical, Incident, link e record. A imagem de deploy instala o lock congelado, extra Neo4j e configuração do simulator. Suites, imagem, live smoke e browser local passaram; ausência de corrida em `origin/main` continua gate imediato do push. Deploy/browser online não podem ser promovidos a concluídos sem evidência externa.

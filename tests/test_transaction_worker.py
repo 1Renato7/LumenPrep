@@ -136,6 +136,23 @@ def test_pipeline_failure_never_becomes_a_business_decline(monkeypatch):
     assert final["classification"] is None
 
 
+def test_analytics_failure_rolls_back_canonical_and_incident_side_effects(monkeypatch):
+    transaction_id = _new_transaction_id(key="worker-key-analytics-rollback")
+
+    def _boom(_con, _correlation_id: str):
+        raise RuntimeError("simulated analytics failure")
+
+    monkeypatch.setattr(worker, "derive_incidents_for_correlation", _boom)
+    worker.run_to_completion(transaction_id)
+
+    final = _record(transaction_id)
+    assert final["status"] == "UNKNOWN"
+    assert final["processing"]["stage"] == "PIPELINE_FAILED"
+    con = get_connection()
+    assert con.execute("SELECT count(*) FROM canonical_events WHERE event_id = ?", [f"evt_{transaction_id}"]).fetchone()[0] == 0
+    assert con.execute("SELECT count(*) FROM transaction_incident_links WHERE transaction_id = ?", [transaction_id]).fetchone()[0] == 0
+
+
 def test_outcome_generation_is_deterministic_for_the_same_transaction_id():
     transaction = {
         "merchant_id": "merchant_br_01",

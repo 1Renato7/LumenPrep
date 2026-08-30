@@ -122,6 +122,9 @@ def to_anomaly_candidate(
     candidate_key = json.dumps(
         {
             "correlation_id": current.correlation_id,
+            "window_start": current.window_start,
+            "window_end": current.window_end,
+            "slice": current.dimensions,
             "metric": signal.metric,
             "pooling_level": baseline.pooling_level,
             "detector_version": detector_version,

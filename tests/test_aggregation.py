@@ -55,3 +55,34 @@ def test_get_current_metrics_filters_by_dimension(valid_attempt):
     stripe_only = get_current_metrics(dimensions={"provider_id": "stripe"})
     assert len(stripe_only) == 1
     assert stripe_only[0].dimensions["provider_id"] == "stripe"
+
+
+def test_same_slice_and_bucket_remain_isolated_by_correlation(valid_attempt):
+    base = dict(valid_attempt)
+    base.update(provider_id="stripe", country="BR", decline=None, status="SUCCEEDED")
+    ingest_event(_attempt(base, event_id="corr-a-event", attempt_id="corr-a-attempt", payment_id="corr-a-payment", correlation_id="corr-a"))
+    ingest_event(_attempt(base, event_id="corr-b-event", attempt_id="corr-b-attempt", payment_id="corr-b-payment", correlation_id="corr-b"))
+
+    windows = get_current_metrics(dimensions={"provider_id": "stripe", "country": "BR"})
+
+    assert len(windows) == 2
+    assert {window.correlation_id for window in windows} == {"corr-a", "corr-b"}
+    assert all(window.eligible_attempts == 1 for window in windows)
+
+
+def test_same_correlation_slice_and_bucket_never_mix_currencies(valid_attempt):
+    brl = dict(valid_attempt)
+    brl.update(provider_id="stripe", country="BR", currency="BRL", amount_minor=10_000, decline=None, status="SUCCEEDED")
+    mxn = dict(brl)
+    mxn.update(currency="MXN", amount_minor=20_000)
+    ingest_event(_attempt(brl, event_id="brl-event", attempt_id="brl-attempt", payment_id="brl-payment", correlation_id="corr-mixed"))
+    ingest_event(_attempt(mxn, event_id="mxn-event", attempt_id="mxn-attempt", payment_id="mxn-payment", correlation_id="corr-mixed"))
+
+    windows = get_current_metrics(dimensions={"provider_id": "stripe", "country": "BR"})
+
+    assert len(windows) == 2
+    by_currency = {window.currency: window for window in windows}
+    assert by_currency["BRL"].dimensions["currency"] == "BRL"
+    assert by_currency["BRL"].amount_minor == 10_000
+    assert by_currency["MXN"].dimensions["currency"] == "MXN"
+    assert by_currency["MXN"].amount_minor == 20_000

@@ -61,7 +61,7 @@ def _memory_repository() -> IncidentMemoryRepository | None:
     driver = _neo4j_driver_instance()
     if driver is None:
         return None
-    return Neo4jIncidentRepository(driver)
+    return Neo4jIncidentRepository(driver, database=settings.neo4j_database)
 
 
 def _fixture(name: str) -> dict[str, Any]:

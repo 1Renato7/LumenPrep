@@ -1,11 +1,11 @@
 # Plano individual — André
 
-## Missão 2.1
+## Missão 2.2.1
 
-> A pasta `web/` e os contratos/fixtures v3 estão publicados na `main` para integração compartilhada. O formulário usa o client v3; Logs, Detail e Incidents seguem fixtures explícitas até `LUM2-12`. Deploy e smoke Railway/Vercel continuam pendentes.
+> A pasta `web/` está integrada ao backend transaction-first pelos contratos v3. Fixtures permanecem apenas no modo offline explícito; deploy e smoke Railway/Vercel continuam pendentes até evidência no ambiente real.
 
-- **Plano geral:** 2.1.1
-- **Objetivo:** `OBJ-ANDRE-001`
+- **Plano geral:** 2.2.1
+- **Objetivo:** `OBJ-ANDRE-002`
 - **Papel:** frontend Next.js, experiência transaction-first, integração Vercel → Railway e acceptance visual.
 - **Resultado:** inserir uma ou várias transações manualmente ou gerar samples por quantidade, acompanhar logs e abrir classificação/incidentes sem calcular nenhum fato no navegador; seed permanece capacidade opcional da API.
 - **Prioridade atual:** sistema front funcional; pitch só depois da fatia ao vivo.
@@ -75,17 +75,23 @@ O shell desktop usa sidebar `sticky` e conteúdo em colunas separadas; em mobile
 
 ### TASK-UI-003 / LUM2-10 — log, filtros, progresso e detalhe
 
+- **Estado:** concluída localmente; suite web e teste live são gates da integração.
+
 - Implementar `/transactions`, `/transactions/[id]`, filtros, cursor, polling e estados.
 - **Aceite:** processing mostra stage real; filtros não misturam falha técnica e decline; falha/UNKNOWN exibem diagnóstico disponível; refresh preserva URLs; detalhe linka Incident sem fabricar action.
 - **Independe de:** API real usando `transaction-list.json` e records.
 
 ### TASK-UI-004 / LUM2-11 — incidentes e recorrência dentro do novo fluxo
 
+- **Estado:** concluída localmente; detalhe usa `GET /transactions/{id}/incidents` e lista usa o filtro homogêneo contratado.
+
 - Migrar cards para `/incidents`, adicionar o destino à sidebar e linkar a partir do detalhe da transação.
 - **Aceite:** `INCONCLUSIVE + MATCH` continua inconclusivo; diagnóstico contratado fica legível; `UNKNOWN` aparece em atenção técnica sem causa inventada.
 - **Bloqueio live:** `TASK-EXP-004` e filtro `transaction_id` de Rogério; layout pode avançar por fixture.
 
 ### TASK-UI-005 / LUM2-12 — adapter Railway e estados live
+
+- **Estado:** concluída localmente; falta somente comprovação no Railway/Vercel real.
 
 - Substituir o adapter de cenário público por catalog/sample/batch/list/detail/incident.
 - Centralizar timeout, base URL, error mapping e polling cancellation.
@@ -126,8 +132,8 @@ Parent: [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-frontend-tra
 
 ## Recuperação 2.2 — Pessoa B
 
-- **Plano geral:** 2.2.0; **objetivo:** `OBJ-ANDRE-002`; **base:** `main@613df52`.
+- **Plano geral:** 2.2.1; **objetivo:** `OBJ-ANDRE-002`; **base integrada:** `main@23b9061` + incremento web em validação.
 - **Limite:** `web/` é ownership exclusivo. Não alterar `contracts/v1/`, backend, Docker, migrations ou API em resposta a payload inesperado; abrir contract issue para Rogério.
 - **Início independente:** factory única com live quando `NEXT_PUBLIC_API_BASE_URL` existe e mock somente explícito. Corrigir CTR-TDI para `/transactions/{id}/incidents`; preservar a lista homogênea de `Incident[]` em `/incidents?transaction_id=`.
-- **Handoff esperado de Rogério:** OpenAPI validado, comando/API local, exemplos reais `NO_INCIDENT/PARTIAL/RESOLVED` e mapa de erros. Até recebê-lo, testes usam mocks congelados e rotas live não fazem fallback automático a fixture.
-- **Evidência de entrega:** browser local e deployed mostra submit → log/detail → Incident, cancelamento de polling, API down honesto, console/rede sem fixture, e os gates de review/browser/guardian aplicáveis.
+- **Handoff recebido de Rogério:** OpenAPI, comando/API local e pipeline persistido estão integrados; `NO_INCIDENT/PARTIAL/RESOLVED` e erros continuam explícitos. Rotas live não fazem fallback automático a fixture.
+- **Evidência local:** suite web live 35/35, build e browser desktop/mobile passam; sample → submit → log/detail → Incidents usa FastAPI real, e memória Neo4j retorna `MATCH_FOUND` sem fallback. Browser deployed, CORS real e persistência/restart Railway continuam `NOT RUN` até URLs/ambiente estarem disponíveis.

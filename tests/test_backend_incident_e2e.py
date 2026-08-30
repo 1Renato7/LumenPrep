@@ -111,3 +111,8 @@ def test_batch_to_incident_to_grounded_detail_uses_no_fixture(monkeypatch):
     assert incident["state"] == incident["root_cause"]["status"] == "INCONCLUSIVE"
     assert body["incidents"][0]["evidence_ids"] == [f"evd_{anomaly_transaction_ids[0]}"]
     assert "fixture://" not in str(body)
+
+    trigger_detail = client.get(f"/v1/transactions/{anomaly_transaction_ids[-1]}/incidents")
+    assert trigger_detail.status_code == 200
+    assert trigger_detail.json()["status"] == "RESOLVED"
+    assert trigger_detail.json()["incidents"][0]["evidence_ids"] == [f"evd_{anomaly_transaction_ids[-1]}"]

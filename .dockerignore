@@ -7,6 +7,8 @@ __pycache__
 .codex
 .agents
 tests
+web
+.pytest_cache
 docs
 workflows
 scripts

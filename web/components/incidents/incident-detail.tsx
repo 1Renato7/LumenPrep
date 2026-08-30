@@ -30,7 +30,10 @@ function IncidentDetailView({ incidentId, suppliedApi }: { incidentId: string; s
     return () => controller.abort("incident changed");
   }, [client, incidentId, reload]);
 
-  if (error) return <main className={styles.shell}><section className={`${styles.card} ${styles.alert}`} role="alert"><strong>Could not load incident</strong><p>{error}</p><button className={styles.button} type="button" onClick={() => { setError(null); setDetail(null); setReload((value) => value + 1); }}>Try again</button></section></main>;
+  if (error) return <main className={styles.shell}><section className={`${styles.card} ${styles.alert}`} role="alert"><strong>Could not load incident</strong><p>{error}</p><button className={styles.button} type="button" onClick={() => {
+    if (!client.api) { setError(client.error); return; }
+    setError(null); setDetail(null); setReload((value) => value + 1);
+  }}>Try again</button></section></main>;
   if (!detail) return <main className={styles.shell}><section className={styles.card} role="status">Loading incident…</section></main>;
 
   const { incident, memory, explanation } = detail;

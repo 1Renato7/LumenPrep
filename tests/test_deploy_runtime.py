@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from pathlib import Path
 
 import duckdb
 import pytest
@@ -7,6 +8,17 @@ from fastapi.testclient import TestClient
 from app.config import Settings, settings
 from app.ingestion import storage
 from main import create_app
+
+
+def test_docker_uses_frozen_uv_lock_and_installs_neo4j_extra():
+    dockerfile = (Path(__file__).resolve().parent.parent / "Dockerfile").read_text(encoding="utf-8")
+    assert "COPY pyproject.toml uv.lock" in dockerfile
+    assert "COPY config ./config" in dockerfile
+    assert "uv sync --frozen --no-dev --extra neo4j" in dockerfile
+    assert "mkdir -p /data" in dockerfile
+    assert 'ENV PATH="/app/.venv/bin:$PATH"' in dockerfile
+    dockerignore = (Path(__file__).resolve().parent.parent / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    assert "web" in dockerignore
 
 
 def test_cors_accepts_only_configured_browser_origin():

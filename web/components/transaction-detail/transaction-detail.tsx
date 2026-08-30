@@ -28,12 +28,17 @@ function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: 
   const [groundingError, setGroundingError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
+    if (!api) {
+      setError(client.error);
+      setLoading(false);
+      return;
+    }
     setError(null);
     setGroundingError(null);
     setGrounding(null);
     setLoading(true);
     setReloadKey((value) => value + 1);
-  }, []);
+  }, [api, client.error]);
   const refresh = () => {
     reload();
     router.refresh();

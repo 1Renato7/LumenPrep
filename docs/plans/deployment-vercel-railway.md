@@ -1,6 +1,6 @@
 # Deployment — Vercel + Railway
 
-> Estado na `main`: API v3, lifecycle e CORS já existem no código; a pipeline real de Incident, o smoke Railway e a acceptance Vercel continuam pendentes. Este arquivo é subordinado ao plano geral 2.2.0.
+> Estado integrado: API v3, lifecycle, pipeline real de Incident e frontend live existem no código; smoke Railway e acceptance Vercel continuam pendentes. Este arquivo é subordinado ao plano geral 2.2.1.
 
 ## Topologia
 
@@ -8,13 +8,13 @@
 - `app/`: FastAPI e worker implantados no Railway.
 - Railway Volume: path de DuckDB/Parquet do MVP.
 - Neo4j/OpenAI: acessados somente pelo backend.
-- O browser usa apenas `${NEXT_PUBLIC_API_BASE_URL}/v1`.
+- O browser usa apenas `NEXT_PUBLIC_API_BASE_URL`, que já inclui o prefixo `/v1`.
 
 ## Variáveis de ambiente
 
 | Runtime | Variável | Pública? | Propósito |
 | --- | --- | --- | --- |
-| Vercel | `NEXT_PUBLIC_API_BASE_URL` | sim | domínio HTTPS Railway, sem trailing slash |
+| Vercel | `NEXT_PUBLIC_API_BASE_URL` | sim | base HTTPS Railway terminando em `/v1`, sem trailing slash |
 | Railway | `CORS_ALLOWED_ORIGINS` | não | lista exata de URLs Vercel/local |
 | Railway | `LUMEN_DATA_DIR` | não | mount path do volume |
 | Railway | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | não | memória |
@@ -24,6 +24,7 @@
 ## Regras
 
 - Vercel production e previews autorizados são listados explicitamente; sem `*` quando houver credentials.
+- Configure, por exemplo, `NEXT_PUBLIC_API_BASE_URL=https://<servico>.up.railway.app/v1`; o client acrescenta somente os paths de cada endpoint.
 - O serviço Railway responde `/v1/health`; worker/store degraded aparecem separadamente.
 - `202` só é emitido após persistência inicial durável.
 - O volume contém dados, não secrets; nenhum domínio público é criado para banco/store.

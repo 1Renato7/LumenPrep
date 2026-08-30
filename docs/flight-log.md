@@ -1524,6 +1524,58 @@ Mudança em `CTR-TXN-001`/`CTR-EVT-001`, requisito de retry público, ou falha d
 - **2026-08-29T23:05:00-03:00:** PASS — `python -m pytest -q` aprovou 100 testes; `python scripts/validate_contracts.py`, `python -m compileall -q app` e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes.
 - **2026-08-29T23:05:00-03:00:** Browser acceptance PASS — Swagger local submeteu batch sintético (`202`) e consultou o registro (`200`) em `COMPLETE`, com `FAILED`, `PROVIDER_INTERNAL_ERROR` e classificação `PROVIDER_ERROR`; console sem erros. Servidor local encerrado após o smoke.
 
+### FL-20260830-TEAM-024 — Consolidar as lanes A+B com correlação e conclusão terminal atômicas
+
+- **Timestamp:** 2026-08-30T00:48:49-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team (solicitante autorizou integração e publicação)
+- **Participantes:** André; Rogério; Codex como integrador e recorder
+- **Categoria:** architecture | integration | data | deploy | quality
+- **Escopo:** `CTR-AGG-001 v1`, `CTR-INC-001 v1`, `CTR-TDI-001 v1`, worker DuckDB, Docker/uv/Neo4j, frontend live
+- **Links:** `docs/plans/system-plan.md` v2.2.1; `FL-20260830-ROGERIO-010`; `FL-20260830-ANDRE-001`
+- **Supersedes / superseded by:** complementa a recuperação 2.2; não altera contratos públicos.
+
+#### Contexto e pergunta
+
+Depois de Pessoa A publicar o pipeline grounded na `main`, a integração com a lane web revelou três falhas internas: janelas podiam misturar correlações no mesmo bucket/slice; a transação que disparava a janela ainda não estava classificada quando os links eram derivados; e a imagem Docker não instalava o extra Neo4j pelo `uv.lock`. A pergunta foi como corrigir essas fronteiras sem mudar schemas ou endpoints congelados.
+
+#### Decisão
+
+Isolar `WindowMetrics` por `correlation_id`; executar canonical → analytics → Incident → link → record terminal em uma única transação DuckDB protegida pelo lock compartilhado; em falha, fazer rollback antes de persistir `UNKNOWN/PIPELINE_FAILED`; e construir a imagem com `uv sync --frozen --no-dev --extra neo4j`. O frontend permanece consumidor puro de `CTR-API-001 v3`; deploy e browser online só serão declarados após prova real.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Decisão |
+| --- | --- | --- | --- | --- |
+| Agrupar somente por bucket/slice | menos grupos | mistura lotes independentes e pode vazar evidência | revisão reproduziu correlações distintas no mesmo bucket | rejeitada |
+| Finalizar record antes de analytics | fluxo mais simples | transação gatilho não recebe o Incident; falha deixa estado parcial | E2E exigiu vínculo da última transação | rejeitada |
+| Compensação após commits separados | reduz duração da transação | recuperação complexa e estado canônico/link divergente | teste de falha observou side effects parciais | rejeitada |
+| Transação DuckDB única + lock | visibilidade atômica e rollback verificável | mantém lock durante analytics e reduz concorrência local | worker é deliberadamente single-process para a demo | escolhida |
+| `pip install` sem lock/extra | Dockerfile menor | drift e Neo4j configurado sem driver | `uv.lock` é padrão do projeto | rejeitada |
+
+#### Evidência, trade-offs e validação
+
+- **FACT:** contratos públicos permanecem byte-compatible; as mudanças são de agrupamento, ordem transacional e empacotamento.
+- **TEST:** testes focados de aggregation/worker/E2E/deploy passaram (21); suite completa, imagem Docker e smoke live serão repetidos antes do push.
+- **Trade-off aceito:** o lock cobre mais trabalho, adequado à réplica única/DuckDB do MVP; escala multi-worker exigirá outra arquitetura.
+- **UNKNOWN:** Railway Volume/restart/CORS e Vercel ainda dependem do ambiente deployed.
+- **Resultado observado:** PENDING para os gates finais e publicação; um adendo registrará SHA, testes e validação online.
+
+#### Adendo operacional
+
+- **2026-08-30T00:55:00-03:00:** o primeiro smoke da imagem revelou health `503` porque `/data` não existia sem um Volume montado. A imagem passou a criar o diretório, enquanto Railway continua montando armazenamento durável no mesmo path. Essa correção não substitui o teste de persistência/restart no serviço real.
+- **2026-08-30T01:00:00-03:00:** a revisão final alinhou três contratos operacionais sem mudar a API pública: `NEXT_PUBLIC_API_BASE_URL` deve terminar em `/v1`; `NEO4J_DATABASE` passa a ser consumido tanto pelo bootstrap quanto pelo runtime; e retries sem client configurado preservam o erro em vez de entrar em loading infinito.
+- **2026-08-30T01:03:00-03:00:** a mesma revisão identificou risco de somar `amount_minor` entre moedas no mesmo bucket. `currency` passou a integrar o slice de agregação, baseline, candidato e Incident, e o vínculo exige a mesma moeda. A identidade do candidato também inclui janela e slice. O custo aceito é fragmentar amostras por moeda; a alternativa de FX implícito permanece proibida.
+- **2026-08-30T01:02:30-03:00:** o browser gate expôs `UNKNOWN/PIPELINE_FAILED/FileNotFoundError` porque a imagem não continha `config/`. O Docker passou a copiar o catálogo/configuração do simulator e o smoke live agora rejeita qualquer `UNKNOWN`, estágio diferente de `COMPLETE` ou outcome ausente; atingir apenas um estado terminal deixou de ser evidência suficiente.
+
+#### Adendo de evidência final
+
+- **2026-08-30T01:03:17-03:00:** PASS local — 174 testes Python; contratos/OpenAPI, `compileall`, `uv lock --check`, lint e build Next passaram; imagem Python 3.14.4 foi construída com lock/Neo4j/config e health `200`; suite web live passou 35/35 exigindo `COMPLETE` e outcome. O browser real confirmou sample → submit → log `FAILED` de negócio/`COMPLETE` → detalhe `NO_INCIDENT`, lista de Incidents, memória `MATCH_FOUND` com um candidato e `Fallback: Not used`, layout mobile e console sem warnings/errors. Code review: `PASS WITH NOTES`; guardian: `READY WITH WARNINGS`. Railway Volume/restart/CORS e Vercel/browser deployed permanecem `NOT RUN`.
+
+#### Gatilhos de revisão
+
+Mais de uma réplica, migração para queue externa/Postgres, mudança de chave de correlação, falha de build com Python 3.14.4 ou divergência remota exige nova decisão e revalidação dos contratos.
+
 ## André
 
 <!-- ANDRE: faça append de novas entradas imediatamente antes da próxima seção. -->

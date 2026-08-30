@@ -87,13 +87,45 @@ def _advance_locked(con, transaction_id: str) -> None:
         )
         return
 
+    transaction_started = False
     try:
         adapted = _generate_outcome(transaction_id, json.loads(row[2]), row[3])
+        con.execute("BEGIN TRANSACTION")
+        transaction_started = True
+        # Make the current transaction eligible for evidence-authorized linking.
+        # API readers use the same CONNECTION_LOCK, so they cannot observe this
+        # provisional PROCESSING + classification state.
+        con.execute(
+            "UPDATE transaction_records SET classification_json = ? WHERE transaction_id = ?",
+            [json.dumps(adapted.classification), transaction_id],
+        )
         ingestion = ingest_event(adapted.event)
         if ingestion.status not in {"ACCEPTED", "DUPLICATE"}:
             raise RuntimeError(f"canonical event was {ingestion.status}")
         derive_incidents_for_correlation(con, row[3])
+        authored_classification = con.execute(
+            "SELECT classification_json FROM transaction_records WHERE transaction_id = ?",
+            [transaction_id],
+        ).fetchone()[0]
+        con.execute(
+            """UPDATE transaction_records
+               SET status = ?, processing_json = ?, outcome_json = ?, classification_json = ?,
+                   updated_at = ?, lease_owner = NULL, lease_expires_at = NULL
+               WHERE transaction_id = ?""",
+            [
+                adapted.result,
+                json.dumps({"stage": "COMPLETE", "progress_percent": 100, "failure_code": None}),
+                json.dumps(adapted.outcome),
+                authored_classification,
+                now,
+                transaction_id,
+            ],
+        )
+        con.execute("COMMIT")
+        transaction_started = False
     except Exception as exc:  # a technical worker failure must never read as a business decline
+        if transaction_started:
+            con.execute("ROLLBACK")
         con.execute(
             """UPDATE transaction_records
                SET status = 'UNKNOWN', processing_json = ?, outcome_json = NULL, classification_json = NULL,
@@ -106,21 +138,6 @@ def _advance_locked(con, transaction_id: str) -> None:
             ],
         )
         return
-
-    con.execute(
-        """UPDATE transaction_records
-           SET status = ?, processing_json = ?, outcome_json = ?, classification_json = ?,
-               updated_at = ?, lease_owner = NULL, lease_expires_at = NULL
-           WHERE transaction_id = ?""",
-        [
-            adapted.result,
-            json.dumps({"stage": "COMPLETE", "progress_percent": 100, "failure_code": None}),
-            json.dumps(adapted.outcome),
-            json.dumps(adapted.classification),
-            now,
-            transaction_id,
-        ],
-    )
 
 
 def advance_transaction(transaction_id: str, *, worker_id: str | None = None, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> bool:

@@ -143,7 +143,12 @@ def _link_matching_transactions(con, repository: DuckDBIncidentRepository, incid
 
 
 def _input_matches_scope(transaction_input: dict[str, Any], scope: dict[str, list[str]]) -> bool:
-    input_fields = {"issuer_bank": "issuer_bank", "provider_id": "provider_id", "country": "country"}
+    input_fields = {
+        "issuer_bank": "issuer_bank",
+        "provider_id": "provider_id",
+        "country": "country",
+        "currency": "currency",
+    }
     for dimension, allowed in scope.items():
         input_field = input_fields.get(dimension)
         if input_field is None or str(transaction_input.get(input_field)) not in allowed:

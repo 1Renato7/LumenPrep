@@ -8,7 +8,7 @@ from . import WindowMetrics
 
 WINDOW_SECONDS = 300
 TERMINAL_STATUSES = {"SUCCEEDED", "DECLINED", "ERROR", "TIMEOUT", "CANCELLED"}
-DIMENSION_KEYS = ("provider_id", "country")
+DIMENSION_KEYS = ("provider_id", "country", "currency")
 
 
 def _window_bucket(event_time: datetime) -> datetime:
@@ -46,10 +46,11 @@ def compute_windows(con) -> list[WindowMetrics]:
         event_time = datetime.fromisoformat(c["event_time"].replace("Z", "+00:00"))
         bucket = _window_bucket(event_time)
         dims = tuple(c.get(k) or "unknown" for k in DIMENSION_KEYS)
-        groups[(bucket, dims)].append(c)
+        correlation_id = c.get("correlation_id") or "corr_unknown"
+        groups[(bucket, dims, correlation_id)].append(c)
 
     windows: list[WindowMetrics] = []
-    for (bucket, dims), attempts in groups.items():
+    for (bucket, dims, correlation_id), attempts in groups.items():
         eligible = [a for a in attempts if a["status"] in TERMINAL_STATUSES]
         approved = [a for a in eligible if a["status"] == "SUCCEEDED"]
         payments = {a["payment_id"] for a in eligible}
@@ -63,7 +64,7 @@ def compute_windows(con) -> list[WindowMetrics]:
                 decline_counts[key] += 1
 
         revision = 1 + sum(late_counts.get(a["attempt_id"], 0) for a in attempts)
-        currency = attempts[0].get("currency", "BRL")
+        currency = dict(zip(DIMENSION_KEYS, dims))["currency"]
 
         windows.append(
             WindowMetrics(
@@ -86,7 +87,7 @@ def compute_windows(con) -> list[WindowMetrics]:
                 decline_counts=dict(decline_counts),
                 data_quality=1.0,
                 window_revision=revision,
-                correlation_id=attempts[0].get("correlation_id", "corr_unknown"),
+                correlation_id=correlation_id,
             )
         )
     return windows
