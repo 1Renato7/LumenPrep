@@ -3843,6 +3843,7 @@ Mudança do público operacional, timezone configurável por usuário ou políti
 #### Adendos
 
 - **2026-08-30T01:55:00-03:00:** `npm test` passou com 36 testes e 1 integração live opcional marcada como `SKIP`; `npm run lint`, `npm run build` e `git diff --check` passaram. `code-review-gate`: PASS, sem achados bloqueantes. A conversão isolada já havia passado no navegador com UTC−03, detalhe, refresh, mobile e ISO semântico preservado. Na worktree da `origin/main@404c23b`, o frontend live iniciou corretamente, mas a leitura Railway em `localhost:3002` foi bloqueada pela allowlist de CORS conhecida; browser acceptance live local permanece `PASS WITH LIMITATIONS` e deve ser repetido no domínio Vercel após o deploy. `integration-contract-guardian`: READY WITH WARNINGS; nenhum contrato, env var, migration ou backend foi alterado.
+- **2026-08-30T02:02:00-03:00:** VALIDATED no deploy público após o commit `e035663`. GitHub registrou Railway e Vercel como `success`. Em `https://lumen-nextwave.vercel.app/transactions`, `2026-08-30T04:31:50.211528Z` permaneceu no atributo `datetime` e foi exibido como `30/08/2026, 01:31:50`; o cabeçalho mostrou `Updated (Brasília)`. O detalhe manteve o estado opcional `Not provided` após refresh e o rótulo `Occurred at (Brasília)`. No viewport 375×812 não houve overflow horizontal nem erros/warnings de console. `browser-acceptance-gate`: PASS no ambiente publicado.
 
 ### FL-20260830-ROGERIO-010 — Concentrar a recuperação live em duas lanes sem trocar os contratos públicos
 
