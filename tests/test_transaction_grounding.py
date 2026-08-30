@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from app.explanation import ExplanationBundle, resolve_transaction_grounding
+from app.explanation import (
+    ExplanationBundle,
+    resolve_transaction_grounding,
+    resolve_transaction_grounding_from_api_responses,
+)
 from tests.test_memory_service import current_incident
 
 
@@ -40,6 +44,51 @@ def explanation(incident_id: str, *, limitations: tuple[str, ...] = ()) -> Expla
 
 
 class TransactionGroundingTest(unittest.TestCase):
+    def test_api_response_adapter_reuses_existing_bundle(self) -> None:
+        incident = current_incident()
+        bundle = explanation(incident.incident_id)
+        response = {
+            "incident": {
+                "incident_id": incident.incident_id,
+                "detected_at": incident.detected_at.isoformat(),
+                "scope": {key: list(value) for key, value in incident.scope.items()},
+                "metrics": dict(incident.metrics),
+                "root_cause": {"status": incident.root_cause_status, "category": incident.root_cause_category},
+                "evidence": [{"evidence_id": item} for item in incident.evidence_ids],
+                "correlation_id": incident.correlation_id,
+            },
+            "explanation": bundle.to_contract(),
+        }
+
+        result = resolve_transaction_grounding_from_api_responses(
+            "txn-api", [transaction_record("txn-api")], {incident.incident_id: response}
+        )
+
+        self.assertEqual("RESOLVED", result.status)
+        self.assertEqual(bundle.to_contract(), result.incident_links[0].explanation.to_contract())
+
+    def test_api_response_adapter_keeps_invalid_bundle_explicit(self) -> None:
+        incident = current_incident()
+        response = {
+            "incident": {
+                "incident_id": incident.incident_id,
+                "detected_at": incident.detected_at.isoformat(),
+                "scope": {key: list(value) for key, value in incident.scope.items()},
+                "metrics": dict(incident.metrics),
+                "root_cause": {"status": incident.root_cause_status, "category": incident.root_cause_category},
+                "evidence": [{"evidence_id": item} for item in incident.evidence_ids],
+                "correlation_id": incident.correlation_id,
+            },
+            "explanation": {"incident_id": incident.incident_id},
+        }
+
+        result = resolve_transaction_grounding_from_api_responses(
+            "txn-invalid-bundle", [transaction_record("txn-invalid-bundle")], {incident.incident_id: response}
+        )
+
+        self.assertEqual("PARTIAL", result.status)
+        self.assertIn("invalid", result.incident_links[0].limitations[0])
+
     def test_no_incident_is_explicit_and_other_transactions_do_not_leak(self) -> None:
         incident = current_incident()
         result = resolve_transaction_grounding(

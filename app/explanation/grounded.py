@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from app.memory.models import Incident, MemoryStatus, SimilarIncidentResult
 
@@ -37,6 +37,51 @@ class ExplanationBundle:
     recommended_action: str
     limitations: tuple[str, ...]
     model_version: str = "deterministic-template"
+
+    @classmethod
+    def from_contract(cls, payload: Mapping[str, object]) -> "ExplanationBundle":
+        """Read the existing CTR-LLM-001 shape without starting a model call."""
+
+        if payload.get("execution") != "HUMAN_ONLY":
+            raise ValueError("ExplanationBundle execution must be HUMAN_ONLY")
+        incident_id = payload.get("incident_id")
+        if not isinstance(incident_id, str) or not incident_id:
+            raise ValueError("ExplanationBundle incident_id must be a non-empty string")
+        required_text = (
+            "executive_summary",
+            "operations_summary",
+            "what_happened",
+            "where_and_why",
+            "playbook_id",
+            "recommended_action",
+        )
+        if any(not isinstance(payload.get(field), str) for field in required_text):
+            raise ValueError("ExplanationBundle is missing required text fields")
+        recurrence_statement = payload.get("recurrence_statement")
+        if recurrence_statement is not None and not isinstance(recurrence_statement, str):
+            raise ValueError("ExplanationBundle recurrence_statement must be a string or null")
+        evidence_ids = payload.get("evidence_ids")
+        limitations = payload.get("limitations")
+        if not isinstance(evidence_ids, list) or not all(isinstance(item, str) for item in evidence_ids):
+            raise ValueError("ExplanationBundle evidence_ids must be a list of strings")
+        if not isinstance(limitations, list) or not all(isinstance(item, str) for item in limitations):
+            raise ValueError("ExplanationBundle limitations must be a list of strings")
+        model_version = payload.get("model_version", "deterministic-template")
+        if not isinstance(model_version, str):
+            raise ValueError("ExplanationBundle model_version must be a string")
+        return cls(
+            incident_id=incident_id,
+            executive_summary=str(payload["executive_summary"]),
+            operations_summary=str(payload["operations_summary"]),
+            what_happened=str(payload["what_happened"]),
+            where_and_why=str(payload["where_and_why"]),
+            recurrence_statement=recurrence_statement,
+            evidence_ids=tuple(evidence_ids),
+            playbook_id=str(payload["playbook_id"]),
+            recommended_action=str(payload["recommended_action"]),
+            limitations=tuple(limitations),
+            model_version=model_version,
+        )
 
     def to_contract(self) -> dict[str, object]:
         return {

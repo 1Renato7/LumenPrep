@@ -2295,6 +2295,14 @@ relaxar a regra.
   cruzada, isolamento entre transações e falhas de memória/modelo. Um Incident
   sem bundle é exposto como `PARTIAL`, não como resolvido, preservando a falha
   explícita; nenhum contrato público ou API foi alterado.
+- **2026-08-29T21:55:16-03:00:** A branch foi rebaseada sobre a `origin/main`
+  local que contém ingestion/detection/API. O adaptador interno agora aceita as
+  respostas existentes de `GET /incidents/{id}` e reutiliza somente bundles já
+  produzidos; bundle ausente, inválido ou com `incident_id` divergente permanece
+  `PARTIAL`, sem chamada de modelo e sem mudar schema/endpoints. PASS: 27 testes
+  de memória, explicação e trace passaram via `unittest`. A descoberta completa
+  ficou BLOCKED pelo ambiente: o Python disponível é 3.12.13, mas o projeto
+  exige 3.14.4, e faltam `duckdb` e `jsonschema`.
 
 ## Rogério
 

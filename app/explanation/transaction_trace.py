@@ -222,6 +222,53 @@ def resolve_transaction_grounding(
     )
 
 
+def resolve_transaction_grounding_from_api_responses(
+    transaction_id: str,
+    transaction_records: Iterable[Mapping[str, object]],
+    incident_responses: Mapping[str, Mapping[str, object]],
+) -> TransactionGrounding:
+    """Adapt existing ``GET /incidents/{id}`` response bodies for transaction detail.
+
+    This is deliberately not an HTTP client and does not introduce a transaction
+    endpoint or public schema. The future API handler supplies the transaction
+    records and already-read incident responses. Invalid or unavailable bundles
+    become explicit ``PARTIAL`` limitations rather than triggering an LLM call.
+    """
+
+    incidents: dict[str, Incident] = {}
+    bundles: dict[str, ExplanationBundle] = {}
+    failures: dict[str, str] = {}
+    for response in incident_responses.values():
+        incident_payload = response.get("incident")
+        if not isinstance(incident_payload, Mapping):
+            continue
+        try:
+            incident = Incident.from_contract(incident_payload)
+        except (KeyError, TypeError, ValueError):
+            continue
+        incidents[incident.incident_id] = incident
+        explanation_payload = response.get("explanation")
+        if not isinstance(explanation_payload, Mapping):
+            failures[incident.incident_id] = "ExplanationBundle is unavailable from the incident API response."
+            continue
+        try:
+            bundle = ExplanationBundle.from_contract(explanation_payload)
+        except (KeyError, TypeError, ValueError):
+            failures[incident.incident_id] = "ExplanationBundle from the incident API response is invalid."
+            continue
+        if bundle.incident_id != incident.incident_id:
+            failures[incident.incident_id] = "ExplanationBundle incident_id did not match the incident API response."
+            continue
+        bundles[incident.incident_id] = bundle
+    return resolve_transaction_grounding(
+        transaction_id,
+        transaction_records,
+        incidents,
+        bundles,
+        failures,
+    )
+
+
 def _incident_map(incidents: Mapping[str, Incident] | Iterable[Incident]) -> dict[str, Incident]:
     if isinstance(incidents, Mapping):
         return {str(key): value for key, value in incidents.items() if isinstance(value, Incident)}

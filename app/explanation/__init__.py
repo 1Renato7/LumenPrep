@@ -8,6 +8,7 @@ from .transaction_trace import (
     TransactionIncidentLink,
     resolve_transaction_evidence,
     resolve_transaction_grounding,
+    resolve_transaction_grounding_from_api_responses,
 )
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "load_playbooks",
     "resolve_transaction_evidence",
     "resolve_transaction_grounding",
+    "resolve_transaction_grounding_from_api_responses",
     "validate_evidence_ids",
 ]
 
