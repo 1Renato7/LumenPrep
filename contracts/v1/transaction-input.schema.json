@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/transaction-input.schema.json",
+  "title": "CTR-TXN-001 Transaction Input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "merchant_id",
+    "provider_id",
+    "issuer_bank",
+    "country",
+    "currency",
+    "amount_minor",
+    "payment_method_category"
+  ],
+  "properties": {
+    "client_reference": {"type": ["string", "null"], "minLength": 1, "maxLength": 100},
+    "occurred_at": {"type": ["string", "null"], "format": "date-time"},
+    "merchant_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "provider_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "issuer_bank": {"type": "string", "minLength": 1, "maxLength": 100},
+    "country": {"type": "string", "pattern": "^[A-Z]{2}$"},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "amount_minor": {"type": "integer", "minimum": 1},
+    "payment_method_category": {"enum": ["CARD", "BANK_TRANSFER", "DIGITAL_WALLET", "OTHER"]},
+    "card_brand": {"type": ["string", "null"], "maxLength": 50},
+    "card_type": {"enum": ["CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE", null]},
+    "provider_connection_id": {"type": ["string", "null"], "maxLength": 100},
+    "channel": {"enum": ["WEB", "MOBILE", "POS", "API", null]}
+  },
+  "allOf": [
+    {
+      "not": {
+        "anyOf": [
+          {"required": ["status"]},
+          {"required": ["approval_rate"]},
+          {"required": ["decline_code"]},
+          {"required": ["root_cause"]},
+          {"required": ["ground_truth"]},
+          {"required": ["pan"]},
+          {"required": ["cvv"]}
+        ]
+      }
+    }
+  ]
+}

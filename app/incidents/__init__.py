@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from math import ceil
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Candidate = Mapping[str, Any]
 
@@ -30,10 +30,17 @@ def _window_overlaps(left: Candidate, right: Candidate) -> bool:
         return False
 
 
+def _causal_fingerprint(candidate: Candidate) -> tuple[tuple[str, str], ...] | None:
+    """Canonicalize the full causal slice; partial overlap is not causality."""
+    slice_values = candidate.get("slice")
+    if not isinstance(slice_values, Mapping) or not slice_values:
+        return None
+    return tuple(sorted((str(dimension), str(value)) for dimension, value in slice_values.items()))
+
+
 def _slices_compatible(left: Candidate, right: Candidate) -> bool:
-    left_slice = left.get("slice", {})
-    right_slice = right.get("slice", {})
-    return all(left_slice[dimension] == right_slice[dimension] for dimension in left_slice.keys() & right_slice.keys())
+    left_fingerprint = _causal_fingerprint(left)
+    return left_fingerprint is not None and left_fingerprint == _causal_fingerprint(right)
 
 
 @dataclass(frozen=True)
@@ -115,6 +122,15 @@ def compute_impact(correlated: CorrelatedCandidates, window_metrics: Mapping[str
     return Impact(amount_minor=estimated_minor, currency=str(metrics["currency"]))
 
 
+class RootCauseAlternative(BaseModel):
+    """A competing causal hypothesis, never an upgrade of the current cause."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: str
+    confidence: float = Field(ge=0, le=1)
+
+
 class RootCause(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -122,6 +138,13 @@ class RootCause(BaseModel):
     category: str | None
     confidence: float = Field(ge=0, le=1)
     confidence_factors: dict[str, float]
+    alternatives: list[RootCauseAlternative] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def sort_alternatives(self) -> "RootCause":
+        """Give every consumer a stable, confidence-first ordering."""
+        self.alternatives.sort(key=lambda alternative: (-alternative.confidence, alternative.category))
+        return self
 
 
 class Evidence(BaseModel):
@@ -138,6 +161,7 @@ class Recommendation(BaseModel):
 
     playbook_id: str
     action: str
+    recommendation_class: Literal["INVESTIGATE", "MONITOR", "ESCALATE"] = "INVESTIGATE"
     execution: Literal["HUMAN_ONLY"] = "HUMAN_ONLY"
     rationale_evidence_ids: list[str]
 
@@ -162,6 +186,27 @@ class Incident(BaseModel):
     recommendations: list[Recommendation]
     limitations: list[str]
     correlation_id: str
+
+    @model_validator(mode="after")
+    def keep_terminal_state_aligned_with_root_cause(self) -> "Incident":
+        if self.state in {"SUPPORTED", "INCONCLUSIVE"} and self.state != self.root_cause.status:
+            raise ValueError("state must match root_cause.status for supported or inconclusive incidents")
+        return self
+
+
+def prioritize_incidents_by_local_impact(incidents: Iterable[Incident]) -> dict[str, list[Incident]]:
+    """Rank incidents by GMV at risk within their own currency only.
+
+    ``amount_minor`` has no cross-currency meaning.  Bucketing is therefore the
+    honest fallback until a versioned FX source is introduced.
+    """
+    buckets: dict[str, list[Incident]] = {}
+    for incident in incidents:
+        buckets.setdefault(incident.impact.currency, []).append(incident)
+    return {
+        currency: sorted(bucket, key=lambda incident: (-incident.impact.amount_minor, incident.incident_id))
+        for currency, bucket in sorted(buckets.items())
+    }
 
 
 def to_incident(

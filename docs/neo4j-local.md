@@ -7,13 +7,13 @@
 3. Instale o driver opcional no runtime do projeto:
 
    ```powershell
-   uv pip install --python .\.python-runtime\python.exe -r requirements-neo4j.txt
+   uv pip install --python .\.python-runtime\python.exe ".[neo4j]"
    ```
 
    O runtime criado por `scripts/bootstrap-python.ps1` é o pacote embutido
    oficial do Python e não inclui `pip`. Se você preferir usar uma instalação
    normal de Python que já tenha `pip`, o comando equivalente é
-   `python -m pip install -r requirements-neo4j.txt`.
+   `python -m pip install ".[neo4j]"`.
 
 4. Inicialize o banco:
 

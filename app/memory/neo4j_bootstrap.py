@@ -46,7 +46,7 @@ def main() -> None:
     try:
         from neo4j import GraphDatabase
     except ImportError as error:
-        raise RuntimeError("Install the optional driver with: pip install -r requirements-neo4j.txt") from error
+        raise RuntimeError("Install the optional driver with: pip install '.[neo4j]'") from error
 
     uri, user, password, database = _environment()
     driver = GraphDatabase.driver(uri, auth=(user, password))

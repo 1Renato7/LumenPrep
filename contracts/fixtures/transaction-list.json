@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "items": [
+    {
+      "schema_version": "1.0",
+      "transaction_id": "txn_demo_1001",
+      "batch_id": "batch_demo_0001",
+      "created_at": "2026-08-29T18:00:02Z",
+      "updated_at": "2026-08-29T18:00:03Z",
+      "status": "PROCESSING",
+      "input": {"client_reference": "checkout-1001", "occurred_at": "2026-08-29T18:00:00Z", "merchant_id": "merchant_br_01", "provider_id": "provider_alpha", "issuer_bank": "bank_br_a", "country": "BR", "currency": "BRL", "amount_minor": 12990, "payment_method_category": "CARD", "card_brand": "MASTERCARD", "card_type": "CREDIT", "provider_connection_id": "conn_br_primary", "channel": "WEB"},
+      "processing": {"stage": "CLASSIFYING", "progress_percent": 45, "failure_code": null},
+      "outcome": null,
+      "classification": null,
+      "correlation_id": "corr_demo_batch_0001"
+    }
+  ],
+  "next_cursor": null,
+  "correlation_id": "corr_demo_list_0001"
+}

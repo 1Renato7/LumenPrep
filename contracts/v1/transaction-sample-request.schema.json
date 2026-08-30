@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumen.local/contracts/v1/transaction-sample-request.schema.json",
+  "title": "CTR-TXN-001 Transaction Sample Request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "count"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "count": {"type": "integer", "minimum": 1, "maximum": 100},
+    "seed": {"type": ["integer", "null"], "minimum": 0},
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "merchant_id": {"type": "string"},
+        "country": {"type": "string", "pattern": "^[A-Z]{2}$"},
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$"}
+      }
+    }
+  }
+}

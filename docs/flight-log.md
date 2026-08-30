@@ -174,7 +174,7 @@ Exigência oficial de nome/localização, conflitos recorrentes, backlinks quebr
 
 #### Adendos
 
-- Nenhum.
+- **2026-08-29T18:13:16-03:00:** validação final em `127.0.0.1:8516` confirmou o estado padrão com `LOCAL FIXTURE FALLBACK` e sem `status: live`; `?fixture=inconclusive` renderiza `INCONCLUSIVE`, aviso causal não-confirmatório, métricas da fixture (82% → 67%, BRL 1.940,00) e conteúdo em inglês. O parâmetro desconhecido retorna ao incidente suportado. Browser acceptance em 375, 768, 1024 e 1440 px registrou zero overflow horizontal e zero card/texto fora do content box; drill-down expande e console não contém erros. `py_compile`, assertions focadas e `git diff --check` passaram; code review `PASS` sem achados bloqueantes.
 
 ### FL-20260829-TEAM-003 — Colocar precisão causal e memória recorrente no núcleo do MVP
 
@@ -868,11 +868,1081 @@ Consumidor inferindo status por `matches.length`, necessidade de erro HTTP parci
 - **2026-08-29T16:50:00-03:00:** validação pós-migração passou para quatro fixtures de memória, três fixtures causais/explicativas, parse de todos os JSON, OpenAPI YAML, cinco diagramas, versões 1.3.0 dos quatro planos individuais, 12 IDs únicos no Flight Log e `git diff --check`.
 - **2026-08-29T16:49:29-03:00:** o schema passou a impor as invariantes de estado: `MATCH_FOUND` exige ao menos um match; `NO_PRECEDENT` e `MEMORY_UNAVAILABLE` exigem lista vazia. O parse das quatro fixtures e a checagem dessas invariantes passaram; teste de aplicação continua `NOT RUN`.
 
+### FL-20260829-TEAM-013 — Expor combinações de cenário por construtor visual, não por casos prontos
+
+- **Timestamp:** 2026-08-29T17:59:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como recorder e planejador
+- **Categoria:** product | UX | contract | demo
+- **Escopo:** `DEC-013`, `CTR-SCN-001 v1.1`, `CTR-API-001 v1.1`, `CMP-DATA-001`, `CMP-API-001`, `CMP-UI-001`, `TASK-DATA-006`, `TASK-API-003`, `TASK-UI-005`
+- **Links:** `docs/plans/system-plan.md` v1.4.0, `contracts/v1/scenario*.schema.json`, `contracts/v1/api.openapi.yaml`, `docs/plans/people/{andre,rogerio,renato}.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O plano mostrava cenários demonstrativos nomeados e a UI chamaria IDs existentes. André pediu que a banca pudesse escolher qualquer combinação que o sistema suporta, pela interface e sem inserir código, e que os casos prontos desaparecessem do fluxo. Era preciso manter o trial by fire sem permitir combinações impossíveis ou vazar a verdade da causa.
+
+#### Decisão
+
+Substituir a lista de casos prontos por um construtor visual abastecido em tempo de execução por um catálogo de dimensões, valores, limites de efeitos, duração e capacidade simultânea. A UI envia apenas uma request validável; API e gerador criam `scenario_id`, `correlation_id`, seed e timestamps. A verdade da causa permanece isolada do catálogo, request, UI e diagnóstico. O fluxo inclui catálogo, criação, acompanhamento de status e incidentes filtráveis por correlação.
+
+#### Critérios e por que agora
+
+O requisito explícito da banca de variar combinações precisa ser observável sem depender de código ou assistência da equipe. Como o repositório ainda não implementou a API de injeção, a mudança coordenada de contrato agora não cria migração de consumidores em produção.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter botões de cenários fixos | Roteiro mais rápido e previsível | Não permite escolha real da banca; parece hardcoded | FACT: André pediu remover os casos prontos | Não atende ao requisito |
+| Aceitar JSON ou código livre | Máxima liberdade para teste | Permite valores impossíveis, aumenta erro operacional e revela detalhes técnicos desnecessários | INFERENCE: banca não deve precisar programar | Sem guardrails suficientes para demo ao vivo |
+| Formulário baseado em catálogo do gerador | Escolha real dentro do domínio suportado; validação e UX claras | Requer novos endpoints, mocks e estados | FACT: `CTR-SCN-001` já modela filtros/efeitos e `FACT-002` prevê combinação nova | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o plano já afirma que a banca pode injetar uma nova combinação dentro do schema conhecido; `TASK-RENATO-002` já prevê nova combinação sem código.
+- **TEST:** NOT RUN — apenas schemas, OpenAPI e planos foram atualizados; não há API integrada neste momento.
+- **ASSUMPTION:** o catálogo pode representar todo domínio permitido pelo gerador, incluindo o limite de cenários ativos; Renato valida no contract test de `TASK-DATA-006`.
+- **UNKNOWN:** quais valores exatos estarão presentes no catálogo final, pois dependem das dimensões que o gerador efetivamente produzir; a UI não pode hardcodá-los.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** trial by fire conduzido pela banca, sem código e com combinações realmente suportadas.
+- **Abrimos mão de:** um roteiro de um clique e da simplicidade de somente chamar IDs conhecidos.
+- **Dívida/limitação:** o catálogo fixture inicial é apenas mock; o gerador precisa se tornar sua fonte autoritativa antes da integração.
+- **Risco residual:** uma combinação válida pode terminar em `INCONCLUSIVE` ou não gerar incidente; a UI deve declarar esse resultado, não tratá-lo como falha.
+
+#### Consequências e propagação
+
+- **Produto/demo:** construtor vazio substitui casos prontos; a banca escolhe dimensões, efeitos e duração visualmente.
+- **Arquitetura/contratos:** `CTR-SCN-001` passa a v1.1 com catálogo e request; `CTR-API-001` passa a v1.1 com `GET /demo/scenario-catalog`, `POST /demo/scenarios`, `GET /demo/scenarios/{scenario_id}` e filtro de correlação em incidents.
+- **Pessoas/branches:** Renato produz catálogo/validação; Rogério publica a API/status; André consome catálogo e renderiza estados; Altoé não altera retrieval.
+- **Plano/Linear:** plano geral 1.4.0, três planos individuais e preview foram atualizados. As issues externas LUM2-12, LUM2-40 e LUM2-48 precisam de sincronização autorizada; nenhuma escrita externa foi feita.
+- **Testes/observabilidade:** contract tests cobrem catálogo/request, `403/409/422`, idempotência por `request_id`, sigilo de ground truth e status; browser acceptance cobre formulário e estados.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma pessoa seleciona uma combinação oferecida pela UI, injeta sem código e recebe `SUPPORTED`, `INCONCLUSIVE` ou estado de falha honesto vinculado à correlação.
+- **Caminho feliz:** catalogar opções → enviar request → acompanhar `PENDING/EMITTING` → localizar incidentes por `correlation_id`.
+- **Caso difícil/adverso:** banca tenta valor fora do catálogo, excede a capacidade simultânea ou cria combinação de baixa evidência; API/UI respondem respectivamente `422`, `409` e `INCONCLUSIVE` sem ground truth.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** se a API não responder em 2 s, usar fixture local marcada `DEMO FALLBACK`; ela não oferece seletor de casos prontos nem se apresenta como live.
+
+#### Gatilhos de revisão
+
+Catálogo incapaz de expressar uma dimensão gerada, UI com valores hardcoded, vazamento de ground truth, endpoint fora de demo mode, ou feedback da banca de que o construtor é lento demais para o tempo de pitch.
+
+#### Adendos
+
+- **2026-08-29T17:59:00-03:00:** mudança documental e de contrato preparada; validação executável e browser acceptance ainda pendentes da implementação.
+- **2026-08-29T17:59:00-03:00:** revisão de contrato corrigiu duas lacunas antes da aceitação do plano: catálogo agora só pode publicar as mesmas chaves de dimensão aceitas pela request, e filtros vazios são válidos para permitir a queda global/difusa do roteiro. A validação de sintaxe e invariantes das fixtures passou; execução de API/browser continua `NOT RUN`.
+- **2026-08-29T17:59:00-03:00:** o change control classificou a retirada do endpoint de IDs e a restrição de dimensões como incompatíveis. Os nomes `v1.1` acima foram um rascunho não implementado; o estado operacional canônico é `CTR-SCN-001 v2` e `CTR-API-001 v2`, com mocks atualizados diretamente e sem adapter legado.
+- **2026-08-29T19:35:00-03:00:** após comparar com a `main`, o rótulo `DEC-013` usado nesta experiência local foi identificado como colisão com a decisão Railway já publicada em `FL-20260829-ROGERIO-001`. O ID canônico `DEC-013` pertence ao deploy Railway; esta experiência não recebe novo DEC e seu escopo público foi substituído por `DEC-015`.
+
+### FL-20260829-TEAM-014 — Ensaiar o construtor por fixture local com dois streams e cancelamento
+
+- **Timestamp:** 2026-08-29T18:15:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como implementador
+- **Categoria:** UX | demo | contract
+- **Escopo:** `DEC-014`, `CMP-UI-001`, `CTR-API-001 v2.1`, `TASK-UI-005`
+- **Links:** `app/ui/dashboard.py`, `contracts/fixtures/scenario-catalog.json`, `docs/plans/system-plan.md` v1.5.0
+- **Supersedes / superseded by:** complementa FL-20260829-TEAM-013
+
+#### Contexto e pergunta
+
+O construtor precisava ser utilizável antes da API, e André definiu campos do plano geral, seleção única, dois cenários ativos, cancelamento, inglês, explicação de incerteza e detalhes técnicos recolhidos.
+
+#### Decisão
+
+Implementar primeiro um construtor Streamlit por fixture local. Cada dimensão aceita `Any` ou um único valor; dois streams podem ficar ativos; encerrar um preserva o histórico. O resultado local é explicitamente um fallback demonstrativo e explica em inglês quando não consegue isolar causa.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Esperar API | Resultado real imediato | Bloqueia UI e ensaio | FACT: André pediu local primeiro | Não atende ao fluxo escolhido |
+| Permitir múltiplos valores por campo | Mais combinações por clique | Interface e leitura da banca ficam ambíguas | FACT: André recusou múltipla seleção | Não atende ao requisito |
+| Fixture local com seleção única | Ensaiável e diretamente migrável ao contrato | Não calcula evidência real | FACT: catálogo e fallback já existem | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **TEST:** NOT RUN no momento deste registro; validação de browser e fluxo local seguem após implementação.
+- **ASSUMPTION:** o catálogo final terá as mesmas chaves do fixture local; API substitui o adapter sem mudar a UI.
+- **UNKNOWN:** tempo real de detecção do gerador integrado.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** demo e acceptance independentes da API.
+- **Abrimos mão de:** métricas calculadas a partir do cenário escolhido nesta primeira etapa.
+- **Risco residual:** jurado pode confundir fixture com live; badge e textos de fallback tornam a limitação explícita.
+
+#### Consequências e propagação
+
+- **Produto/demo:** construtor em inglês, correlação recolhida, mensagem honesta para `INCONCLUSIVE`.
+- **Arquitetura/contratos:** API v2.1 adiciona `CANCELLED` e `DELETE` para manter a transição direta.
+- **Pessoas/branches:** André inicia por fixture; Rogério implementa espelho HTTP; Renato mantém catálogo autoritativo.
+- **Testes/observabilidade:** code review e browser acceptance do construtor são obrigatórios antes de aceitar o código.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** jurado adiciona dois cenários sem código, encerra um e entende o estado sem abrir detalhes técnicos.
+- **Caso difícil/adverso:** cenário amplo gera `INCONCLUSIVE` com explicação em vez de causa inventada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** manter o construtor local rotulado `LOCAL FIXTURE FALLBACK`.
+
+#### Gatilhos de revisão
+
+Qualquer opção hardcoded, terceiro stream ativo, seleção múltipla por campo, falta de explicação de incerteza ou API incompatível.
+
+#### Adendos
+
+- **2026-08-29T18:15:00-03:00:** `py_compile` e `git diff --check` passaram. Browser acceptance permanece BLOCKED porque `streamlit` não está instalado neste ambiente (`ModuleNotFoundError`); nenhuma afirmação de interação no navegador foi feita.
+- **2026-08-29T19:35:00-03:00:** após comparar com a `main`, o rótulo `DEC-014` usado nesta experiência local foi identificado como colisão com a decisão de `Incident.scope` já publicada em `FL-20260829-ROGERIO-002`. O ID canônico `DEC-014` pertence à decisão de scope; o construtor local permanece protótipo e seu escopo público foi substituído por `DEC-015`.
+
+### FL-20260829-TEAM-015 — Tornar transações, batches e samples a entrada pública do produto
+
+- **Timestamp:** 2026-08-29T19:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como recorder e planejador
+- **Categoria:** product | UX | contract | data
+- **Escopo:** `DEC-015`, `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CMP-WEB-001`, `CMP-TXN-001`
+- **Links:** `docs/plans/system-plan.md` v2.0.0, `contracts/v1/transaction-*.schema.json`, `contracts/v1/api.openapi.yaml`
+- **Supersedes / superseded by:** supersedes o escopo público de `FL-20260829-TEAM-013` e `FL-20260829-TEAM-014`; o construtor de cenários é preservado como harness interno
+
+#### Contexto e pergunta
+
+O protótipo pedia que a pessoa configurasse efeitos como queda de approval e latência. André identificou que esses valores são outputs do sistema: o usuário só deve fornecer fatos da transação. Também pediu múltiplos inputs e geração aleatória para não montar cada linha durante a demo.
+
+#### Decisão
+
+A entrada pública passa a aceitar batches atômicos de 1 a 100 transações. O Railway oferece catálogo e geração de samples por quantidade e seed; samples preenchem linhas editáveis e não são persistidos até `Submit batch`. Input proíbe status, decline, taxas, efeitos, causa, ground truth, PAN, CVV e PII. Outcomes, métricas, classificação e incidentes são derivados depois.
+
+#### Critérios e por que agora
+
+O modelo transaction-first representa o trabalho real do usuário e permite demonstrar automação, enquanto seed fixa torna o ensaio reproduzível. A decisão antecede a implementação final do frontend e evita consolidar a API v2 errada.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter formulário de efeitos | Usa o protótipo atual | Usuário calcula o que o produto deveria descobrir | FACT: requisito explícito de André | Contradiz o produto |
+| Gerar linhas aleatórias hardcoded no browser | Muito rápido | catálogo diverge; demo não é reproduzível nem governada pelo backend | INFERENCE: opções mudarão durante integração | Fonte de verdade errada |
+| Railway gera inputs por catálogo/seed e usuário revisa | rápido, reproduzível e sem antecipar resultado | adiciona endpoint e um clique antes do submit | FACT: todos os dados devem passar pelo backend Railway | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** contratos anteriores aceitavam multipliers de approval/latency e o Streamlit expunha scenario builder.
+- **TEST:** schemas e fixtures preparados; validação executável ainda `NOT RUN` neste registro.
+- **ASSUMPTION:** batch máximo 100 é suficiente para a demo; revisar com teste de carga.
+- **UNKNOWN:** volume mínimo para cada caso gerar anomalia; o harness de fundo cobre a demo sem falsificar o input.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** narrativa coerente, batch rápido, reprodutibilidade e separação entre input/fato derivado.
+- **Abrimos mão de:** controle público direto sobre o efeito e resultado previsível em qualquer lote pequeno.
+- **Dívida/limitação:** a banca pode gerar um lote sem incidente; a UI deve explicar isso honestamente.
+- **Risco residual:** valores aleatórios pouco diversos; testes do catálogo/seed devem medir cobertura básica.
+
+#### Consequências e propagação
+
+- **Produto/UI:** novas rotas de input, log e detalhe; samples por quantidade/seed.
+- **Contrato/API:** novos CTR-TXN/TXL e API v3; cenário v2 deixa a API pública.
+- **Dados:** Renato produz sample/outcome adapters; Rogério persiste/processa; André apresenta; Altoé só recebe Incident.
+- **Plano/Linear:** plano geral e quatro planos atualizados; Linear aguarda confirmação do preview 2.0.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** três inputs gerados com seed fixa podem ser revisados, submetidos e acompanhados individualmente.
+- **Caminho feliz:** gerar → revisar → submit → processing → outcomes → logs/detail.
+- **Caso difícil/adverso:** 101 itens, mesma idempotency key com payload diferente, campo PII ou lote sem anomalia.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** fixture de sample/batch claramente rotulada até a API estar live.
+
+#### Gatilhos de revisão
+
+Necessidade real de mais de 100 itens, catálogo incapaz de gerar inputs válidos, sample vazando outcome/ground truth ou latência de batch incompatível com a demo.
+
+#### Adendos
+
+- **2026-08-29T19:10:00-03:00:** schemas, fixtures e projeções foram preparados; implementação e Linear permanecem pendentes.
+
+### FL-20260829-TEAM-016 — Separar frontend Vercel do data plane Railway
+
+- **Timestamp:** 2026-08-29T19:20:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como recorder e planejador
+- **Categoria:** architecture | deployment | security | integration
+- **Escopo:** `DEC-016`, `CTR-DEP-001 v1`, `CMP-WEB-001`, `CMP-API-001`, `CMP-DEPLOY-001`
+- **Links:** `docs/plans/deployment-vercel-railway.md`, `docs/plans/architecture-diagrams.md`
+- **Supersedes / superseded by:** supersedes Streamlit como frontend final em `FL-20260829-TEAM-014`; Streamlit permanece fallback local
+
+#### Contexto e pergunta
+
+André definiu Vercel para o frontend e Railway para o backend e pediu que todos os dados passem pelo mesmo servidor. Era necessário impedir acesso direto do navegador a DuckDB, Neo4j ou secrets e explicitar a fronteira de rede.
+
+#### Decisão
+
+Next.js roda na Vercel e consome somente a API HTTPS FastAPI do Railway. Como a Vercel não participa da private network Railway, a API recebe domínio público com CORS allowlist para origins Vercel/local. Worker, volume, stores, agent credentials e ground truth permanecem privados.
+
+#### Critérios e por que agora
+
+A separação viabiliza deploy independente sem duplicar lógica no frontend. Fixar env, CORS e ownership antes do código reduz falhas de integração e vazamento de credenciais.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Hospedar tudo no Railway | menos CORS | contraria deploy Vercel solicitado; UI e backend acoplados | FACT: Vercel + Railway foi definido | Não atende |
+| Vercel acessar banco/Neo4j | elimina alguns endpoints | secrets e stores chegam ao browser/runtime errado | segurança por design | Rejeitada |
+| Vercel → API pública Railway com allowlist | fronteira única e contratos testáveis | exige CORS e health por ambiente | documentação oficial Railway/Vercel consultada | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Railway documenta domínio público para FastAPI e private networking apenas entre serviços do projeto.
+- **FACT:** Vercel usa environment variables por ambiente para a base URL.
+- **TEST:** deploy/CORS `NOT RUN`; somente plano preparado.
+- **UNKNOWN:** URLs finais de preview e production; serão preenchidas no deploy, nunca inventadas no repo.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** fronteira de dados única, frontend stateless e deploys claros.
+- **Abrimos mão de:** rede integralmente privada entre browser-facing frontend e API.
+- **Dívida/limitação:** previews exigem atualização controlada de allowlist.
+- **Risco residual:** env/CORS incorreto bloqueia a demo; smoke deployed é obrigatório.
+
+#### Consequências e propagação
+
+- **Frontend:** `NEXT_PUBLIC_API_BASE_URL` é a única config pública.
+- **Backend:** domínio HTTPS, health, CORS e error states explícitos.
+- **Segurança:** stores/secrets nunca são públicos; wildcard CORS não é aceito.
+- **Operação:** ordem Railway primeiro, Vercel preview depois, production por último.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** Vercel production/preview autorizadas acessam `/v1`; uma origin aleatória é negada.
+- **Caso difícil/adverso:** backend down, origin nova e env apontando para localhost.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** UI mostra `BACKEND UNAVAILABLE`; fixture local não se apresenta como live.
+
+#### Gatilhos de revisão
+
+Necessidade de auth real, private ingress/edge proxy, múltiplos tenants ou restrições de compliance.
+
+#### Adendos
+
+- **2026-08-29T19:20:00-03:00:** topologia e runbook registrados; URLs e smoke aguardam serviços reais.
+
+### FL-20260829-TEAM-017 — Persistir progresso no Railway e preservar DuckDB e o gerador como adapters
+
+- **Timestamp:** 2026-08-29T19:30:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team, proposto por Codex para minimizar quebra
+- **Participantes:** André; Codex como recorder e planejador
+- **Categoria:** architecture | reliability | scope | integration
+- **Escopo:** `DEC-017`, `CMP-TXN-001`, `CMP-HARNESS-001`, Railway Volume, `CTR-TXL-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.0.0, `docs/plans/deployment-vercel-railway.md`
+- **Supersedes / superseded by:** complementa `FL-20260829-TEAM-015`; reclassifica o gerador público de `013/014` como interno
+
+#### Contexto e pergunta
+
+O log precisa mostrar processamento verdadeiro e sobreviver a refresh/restart. Ao mesmo tempo, migrar imediatamente todo o trabalho concluído de DuckDB para Postgres ou apagar o scenario generator aumentaria muito o risco da hackathon.
+
+#### Decisão
+
+O worker Railway persiste stage/progress e usa polling 1–2s no MVP. DuckDB/Parquet ficam em Railway Volume com uma réplica aceita; o persistence adapter preserva futura migração para Postgres. O scenario generator vira harness interno e envia tráfego pela mesma batch API, sem escrita direta no banco.
+
+#### Critérios e por que agora
+
+Progresso backend-authored é necessário para uma UI honesta. Volume + adapter reaproveita ingestão/agregação existentes; polling tem menor complexidade que SSE. Passar o harness pela API prova a mesma rota usada pelo usuário.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Timer de progresso no frontend | implementação mínima | mente sobre estágio e quebra após refresh | requisito de log real | Rejeitada |
+| Postgres + queue externa imediatamente | escala/replicas melhores | reescreve store já concluído e expande escopo | Railway Postgres é alternativa viável, não necessária ao MVP | Adiada |
+| DuckDB Volume + lifecycle durável + polling | reaproveita trabalho e torna estado observável | uma réplica e pequena indisponibilidade no deploy | documentação Railway Volume | Escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Railway Volume mantém dados, mas limita o serviço a uma réplica.
+- **FACT:** o repositório já possui contratos e tarefas concluídas orientadas a DuckDB/Parquet e scenario generator.
+- **TEST:** restart, lease, polling e deploy `NOT RUN`.
+- **ASSUMPTION:** uma réplica e polling bastam para a carga de demo.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** mínimo retrabalho, estado real e uma fatia integrada cedo.
+- **Abrimos mão de:** horizontal scaling e push realtime no MVP.
+- **Dívida/limitação:** migração Postgres/SSE se carga ou disponibilidade exigirem.
+- **Risco residual:** job preso após crash; lease/reconciliation e smoke de restart são obrigatórios.
+
+#### Consequências e propagação
+
+- **Contrato:** lifecycle tipado e separação entre outcome failed e pipeline failed.
+- **Backend:** persist before `202`, idempotência e worker retomável.
+- **Frontend:** polling somente enquanto processing; sem incremento local.
+- **Dados:** harness e samples compartilham domínio, mas só batch persiste/processa.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um item permanece visível e retoma após restart sem duplicar evento/métrica.
+- **Caso difícil/adverso:** crash entre persistência e classificação, reentrega duplicada e progress regressivo.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** marcar `PIPELINE_FAILED`/degraded e permitir retry idempotente; nunca converter em decline.
+
+#### Gatilhos de revisão
+
+Necessidade de mais de uma réplica, lock contention, volume insuficiente, latência do polling ou recuperação inconsistente após restart.
+
+#### Adendos
+
+- **2026-08-29T19:30:00-03:00:** decisão documental aceita; testes operacionais ficam bloqueados até a implementação Railway.
+
+### FL-20260829-TEAM-018 — Publicar primeiro somente o replanejamento 2.0 na main
+
+- **Timestamp:** 2026-08-29T20:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Participantes:** André; Codex como integrador e recorder
+- **Categoria:** Git/integration | scope | coordination
+- **Escopo:** `main`, documentação 2.0, branch `codex/andre-dashboard-pitch@cc24c7a`
+- **Links:** `docs/plans/system-plan.md` v2.0.0, `docs/plans/people/*.md`, `docs/plans/linear-preview.md`, `docs/plans/deployment-vercel-railway.md`
+- **Supersedes / superseded by:** complementa `FL-20260829-ANDRE-006`; não muda DEC-015..017
+
+#### Contexto e pergunta
+
+O replanejamento estava visível apenas na branch do André. André pediu que o time recebesse imediatamente na `main` o que precisa refazer, mas restringiu a publicação às documentações novas.
+
+#### Decisão
+
+Publicar na `main` somente README e `docs/`: plano geral, quatro projeções individuais, diagramas, runbook, preview Linear e Flight Log. Não publicar neste commit protótipo, schemas, fixtures, OpenAPI nem validator. Marcar contratos v3 como `FROZEN SPEC / IMPLEMENTATION PENDING` e apontar o draft executável `cc24c7a`, evitando representar a main como já migrada.
+
+#### Critérios e por que agora
+
+O time precisa mudar de direção antes de continuar implementando a API anterior. Separar coordenação de implementação reduz o diff na main e mantém ownership/review dos contratos e código com seus responsáveis.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter tudo só na branch | nenhum risco à main | time não vê novo escopo por padrão | FACT: André pediu visibilidade na main | rejeitada |
+| Merge completo da branch | mocks disponíveis imediatamente | mistura protótipo/contratos não implementados e aparenta migração concluída | gate: branch é handoff, não produto merge-ready | adiada |
+| Commit somente documental | comunica owners/tarefas e preserva código atual | divergência temporária plano↔implementação precisa estar explícita | change control permite plano primeiro | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `main@f1f0d84` contém a implementação anterior e decisões DEC-013/014 preservadas.
+- **FACT:** draft executável e gates permanecem no commit `cc24c7a` da branch do André.
+- **TEST:** checagem de links, IDs e diff documental será executada antes do push.
+- **UNKNOWN:** ordem exata em que as microtarefas v3 serão integradas; o caminho crítico está no preview.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** fonte de verdade e to-dos visíveis para todos sem incorporar código prematuro.
+- **Abrimos mão de:** mocks v3 imediatamente presentes na main.
+- **Dívida/limitação:** plano e implementação divergem de forma deliberada e rotulada até as tasks v3.
+- **Risco residual:** alguém implementar contra a API antiga; cabeçalhos nos planos e status dos contratos mitigam.
+
+#### Consequências e propagação
+
+- **Git:** um commit documental direto na main; branch do André permanece intacta.
+- **Pessoas:** cada plano explica o novo trabalho e onde consultar os drafts.
+- **Linear:** continua `NOT RUN` até confirmação explícita do preview 2.0.
+- **Integração:** contratos/código entram depois por branches curtas e gates próprios.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** ao abrir a main, cada pessoa identifica sua mudança sem concluir que API v3 já funciona.
+- **Caminho feliz:** system plan → people plan → preview Linear → draft branch quando necessário.
+- **Caso difícil/adverso:** procurar schema v3 na main; documentação informa que ainda está no commit `cc24c7a`.
+- **Resultado observado:** NOT RUN neste registro.
+- **Fallback:** reverter apenas o commit documental se houver inconsistência; branch fonte permanece recuperável.
+
+#### Gatilhos de revisão
+
+Primeira microtarefa v3 integrada, sincronização do Linear, alteração do contrato ou mudança de estratégia de deploy.
+
+#### Adendos
+
+- **2026-08-29T20:00:00-03:00:** publicação limitada por pedido explícito de André; nenhum arquivo fora de README/docs entra no commit.
+
+### FL-20260829-TEAM-019 — Sincronizar o Linear 2.0 sem reescrever trabalho concluído
+
+- **Timestamp:** 2026-08-29T19:44:45-03:00
+- **Status:** VALIDATED
+- **Decision owner:** André
+- **Participantes:** André; Codex como integrador e recorder
+- **Categoria:** planning | coordination | change control
+- **Escopo:** projeto Linear `Lumen — Yuno Hackathon`, 21 issues afetadas pelo replanejamento 2.0
+- **Links:** `docs/plans/system-plan.md` v2.0.0, `docs/plans/linear-preview.md`, `docs/plans/people/*.md`, `LUM2-4`, `LUM2-9`–`14`, `LUM2-23`, `LUM2-25`, `LUM2-39`, `LUM2-41`, `LUM2-42`, `LUM2-49`, `LUM2-56`–`64`
+- **Supersedes / superseded by:** encerra o estado `NOT RUN` de sincronização em `FL-20260829-TEAM-018`; não altera DEC-015..017
+
+#### Contexto e pergunta
+
+André confirmou explicitamente o preview 2.0 e autorizou a escrita no Linear com uma condição: se uma issue prevista para atualização já estivesse concluída, preservar o trabalho encerrado e criar uma nova issue descrevendo somente a extensão necessária. A releitura imediatamente anterior à escrita encontrou `TASK-MEM-008 / LUM2-25` em `Done`, diferente do estado que constava no preview.
+
+#### Decisão
+
+Sincronizar descrições e relações apenas das 14 issues ainda abertas ou em andamento; criar seis issues originalmente previstas e uma sétima issue, `TASK-MEM-009 / LUM2-64`, para a extensão transacional que não poderia ser incorporada a `LUM2-25`. Preservar título, descrição, estado e evidências de toda issue `Done`. Escrever relações em uma segunda passagem e reler todo o conjunto afetado antes de considerar a sincronização concluída.
+
+#### Critérios e por que agora
+
+O Linear precisa refletir o plano transaction-first para coordenar implementação paralela, mas uma issue concluída representa evidência histórica de um escopo anterior. Separar a extensão evita transformar retroativamente o Definition of Done de `LUM2-25`, preserva métricas e oferece ao novo trabalho dependências e aceite próprios.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Reabrir e reescrever `LUM2-25` | menos uma issue | invalida o encerramento anterior e mistura evidências de dois escopos | FACT: `LUM2-25` estava `Done` na releitura | rejeitada pela regra confirmada |
+| Atualizar `LUM2-25` sem mudar o estado | mantém contagem menor | cria trabalho pendente oculto dentro de uma issue concluída | change control exige estado honesto | rejeitada |
+| Preservar `LUM2-25` e criar `LUM2-64` | histórico e aceite ficam rastreáveis | adiciona uma issue e uma dependência ao preflight | alinhada à autorização explícita | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** 54 issues existentes foram preservadas; 14 descrições abertas/em andamento foram atualizadas; `LUM2-58`–`64` foram criadas; total final 61.
+- **FACT:** `LUM2-25` permaneceu `Done` e não recebeu alteração de título, descrição ou estado.
+- **TEST:** 21/21 issues afetadas foram relidas com team, project, owner, parent, label, state, ID estável e relações; nenhuma divergência foi encontrada.
+- **UNKNOWN:** duração real de cada microtarefa; estimativas continuam operacionais e devem ser revistas com evidência de execução.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** Linear consistente com o plano 2.0, histórico concluído preservado e caminho crítico explícito.
+- **Abrimos mão de:** reutilizar um ID concluído para reduzir a quantidade de issues.
+- **Dívida/limitação:** o plano documental e o Linear agora estão sincronizados, mas a implementação v3 ainda permanece pendente.
+- **Risco residual:** relações podem precisar de ajuste se contratos ou owners mudarem; isso exige novo change control.
+
+#### Consequências e propagação
+
+- **Rogério:** `LUM2-58`–`60` cobrem API transaction-first, worker persistente e deploy Railway.
+- **Renato:** `LUM2-61`–`62` cobrem adaptação determinística e samples/tráfego pela API comum.
+- **Altoé:** `LUM2-63`–`64` cobrem trace grounded e extensão dos evals transacionais.
+- **André:** `LUM2-9`–`14` foram replanejadas e conectadas às novas dependências sem criar issue adicional.
+- **Documentação:** plano geral, quatro planos individuais e registro de sincronização passam a citar os IDs reais.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** cada pessoa consegue iniciar pelo primeiro item desbloqueado e rastrear produtores, consumidores e bloqueios sem depender do preview local.
+- **Caminho feliz:** abrir o plano individual, seguir o ID Linear real e consultar suas relações.
+- **Caso difícil/adverso:** uma necessidade nova incide sobre issue `Done`; o padrão aplicado é criar extensão separada, como `LUM2-64`.
+- **Resultado observado:** `VALIDATED`; auditoria pós-escrita de 21/21 issues sem divergência.
+- **Fallback:** em divergência futura, interromper novas escritas, inventariar o estado e corrigir plano/Linear por uma mudança explicitamente aprovada.
+
+#### Gatilhos de revisão
+
+Issue concluída que receba novo escopo, alteração de owner/contrato, bloqueio incompatível com o caminho crítico ou primeira evidência real que invalide uma estimativa/dependência.
+
+#### Adendos
+
+- **2026-08-29T19:44:45-03:00:** sincronização autorizada pelo usuário, escrita em duas passagens e auditada antes da atualização documental.
+
+### FL-20260829-TEAM-020 — Adotar sidebar e fila de atenção técnica sem fabricar Incident
+
+- **Timestamp:** 2026-08-29T20:53:42-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Categoria:** product | UX | contract
+- **Escopo:** `CMP-WEB-001`, `TASK-UI-002..006`, `CTR-TXL-001 v1`, `CTR-INC-001 v1`
+
+#### Decisão e trade-off
+
+Usar uma sidebar com `Input`, `Logs` e `Incidents` no desktop e uma barra inferior no mobile. `UNKNOWN + PIPELINE_FAILED` entra em atenção técnica, mas não recebe `incident_id`, causa ou recommendation até o backend devolver `CTR-INC-001`. A alternativa de converter todo `UNKNOWN` em Incident foi rejeitada porque fabrica causalidade; o custo aceito é explicar separadamente atenção técnica e diagnóstico confirmado.
+
+#### Evidência e validação
+
+- **FACT:** `CTR-TXL-001` permite `UNKNOWN` sem outcome/classification; `CTR-INC-001` exige diagnóstico/evidência próprios.
+- **VALIDAÇÃO:** unit/contract, lint, typecheck e build do frontend passam; browser live continua gate separado.
+
+### FL-20260829-TEAM-021 — Publicar `web/` na main como superfície compartilhada de integração
+
+- **Timestamp:** 2026-08-29T22:06:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Categoria:** integration | ownership | delivery
+- **Escopo:** `CMP-WEB-001`, `web/`, `TASK-UI-002..006`, `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`
+- **Links:** `origin/main@103073b`, `FL-20260829-TEAM-020`, `DEC-021`
+
+#### Contexto e decisão
+
+André pediu que o time visse e integrasse o frontend no repositório comum. A main já contém API/worker/fixtures transaction-first, mas não a pasta `web/`. Publicar a única pasta `web/` evita uma cópia paralela e mantém os mocks como modo explícito; não marca a interface como deployed/live.
+
+#### Alternativas e consequências
+
+| Alternativa | Resultado | Decisão |
+| --- | --- | --- |
+| Esperar Railway/Vercel | reduz risco de deploy, mas bloqueia colaboração | rejeitada por pedido explícito |
+| Criar segunda pasta de frontend | duplica código e lockfile | rejeitada |
+| Publicar `web/` sobre a main v3 | compartilhamento imediato, live acceptance pendente | escolhida |
+
+- **FACT:** a main remota possui batch/list/detail e `GET /incidents?transaction_id`; o consumidor foi alinhado e não envia `correlation_id`.
+- **VALIDAÇÃO:** build, lint, typecheck, testes e contract validation são obrigatórios antes do push; browser, Railway, CORS e Vercel continuam bloqueios de `LUM2-10..13`.
+
+#### Adendo de integração
+
+- **2026-08-29:** `code-review-gate` aprovou a publicação sem achado bloqueante no diff; `browser-acceptance-gate` permanece bloqueado pela política local de navegação para localhost. `integration-contract-guardian` classificou a promoção como `READY WITH WARNINGS` para preview compartilhado: formulário/client v3 alinhado a `transaction_id`, enquanto Logs, Detail e Incidents continuam fixture-backed até `LUM2-12`. Não declarar `LUM2-10`, `LUM2-11` ou `LUM2-12` concluídas.
+
+### FL-20260829-TEAM-022 — Integrar os incrementos de Incident sobre o frontend 2.1.0
+
+- **Timestamp:** 2026-08-29T22:45:47-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como integrador e recorder
+- **Categoria:** Git/integration | contract | quality
+- **Escopo:** `feat/OBJ-ROGERIO-001-platform-core`, `CTR-INC-001 v1`, `CMP-INC-001`, `CMP-WEB-001`, plano geral 2.1.1
+- **Links:** `FL-20260829-ROGERIO-007`, `FL-20260829-ROGERIO-008`, `FL-20260829-ROGERIO-009`, `FL-20260829-TEAM-021`, `docs/plans/system-plan.md`
+- **Supersedes / superseded by:** não aplicável; preserva o frontend publicado em 2.1.0 e integra adendos de Incident.
+
+#### Contexto e pergunta
+
+A `main` recebeu quatro commits de frontend após a primeira simulação da branch de Rogério. O novo merge encontrou conflitos textuais nos planos; código, schemas e testes se uniram automaticamente. Era necessário escolher se o plano de frontend seria substituído pelo plano 2.0.5 da branch ou se ambos os incrementos seriam preservados.
+
+#### Decisão
+
+Manter o frontend 2.1.0 e integrar os incrementos de Incident como 2.1.1: hipóteses ordenadas, `recommendation_class` humana, buckets por moeda e fingerprint causal exato. Preservar as entradas do Flight Log e não promover os mocks de `web/` a adapter live.
+
+#### Critérios e por que agora
+
+O usuário autorizou o push para a `main`; aceitar o plano antigo da branch removeria a evidência e as fronteiras da superfície `web/` já integrada. A versão 2.1.1 mantém a fonte de verdade arquitetural monotônica e descreve o estado publicado.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Aceitar o plano 2.0.5 da branch | resolução curta | regride a documentação e o handoff de `web/` 2.1.0 | FACT: `origin/main` contém o frontend e o plano 2.1.0 | perderia estado integrado |
+| Omitir os incrementos de Incident | evita conflito documental | descarta código e contratos testados | TEST: merge de código é limpo | contraria o push autorizado |
+| Preservar 2.1.0 e publicar 2.1.1 | mantém ambos os incrementos rastreáveis | exige resolver documentação e revalidar a união | TEST: merge-tree só conflitou nos planos | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `origin/main@f5f6e0c` e a branch divergem em quatro commits cada desde `103073b`.
+- **TEST:** a simulação anterior da branch passou 97 testes; a validação do merge atualizado será executada antes do push.
+- **ASSUMPTION:** `web/` continua em fixtures até `LUM2-12`, conforme plano 2.1.0.
+- **UNKNOWN:** o adapter live do frontend permanece fora deste merge.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** contratos de Incident e frontend compartilham a mesma `main` sem apagar evidência.
+- **Abrimos mão de:** uma resolução automática de documentação.
+- **Dívida/limitação:** o OpenAPI ainda não tipa explicitamente o envelope da listagem filtrada por `transaction_id`.
+- **Risco residual:** o adapter live deve tratar as extensões opcionais de `CTR-INC-001` ao substituir fixtures.
+
+#### Consequências e propagação
+
+- **Produto/demo:** UI preserva mocks explícitos; Incident ganha informação adicional sem ação automática.
+- **Arquitetura/contratos:** `CTR-INC-001 v1` permanece compatível por campos aditivos; `CTR-API-001 v3` não muda.
+- **Pessoas/branches:** André consome os novos campos quando presentes; Altoé mantém memória separada da causa atual.
+- **Plano/Linear:** plano geral e plano de André passam a apontar para 2.1.1; Linear não foi alterado.
+- **Testes/observabilidade:** Python, contratos, checagens de diff e testes/build do frontend precisam passar antes do push.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o merge preserva os testes Python e o build/testes do frontend sem marcadores de conflito.
+- **Caminho feliz:** API devolve incidentes compatíveis e `web/` continua compilando contra seus mocks.
+- **Caso difícil/adverso:** uma causa `INCONCLUSIVE` com precedentes permanece inconclusiva, e moedas distintas não recebem ranking comum.
+- **Resultado observado:** NOT RUN no momento deste registro.
+- **Fallback:** abortar o merge antes do commit; as duas branches permanecem recuperáveis.
+
+#### Gatilhos de revisão
+
+Falha de contratos/testes, consumidor que rejeite campo opcional, ou adapter live que precise de um envelope estável para `/incidents?transaction_id` exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:45:47-03:00:** a primeira validação do frontend falhou porque o parser estrito rejeitou `root_cause.alternatives`. A integração adicionou tipos, parser, fixtures e apresentação das extensões opcionais. Também separou `listIncidents()` de `listTransactionIncidents(transactionId)`, pois a rota filtrada devolve `IncidentDetail[]`, não `Incident[]`. PASS após correção: `python -m pytest -q` (105), `python scripts/validate_contracts.py`, `python -m compileall -q app`, `npm run lint`, `npm test` (27) e `npm run build`. O browser local do Codex não conectou durante a validação anterior; este gate fica `PASS WITH LIMITATIONS`, sem alegar interação visual.
+
+### FL-20260829-TEAM-023 — Integrar primeiro o adapter determinístico antes de concluir o tráfego de fundo
+
+- **Timestamp:** 2026-08-29T22:56:44-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Team
+- **Participantes:** solicitante; Codex como executor
+- **Categoria:** Git/integration | contract | operations
+- **Escopo:** `LUM2-61` / `TASK-DATA-008`, `LUM2-62` / `TASK-DATA-009`, `CMP-DATA-001`, `CMP-TXN-001`, `CTR-TXN-001 v1`, `CTR-EVT-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.0.0, branch `RENATO_CONTINUCAO_ROGERIO`, `app/worker/transaction_worker.py`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A branch `RENATO_CONTINUCAO_ROGERIO` foi atualizada por fast-forward até `origin/main` em worktree isolado para preservar alterações locais de outras frentes. No Linear, `LUM2-62` ainda está Todo, mas já possui uma implementação de submissão batch na main e é bloqueada por `LUM2-61`. O worker revela que seu outcome atual é um placeholder; a pergunta era qual item assumir sem conflitar com `LUM2-47`, que foi explicitamente excluída pelo solicitante.
+
+#### Decisão
+
+Executar apenas `LUM2-61`: substituir o placeholder por um adapter puro e determinístico de `TransactionInput` para outcome e evento `CTR-EVT-001`, preservando os contratos v1. Revalidar `LUM2-62` depois, sem marcá-la como concluída antes de seus critérios dependerem do adapter.
+
+#### Critérios e por que agora
+
+`LUM2-61` é urgente, é pré-requisito explícito de `LUM2-62`, e fornece a fronteira mínima para que worker, tráfego interno e analytics usem o mesmo dado derivado. `LUM2-47` não será tocada por instrução do solicitante.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Marcar `LUM2-62` Done só porque o commit já está na main | Atualiza o board rapidamente | Mantém outcome placeholder e não satisfaz a dependência | FACT: `LUM2-62` é bloqueada por `LUM2-61` no Linear | Critérios ainda não estão completos |
+| Trabalhar em `LUM2-47` | Benchmark isolado | Contraria exclusão explícita e a issue aparece já concluída/reatribuída | FACT: instrução do solicitante e estado Linear | Rejeitada |
+| Implementar `LUM2-61` primeiro | Desbloqueia o caminho crítico | Atravessa adapter e worker e requer testes de contrato | FACT: docstring do worker declara o placeholder | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `RENATO_CONTINUCAO_ROGERIO` foi atualizada de `789f5f1` para `f5f6e0c` e publicada sem tocar o worktree principal sujo.
+- **FACT:** `LUM2-61` está Todo, prioridade Urgent, e bloqueia `LUM2-62`.
+- **TEST:** NOT RUN — testes do adapter e integração serão executados antes de atualizar o Linear.
+- **UNKNOWN:** a abrangência dos evals downstream de `LUM2-56/57`; permanece fora desta microtarefa.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** ordem de integração explícita e outcome reproduzível para cada input persistido.
+- **Abrimos mão de:** fechar imediatamente uma issue cuja primeira metade já foi integrada.
+- **Dívida/limitação:** o adapter usa os perfis sintéticos versionados; calibração com dados de produção continua fora do MVP.
+- **Risco residual:** uma falha de ingestão de evento deve ser tratada como falha técnica do pipeline, nunca como decline.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** não há mudança de schema; `CTR-TXN-001 v1` passa a alimentar `CTR-EVT-001 v1` no worker.
+- **Pessoas/branches:** Renato recebe o handoff de adapter implementado; Rogério pode consumir a mesma interface no lifecycle.
+- **Plano/Linear:** atualizar somente `LUM2-61` após review, testes e integração; reavaliar `LUM2-62` depois.
+- **Testes/observabilidade:** provar determinismo, três estados terminais, contrato de evento e reentrega idempotente.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o mesmo input/seed/contexto produz payload idêntico e o worker persiste um evento válido uma única vez.
+- **Caminho feliz:** transaction batch chega a terminal com outcome, classificação e evento canônico derivado.
+- **Caso difícil/adverso:** input inválido continua bloqueado na borda; reentrega não duplica evento; erro técnico não se torna decline.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** preservar a classificação `PIPELINE_FAILED`/`UNKNOWN` do worker para falhas técnicas.
+
+#### Gatilhos de revisão
+
+Mudança em `CTR-TXN-001`/`CTR-EVT-001`, requisito de retry público, ou falha de idempotência exige change control e nova decisão.
+
+#### Adendos
+
+- **2026-08-29T23:05:00-03:00:** PASS — `python -m pytest -q` aprovou 100 testes; `python scripts/validate_contracts.py`, `python -m compileall -q app` e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes.
+- **2026-08-29T23:05:00-03:00:** Browser acceptance PASS — Swagger local submeteu batch sintético (`202`) e consultou o registro (`200`) em `COMPLETE`, com `FAILED`, `PROVIDER_INTERNAL_ERROR` e classificação `PROVIDER_ERROR`; console sem erros. Servidor local encerrado após o smoke.
+
 ## André
 
 <!-- ANDRE: faça append de novas entradas imediatamente antes da próxima seção. -->
 
-_Nenhuma decisão registrada._
+### FL-20260829-ANDRE-001 — Adopt Yuno blue and an Apple-like light UI for the fixture dashboard
+
+- **Timestamp:** 2026-08-29T17:15:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo
+- **Escopo:** `CMP-UI-001`, `TASK-UI-001`, `app/ui/dashboard.py`
+- **Links:** `TASK-UI-001`, `CMP-UI-001`, `docs/plans/people/andre.md`, branch `codex/andre-dashboard-pitch`, [Yuno Brand Guidelines](https://yuno-payments.com/en/brand-guidelines/)
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O shell inicial apresentava o gráfico com roxo desconectado do restante e cópia em português. André pediu interface integralmente em inglês, cores fiéis à Yuno e linguagem visual Apple-like.
+
+#### Decisão
+
+Usar Yuno Blue `#3E4FE0` como cor de dados/ação, Harmony Lilac `#E8EAF5` como superfície informativa e neutros claros com tipografia de sistema, cartões brancos e cantos amplos. Todo texto de interface e o texto visível das fixtures usadas neste shell será apresentado em inglês; IDs e referências técnicas permanecem intactos.
+
+#### Critérios e por que agora
+
+Coerência com a marca, leitura de apresentação e unidade visual do dashboard dominam. O gráfico é parte central da narrativa executiva e não pode parecer um componente de outra aplicação.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter dark navy e roxo | Menor mudança de código | Destoa da marca e do feedback visual | FACT: feedback do usuário no gráfico | Não atende ao pedido explícito |
+| Usar azul Yuno em UI dark | Mantém contraste do shell anterior | Menos Apple-like e maior densidade visual | ASSUMPTION: o dashboard será projetado em ambiente claro | Não maximiza a direção de design solicitada |
+| Superfície clara Apple-like com azul Yuno | Coerente, legível e focaliza o incidente | Menos adequada para salas muito escuras | FACT: Brand Guidelines definem `#3E4FE0` e `#E8EAF5` | Melhor atende à solicitação atual |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** as Brand Guidelines oficiais da Yuno definem Yuno Blue `#3E4FE0` e Harmony Lilac `#E8EAF5`.
+- **TEST:** NOT RUN no momento do registro; repetir browser acceptance após a implementação.
+- **ASSUMPTION:** o shell continuará a usar somente estas duas fixtures até a integração da API.
+- **UNKNOWN:** preferência da banca entre ambiente claro e escuro em um projetor específico.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** unidade visual, legibilidade e consistência de marca.
+- **Abrimos mão de:** contraste OLED do shell anterior.
+- **Dívida/limitação:** a tradução é localizada para as fixtures deste shell; a API integrada deverá prover copy de apresentação em inglês.
+- **Risco residual:** contraste em um projetor com brilho muito baixo; validar no ensaio.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a narrativa fica integralmente em inglês e mais coesa no pitch.
+- **Arquitetura/contratos:** nenhuma alteração em `CTR-INC-001` ou fixtures.
+- **Pessoas/branches:** Rogério deve preservar identificadores e referências se trocar a fixture por API.
+- **Plano/Linear:** nenhum estado de Linear é alterado.
+- **Testes/observabilidade:** browser acceptance deve cobrir gráfico, impacto, evidência e responsividade.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** a tela e o gráfico compartilham a mesma linguagem visual e permanecem legíveis em desktop e mobile.
+- **Caminho feliz:** incidente, gráfico, impacto e evidência aparecem em inglês e sem console errors.
+- **Caso difícil/adverso:** fixture indisponível mantém mensagem de erro visível; viewport 375 px não gera overflow.
+- **Resultado observado:** NOT RUN no momento do registro.
+- **Fallback:** a fixture local continua marcada como demo mode sem backend.
+
+#### Gatilhos de revisão
+
+Feedback de baixa legibilidade em projetor, novas Brand Guidelines ou integração com uma API que forneça copy localizado.
+
+#### Adendos
+
+- **2026-08-29T17:25:00-03:00:** browser acceptance em `127.0.0.1:8505` confirmou incidente, gráfico, impacto e evidência em inglês; console limpo e viewport móvel sem overflow.
+
+### FL-20260829-ANDRE-002 — Adopt the dark electric-blue event identity for the dashboard
+
+- **Timestamp:** 2026-08-29T17:40:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo
+- **Escopo:** `CMP-UI-001`, `TASK-UI-001`, `app/ui/dashboard.py`
+- **Links:** `TASK-UI-001`, `CMP-UI-001`, branch `codex/andre-dashboard-pitch`, user-supplied event reference image
+- **Supersedes / superseded by:** supersedes `FL-20260829-ANDRE-001`
+
+#### Contexto e pergunta
+
+No mobile, a superfície clara criou encaixes confusos, contraste insuficiente no aviso de demo e textos próximos aos limites. André forneceu uma referência escura, preta e azul elétrica e exigiu validação de padding, margens, contraste, contenção e overflow.
+
+#### Decisão
+
+Adotar hero dark com blue glow elétrico e textura técnica discreta; cartões escuros translúcidos; badge de demo de alto contraste; padding explícito no container real do Streamlit, no card e nas métricas; quebra de texto e clipping para os componentes críticos.
+
+#### Critérios e por que agora
+
+Fidelidade à referência, leitura em mobile e contenção do conteúdo dominam. A UI do pitch não pode depender do espaçamento padrão do framework.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Ajustar apenas o padding claro | Menor diff | Mantém contraste e identidade desalinhados | FACT: comentários do usuário | Não atende ao briefing |
+| Dark genérico sem textura | Simples | Perde a linguagem visual fornecida | FACT: imagem possui gradientes/padrão técnico | Não reproduz a intenção |
+| Dark elétrico com guardrails | Coerência e leitura | CSS mais específico ao Streamlit | TEST de browser | Melhor equilíbrio |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** screenshots apontam sobreposição, baixo contraste e falta de respiro.
+- **TEST:** validação de browser concluída no adendo abaixo.
+- **ASSUMPTION:** CSS sem ativo externo evoca a referência sem copiar seus assets.
+- **UNKNOWN:** comportamento em projetor físico; validar no ensaio.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** contraste, hierarquia e aderência ao briefing.
+- **Abrimos mão de:** a paleta clara Apple-like anterior.
+- **Dívida/limitação:** seletores internos do Streamlit podem exigir revisão após upgrade.
+- **Risco residual:** glow pode ser sutil em telas ruins, mas o texto continua legível sem ele.
+
+#### Consequências e propagação
+
+- **Produto/demo:** hero e componentes passam a compartilhar a identidade visual.
+- **Arquitetura/contratos:** nenhuma alteração de contrato ou fixture.
+- **Pessoas/branches:** não afeta backend.
+- **Plano/Linear:** nenhum estado externo alterado.
+- **Testes/observabilidade:** acceptance mede contraste, margens, bounds e overflow.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** nenhum texto vaza ou se sobrepõe e os elementos críticos preservam contraste.
+- **Caminho feliz:** hero, incidente, métricas, gráfico, impacto e evidência permanecem nos cartões.
+- **Caso difícil/adverso:** viewport estreito, título longo e badge de demo sem clipping ou overflow.
+- **Resultado observado:** PASS no adendo abaixo.
+- **Fallback:** remover somente a textura decorativa, preservando contraste e espaçamento.
+
+#### Gatilhos de revisão
+
+Falha em mobile, baixo contraste observado, mudança do Streamlit ou novo feedback visual.
+
+#### Adendos
+
+- **2026-08-29T17:55:00-03:00:** browser acceptance em `127.0.0.1:8508` confirmou 48 px de padding lateral desktop, 32 px no card e 18,4 px nas métricas; zero containers fora dos bounds, sem overflow horizontal, evidência expansível e console limpo. Viewport móvel também registrou zero containers/textos fora dos limites.
+- **2026-08-29T18:08:00-03:00:** correção estrutural em `127.0.0.1:8512` removeu o estilo dos wrappers técnicos do Streamlit e substituiu o incidente/status por exatamente dois cards explícitos. Browser acceptance em 375, 768, 1221 e 1440 px registrou zero cards aninhados, zero elementos fora do content box, zero textos fora do card, `scrollWidth == viewport`, drill-down funcional, interface em inglês e console limpo. Contraste calculado: badge 16,38:1, texto secundário 9,65:1 e texto principal 18,6:1. Code review sem achados bloqueantes; `py_compile`, assertions dos formatadores e `git diff --check` passaram.
+- **2026-08-29T17:52:15-03:00:** refinamento de spacing em `127.0.0.1:8514` removeu alturas mínimas dos cards, padronizou alinhamento à esquerda/centro vertical e preservou 16 px entre cards adjacentes. Browser acceptance em 375, 593, 768, 1024 e 1440 px confirmou alturas naturais conforme o conteúdo, zero overflow, zero nesting, 16 px de inset nas três evidências, touch target de 45,4 px, foco visível, conteúdo expandido contido e console limpo. Code review `PASS`; `py_compile`, assertions e `git diff --check` passaram.
+
+### FL-20260829-ANDRE-003 — Expor o limite causal e o fallback local como estados explícitos da demo
+
+- **Timestamp:** 2026-08-29T18:05:46-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo | quality
+- **Escopo:** `TASK-UI-001`, `CMP-UI-001`, `app/ui/dashboard.py`
+- **Links:** `TASK-UI-001` / `LUM2-8`, `CTR-INC-001`, branch `codex/andre-dashboard-pitch`, `incident-inconclusive-with-precedent.json`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O shell mostrava `status: live` embora estivesse isolado em fixtures locais, e o estado `INCONCLUSIVE` previsto no contrato não possuía uma apresentação demonstrável.
+
+#### Decisão
+
+Declarar o fallback local no hero e renderizar `INCONCLUSIVE` com status visual distinto e mensagem explícita de que o precedente orienta a investigação, mas não confirma a causa atual. Expor o caso real já versionado por `?fixture=inconclusive`, sem backend, schema novo ou fixture inventada.
+
+#### Critérios e por que agora
+
+Honestidade operacional e a capacidade de demonstrar o no-answer do MVP têm prioridade sobre uma aparência de produção que a tela não possui.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter `live` e apenas mudar a cor | Menor diff | Mantém uma afirmação operacional falsa | FACT: a tela usa somente fixtures | Não atende ao pedido |
+| Mostrar `INCONCLUSIVE` apenas por CSS morto | Simples | Não prova o fluxo com dados reais | FACT: fixture inconclusiva existe | Não permite acceptance real |
+| Fallback explícito + fixture inconclusiva selecionável | Demonstra os dois estados honestamente | Adiciona uma rota de demo local | TEST pendente | Melhor equilíbrio |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `incident-inconclusive-with-precedent.json` traz `state` e `root_cause.status` iguais a `INCONCLUSIVE`.
+- **TEST:** NOT RUN no momento do registro; executar browser acceptance nos dois modos.
+- **ASSUMPTION:** o query parameter permanecerá exclusivo do shell local até a integração da API.
+- **UNKNOWN:** a convenção final de navegação entre cenários virá em `TASK-UI-002/005`.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** transparência e prova visual de no-answer.
+- **Abrimos mão de:** hero com aparência de operação live.
+- **Dívida/limitação:** seleção por URL é mecanismo de demo, não controle final de produto.
+- **Risco residual:** um usuário pode abrir a URL inconclusiva sem contexto; o próprio hero informa fallback local.
+
+#### Consequências e propagação
+
+- **Produto/demo:** fallback e limite causal passam a ser visíveis.
+- **Arquitetura/contratos:** apenas consome fixtures existentes de `CTR-INC-001`; sem mudança de contrato.
+- **Pessoas/branches:** Rogério pode substituir o selector local por `CTR-API-001` sem mudar semântica.
+- **Plano/Linear:** `LUM2-8` recebe evidência complementar, sem alterar dependências.
+- **Testes/observabilidade:** validar default e `?fixture=inconclusive`, além de console e responsividade.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** os estados `SUPPORTED` e `INCONCLUSIVE` são legíveis e o fallback nunca parece uma conexão live.
+- **Caminho feliz:** abrir a fixture padrão e a inconclusiva, conferindo status e mensagem.
+- **Caso difícil/adverso:** parâmetro desconhecido mantém o fallback padrão sem buscar recursos externos.
+- **Resultado observado:** NOT RUN no momento do registro.
+- **Fallback:** parâmetro ausente ou desconhecido exibe a fixture suportada.
+
+#### Gatilhos de revisão
+
+Integração de `CTR-API-001`, novo estado contratual ou mudança na semântica de no-answer.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-ANDRE-004 — Mostrar recorrência como evidência comparável, sem esconder a incerteza causal
+
+- **Timestamp:** 2026-08-29T18:30:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo
+- **Escopo:** `TASK-UI-004` / `LUM2-11`, `CMP-UI-001`, `app/ui/dashboard.py`
+- **Links:** `CTR-MEM-001 v1.1`, `CTR-INC-001 v1`, `TASK-MEM-006`, `TASK-UI-003`, `TASK-UI-006`, `FL-20260829-TEAM-011`, `FL-20260829-TEAM-012`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A tela já apresentava diagnóstico e evidências, mas não explicava ao mesmo tempo a utilidade executiva e o detalhe operacional de um precedente. Era necessário decidir se a recorrência ficaria escondida em uma tela técnica, se os scores ficariam ocultos e como evitar que o playbook histórico parecesse uma ação automática ou uma confirmação da causa atual.
+
+#### Decisão
+
+Adicionar um bloco de recorrência destacado e expansível. Seu resumo mostra o precedente humano, tempo relativo e sinais iguais/diferentes com ícones vetoriais; o detalhe público traz tabela responsiva, scores estruturado e semântico, IDs de evidência e dois CTAs: abrir a comparação e consultar o guia de investigação. Em `INCONCLUSIVE + MATCH`, a copy mantém explicitamente a causa atual inconclusiva. `MEMORY_UNAVAILABLE` aparece como aviso discreto, sem alterar o diagnóstico atual.
+
+#### Critérios e por que agora
+
+Clareza simultânea para executivo e operações, auditabilidade e honestidade causal dominam. A tarefa `TASK-UI-004` existe para entregar essa leitura antes da validação final do dashboard, e os contratos/fixtures necessários já estão congelados.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Esconder recorrência em detalhe técnico | Interface inicial mais curta | Executivo não percebe o valor da memória; comparação fica difícil de demonstrar | FACT: usuário pediu bloco destacado | Não atende à narrativa de demo |
+| Mostrar só mensagem e playbook | Implementação curta | Esconde fatores, scores e evidências; aumenta risco de falsa certeza | FACT: CTR-MEM-001 expõe fatores e scores | Não prova groundedness |
+| Bloco destacado + detalhe expansível | Atende os dois públicos e preserva rastreabilidade | Adiciona densidade e exige responsividade | FACT: decisão explícita do usuário | Melhor equilíbrio atual |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `CTR-MEM-001 v1.1` distingue `MATCH_FOUND`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE`; lista vazia não significa falha.
+- **FACT:** o usuário escolheu bloco destacado expansível, tabela com resumo visual, CTAs combinados, scores públicos e aviso discreto.
+- **TEST:** NOT RUN no momento do registro; executar `py_compile`, code review e browser acceptance nas quatro combinações.
+- **ASSUMPTION:** a API final preservará os campos e IDs das fixtures; owner de validação: Rogério ao integrar `CTR-API-001`.
+- **UNKNOWN:** o limite ideal de matches simultâneos além do primeiro; o MVP apresenta o top-1 disponível na fixture.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** leitura imediata da recorrência e profundidade auditável sem esconder os scores.
+- **Abrimos mão de:** uma tela inicial minimalista e de uma lista completa de precedentes.
+- **Dívida/limitação:** os CTAs são guias locais no shell de fixture, não links para um executor ou mecanismo de decisão.
+- **Risco residual:** tabela pode ser densa em telas pequenas; a implementação precisa manter coluna responsiva e validação em mobile.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a demo pode defender por que a recorrência é provável e por que ela não é prova causal.
+- **Arquitetura/contratos:** consome, sem alterar, `CTR-INC-001 v1` e `CTR-MEM-001 v1.1`.
+- **Pessoas/branches:** Altoé revisa a semântica da memória; Rogério preserva `memory_status` e evidence IDs na API.
+- **Plano/Linear:** o plano já atribui autonomia de layout/copy a André; não há mudança de contrato, dependência ou escrita externa no Linear.
+- **Testes/observabilidade:** validar match suportado, match inconclusivo, sem precedente, memória indisponível, expansão, CTAs, console e mobile.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma pessoa identifica em poucos segundos o precedente e distingue similaridade de causa atual; um operador encontra fatores, scores e guia sem perder a evidência.
+- **Caminho feliz:** match suportado exibe resumo, comparação e guia `HUMAN_ONLY`.
+- **Caso difícil/adverso:** `INCONCLUSIVE + MATCH` não promove a causa; memória indisponível não parece ausência de precedente; tela de 375 px não vaza tabela.
+- **Resultado observado:** NOT RUN no momento do registro.
+- **Fallback:** fixtures locais versionadas mantêm todos os quatro estados sem Neo4j, API ou executor de playbook.
+
+#### Gatilhos de revisão
+
+API que altere `CTR-MEM-001`, avaliação que mostre confusão entre score e confiança causal, ou feedback de overflow/baixa legibilidade em projetor ou mobile.
+
+#### Adendos
+
+- **2026-08-29T18:42:00-03:00:** browser acceptance em `127.0.0.1:8520` passou para `SUPPORTED + MATCH`, `INCONCLUSIVE + MATCH`, `NO_PRECEDENT` e `MEMORY_UNAVAILABLE`; a comparação expandiu e exibiu ambos os scores, o guia permaneceu `HUMAN_ONLY` e o console ficou sem erros. Em 375 px, os dois controles de recorrência mediram 44 px, a tabela ficou visível, `scrollWidth == clientWidth` e o resumo passou a uma coluna. As assertions focadas de tempo/fatores/mensagem inconclusiva e `git diff --check` passaram. A validação de teclado por `Enter` não abriu o controle no driver do navegador, embora o clique real tenha aberto; o foco visível permanece coberto pelo CSS e deve ser repetido manualmente no ensaio final.
+
+### FL-20260829-ANDRE-005 — Consolidar detalhe e guia dentro do card de recorrência
+
+- **Timestamp:** 2026-08-29T18:50:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (request owner)
+- **Participantes:** André; implementation by Codex
+- **Categoria:** UX | demo
+- **Escopo:** `TASK-UI-004` / `LUM2-11`, `CMP-UI-001`, `app/ui/dashboard.py`
+- **Links:** `FL-20260829-ANDRE-004`, `CTR-MEM-001 v1.1`, `CTR-INC-001 v1`
+- **Supersedes / superseded by:** substitui a decisão de dois CTAs em `FL-20260829-ANDRE-004`; demais decisões permanecem válidas
+
+#### Contexto e pergunta
+
+O review visual mostrou três controles consecutivos para uma única área: botão para abrir, expansível e botão para o guia. Isso fragmentava a leitura e deslocava o detalhe para fora do card de recorrência.
+
+#### Decisão
+
+Remover os dois botões. O expansível é o único controle de abertura e fica dentro do card de recorrência. O guia de investigação `HUMAN_ONLY` aparece ao final do detalhe aberto, próximo dos scores, tabela e evidence IDs.
+
+#### Critérios e por que agora
+
+Reduzir redundância e manter contexto visual sem reduzir auditabilidade. O feedback do usuário identificou diretamente a repetição antes de a UI ser integrada à API.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter dois botões | Ações explicitamente nomeadas | Cria passos duplicados e conteúdo fora do card | FACT: review visual do usuário | Rejeitada |
+| Mostrar guia sempre no resumo | Menos interação | Aumenta densidade e mistura recomendação com síntese executiva | ASSUMPTION: resumo deve ser escaneável | Rejeitada |
+| Um expansível interno com guia no detalhe | Um único ponto de interação e contexto completo | Exige abrir para ver o guia | FACT: escolha explícita do usuário | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o usuário pediu a remoção dos dois botões e o detalhe dentro do card.
+- **TEST:** NOT RUN no momento do registro; validar abertura, guia e mobile após a alteração.
+- **ASSUMPTION:** o playbook não é a informação primária de um executivo; ele pertence ao detalhe operacional.
+- **UNKNOWN:** não aplicável; contratos e dados não mudam.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** leitura mais direta e card autocontido.
+- **Abrimos mão de:** atalho visível para o guia sem abrir detalhes.
+- **Dívida/limitação:** nenhuma além da expansão intencional.
+- **Risco residual:** o usuário pode não abrir o detalhe; o resumo continua dizendo que há playbook a validar.
+
+#### Consequências e propagação
+
+- **Produto/demo:** a recorrência vira uma única unidade visual expansível.
+- **Arquitetura/contratos:** nenhum contrato muda.
+- **Pessoas/branches:** não altera API, memória ou schema.
+- **Plano/Linear:** o plano já permite decisão local de layout; sem escrita externa.
+- **Testes/observabilidade:** validar remoção dos botões, expansão e guia no card em mobile.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o usuário abre um único expansível e encontra comparação e guia sem sair do card.
+- **Caminho feliz:** abrir detalhe → ver scores/tabela → ler guia `HUMAN_ONLY`.
+- **Caso difícil/adverso:** 375 px mantém todo conteúdo contido após expansão.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** conteúdo permanece disponível por fixture quando a API/memória não estiverem integradas.
+
+#### Gatilhos de revisão
+
+Feedback de que o guia ficou difícil de descobrir ou que o card perdeu legibilidade em mobile.
+
+#### Adendos
+
+- **2026-08-29T18:58:00-03:00:** browser acceptance em `127.0.0.1:8520` confirmou zero botões `Open detailed comparison`/`View the investigation guide`; abrir o único expansível mostrou scores, tabela e guia `HUMAN_ONLY`. Em 483 px, `scrollWidth == clientWidth`, o guia permaneceu dentro do detalhe e o console não registrou erros. Sintaxe e `git diff --check` passaram.
+
+### FL-20260829-ANDRE-006 — Rebasear o replanejamento sobre a main integrada antes de publicar
+
+- **Timestamp:** 2026-08-29T19:45:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André
+- **Participantes:** André; Codex como integrador e recorder
+- **Categoria:** Git/integration | quality | scope
+- **Escopo:** branch `codex/andre-dashboard-pitch`, `origin/main@f1f0d84`, plano 2.0, contracts e validator
+- **Links:** `DEC-015`–`017`, `scripts/validate_contracts.py`, `docs/plans/linear-preview.md`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+Antes do push, o fetch mostrou que a branch de André estava 80 commits atrás da main, que já continha runtime, ingestion, aggregation, detection, simulation, incidents, memory, API e Docker, além de `DEC-013/014` oficiais. Publicar sem integrar apagaria contexto e criaria colisões de IDs.
+
+#### Decisão
+
+Commitar a mudança recuperável, rebasear sobre `origin/main@f1f0d84`, resolver conflitos preservando as decisões e módulos publicados e atualizar o validador oficial para incluir todos os contratos 2.0. A branch é `READY TO HAND OFF`, não `READY TO MERGE` como produto completo: a implementação existente ainda expõe o fluxo v1/v2 e precisa das novas microtarefas.
+
+#### Critérios e por que agora
+
+O push precisava carregar o trabalho atual do time e uma diferença pequena/explicável sobre a main. O rebase antes da publicação evita pedir que cada colega reconcilie uma base obsoleta.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Push da base antiga | imediato | 80 commits de divergência e decisões sobrescritas | FACT: `git rev-list` mostrou `80 0` | insegura |
+| Merge commit sem revisar conflitos | preserva ancestrais | plano duplicado e IDs colididos | FACT: main já possuía DEC-013/014 | insuficiente |
+| Rebase com resolução e gates | branch linear e base atual | exige reconciliar planos/testes | evidência Git e contratos | escolhido |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** rebase concluiu sobre `f1f0d84`; 33 IDs de Flight Log são únicos.
+- **TEST:** contract validator passou todos os schemas/fixtures/OpenAPI; 53 testes passaram em Python 3.12.13.
+- **TEST:** 1 teste de ambiente falhou porque exige Python 3.14.4; não é falha funcional observada.
+- **UNKNOWN:** runtime/deploy 3.14.4 e browser Vercel → Railway ainda não foram executados nesta branch.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** base atual, decisões preservadas e validação central completa.
+- **Abrimos mão de:** declarar a branch pronta para merge do produto antes da implementação v3.
+- **Dívida/limitação:** repetir suíte em Python 3.14.4 e browser gate quando frontend/worker existirem.
+- **Risco residual:** código v1/v2 e contrato v3 coexistem temporariamente; Linear e implementação tornam a migração explícita.
+
+#### Consequências e propagação
+
+- **Git:** branch contém um commit sobre a main atual.
+- **Contratos:** CI local passa a conhecer 27 fixtures e referências v3.
+- **Planos:** DEC-013/014 publicados foram preservados; DEC-015..017 carregam a reformulação.
+- **Integração:** não mergear como feature completa até API/worker/Next migrarem; pode ser usada imediatamente para handoff e branches curtas.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um colega parte da branch e encontra código atual da main mais contratos/planos 2.0 sem conflito.
+- **Caminho feliz:** checkout → contract validator → iniciar microtarefa pelo mock.
+- **Caso difícil/adverso:** executar em Python 3.12; somente o teste de runtime exato falha, enquanto contratos e 53 testes funcionais passam.
+- **Resultado observado:** PASS parcial conforme evidências acima.
+- **Fallback:** usar Python 3.14.4 oficial e repetir a suíte; não afrouxar o teste para esconder versão.
+
+#### Gatilhos de revisão
+
+Nova mudança na main antes do merge, falha de contrato em branch consumidora, decisão de trocar DuckDB por Postgres ou implementação v3 incompatível com os mocks.
+
+#### Adendos
+
+- **2026-08-29T19:45:00-03:00:** Linear permanece `NOT RUN` até confirmação explícita do preview 2.0.
 
 ## Altoé
 
@@ -1124,192 +2194,204 @@ Adicionar rerank, conectar Neo4j, receber holdout ou observar falso precedente e
 - Nenhum.
 
 
-### FL-20260829-ALTOE-005 — Suportar o runtime embutido do projeto para o bootstrap Neo4j
+### FL-20260829-ALTOE-005 — Exigir vínculo triplo para traçar transação até incidente
 
-- **Timestamp:** 2026-08-29T19:18:00-03:00
+- **Timestamp:** 2026-08-29T20:06:13-03:00
 - **Status:** ACCEPTED
 - **Decision owner:** Altoé
-- **Participantes:** Altoé; Codex
-- **Categoria:** operations | quality | Git/integration
-- **Escopo:** LUM2-15, `scripts/bootstrap-python.ps1`, `scripts/start-neo4j.ps1`, `docs/neo4j-local.md`
-- **Links:** PR #1, `requirements-neo4j.txt`, `scripts/start-neo4j.ps1`
+- **Participantes:** Altoé; Codex; Rogério e André como consumidores futuros
+- **Categoria:** AI/RAG | contract | quality
+- **Escopo:** TASK-EXP-002 / LUM2-23; `CMP-MEM/EXP-001`; CTR-INC-001 e CTR-TXL-001 v1
+- **Links:** LUM2-23, LUM2-63, CTR-INC-001 v1, CTR-TXL-001 v1, CTR-LLM-001 v1
 - **Supersedes / superseded by:** não aplicável
 
 #### Contexto e pergunta
 
-O bootstrap oficial baixa o Python embutido 3.14.4, que não contém `pip`. A
-documentação do Neo4j e o script de inicialização mandavam executar
-`python -m pip`, tornando a instalação limpa do driver inviável justamente no
-runtime recomendado pelo repositório.
+O plano 2.0 exige navegar de uma transação até uma explicação de incidente,
+mas proíbe narrar falha isolada como incidente e vazar evidência de outra
+transação. Os contratos já trazem `related_incident_ids`, `evidence_ids` e
+`correlation_id`, sem precisar de novo campo público.
 
 #### Decisão
 
-Priorizar `.python-runtime\\python.exe` no bootstrap Neo4j e documentar a
-instalação do driver com `uv pip install --python ...`. Uma instalação normal
-de Python com `pip` continua sendo alternativa explícita, mas não é exigida.
+Resolver uma ligação somente quando os três sinais concordarem: a classificação
+da transação referencia o Incident, contém ao menos um `evidence_id` próprio e
+o `correlation_id` é igual. Os IDs de evidência transacional e agregada podem
+ter namespaces diferentes; evidência de memória histórica não é atribuída a
+uma transação corrente.
 
 #### Critérios e por que agora
 
-O fluxo local precisa ser reproduzível para a integração e a demo. Manter uma
-instrução que o runtime oficial não consegue executar cria falha tardia e
-mascara a causa com erro de import.
+Esta regra entrega rastreabilidade auditável para a API/UI futura sem uma nova
+chamada LLM, sem mudança de schema e sem depender da implementação da API v3.
 
 #### Alternativas consideradas
 
 | Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
 | --- | --- | --- | --- | --- |
-| Exigir Python de sistema com pip | instrução conhecida | diverge do runtime 3.14.4 reproduzível do projeto | FACT: não há `pip` no runtime embutido | rejeitada |
-| Adicionar pip ao runtime embutido | elimina `uv` | o pacote embutido não traz `ensurepip`; manutenção extra | TEST: `python -m pip` e `ensurepip` ausentes | rejeitada |
-| Usar `uv` para instalar no runtime do projeto | preserva versão e instala só o driver opcional | requer `uv` instalado | TEST: `uv pip install --python` funcionou com `neo4j==5.28.5` | escolhida |
+| Confiar apenas em `related_incident_ids` | Implementação curta | Permite referência sem prova de evidência | FACT: campo é uma lista de IDs | Não protege grounding |
+| Inferir por escopo ou semelhança | Cobre registros incompletos | Pode ligar uma falha isolada ao incidente errado | FACT: RAG não classifica transações | Proibido pelo guardrail |
+| Exigir Incident + evidência da classificação + correlação | Auditável e compatível | Pode retornar vazio para dado incompleto | TEST: pendente | Escolhida |
 
 #### Evidência, hipóteses e desconhecidos
 
-- **FACT:** `scripts/bootstrap-python.ps1` baixa o pacote embutido oficial.
-- **TEST:** validação real do Neo4j e os cinco evals de memória passaram usando
-  o runtime 3.14.4 com o driver instalado via `uv`.
-- **ASSUMPTION:** colaboradores terão `uv` disponível ou poderão usar Python
-  normal com `pip`; o runbook declara as duas rotas.
-- **UNKNOWN:** a CI ainda não possui checks publicados para a PR #1.
+- **FACT:** CTR-TXL-001 v1 expõe os três campos necessários; os fixtures v2
+  usam IDs de evento na transação e IDs agregados no Incident.
+- **TEST:** NOT RUN — testes da resolução serão executados após a implementação.
+- **ASSUMPTION:** produtor da API v3 preservará a mesma `correlation_id` entre
+  transação e Incident relacionado.
+- **UNKNOWN:** o formato de apresentação do trace pelo frontend; o resolver
+  permanece interno e retorna IDs estáveis.
 
 #### Trade-offs aceitos
 
-- **Ganhamos:** instalação coerente com o runtime oficial e erro acionável para
-  driver ausente.
-- **Abrimos mão de:** fluxo de uma única ferramenta do Python embutido.
-- **Dívida/limitação:** o setup completo das dependências da aplicação além do
-  driver Neo4j permanece responsabilidade do ambiente compartilhado.
-- **Risco residual:** ausência de `uv` bloqueia apenas o caminho embutido; o
-  fallback com Python e `pip` continua documentado.
+- **Ganhamos:** nenhuma associação sem prova local e reproduzível.
+- **Abrimos mão de:** mostrar relações quando o produtor não fornecer evidência.
+- **Dívida/limitação:** a regra não reconstrói links perdidos no histórico.
+- **Risco residual:** producer com `correlation_id` inconsistente produz vazio,
+  que é seguro e observável pelos testes.
 
 #### Consequências e propagação
 
-- **Produto/demo:** a inicialização local do grafo deixa de falhar por `pip`
-  inexistente.
-- **Arquitetura/contratos:** nenhum contrato ou schema muda.
-- **Pessoas/branches:** Rogério precisa tratar a instalação das dependências
-  gerais observada no smoke completo; Altoé mantém o driver opcional isolado.
-- **Plano/Linear:** LUM2-15 recebe a evidência da revisão; plano geral não muda.
-- **Testes/observabilidade:** o script verifica o import do driver antes do
-  bootstrap e mostra a correção exata.
+- **Produto/demo:** uma transação isolada permanece sem narrativa de incidente.
+- **Arquitetura/contratos:** sem alteração de schema; interpreta os campos
+  congelados de CTR-INC-001/CTR-TXL-001.
+- **Pessoas/branches:** Rogério recebe a regra de resolução; André recebe IDs
+  já autorizados para o detalhe.
+- **Plano/Linear:** LUM2-23 em progresso; LUM2-63 consumirá o resolver.
+- **Testes/observabilidade:** cobrir um, múltiplos, ausente e cross-transaction.
 
 #### Validação e trial by fire
 
-- **Hipótese verificável:** um clone limpo com runtime embutido consegue
-  inicializar Neo4j após instalar o driver pelo comando documentado.
-- **Caminho feliz:** Compose saudável, constraints e seed D-2 aplicados.
-- **Caso difícil/adverso:** driver ausente falha antes do bootstrap com comando
-  de instalação explícito, sem deixar estado parcial.
-- **Resultado observado:** validação real do grafo e evals passaram; o teste do
-  script completo está limitado nesta sessão pela ausência do CLI Docker no PATH.
-- **Fallback:** usar Python normal com `pip` para o mesmo `requirements-neo4j.txt`.
-
-#### Gatilhos de revisão
-
-Adicionar um gerenciador de dependências do projeto, disponibilizar CI ou mudar
-o bootstrap Python exige revisar este runbook.
-
-#### Adendos
-
-- 2026-08-29T19:16:00-03:00 — Validação real concluída contra Neo4j local:
-  bootstrap aplicou constraints e seed D-2 de modo idempotente; recorrência,
-  combinação nova, falta de similaridade e indisponibilidade retornaram os
-  estados esperados. Os cinco evals automatizados continuam passando. Holdout
-  independente, latência sob carga e rerank continuam `NOT RUN`.
-
-### FL-20260829-ALTOE-006 — Conectar a API à memória Neo4j com fallback explícito
-
-- **Timestamp:** 2026-08-29T19:38:23-03:00
-- **Status:** ACCEPTED
-- **Decision owner:** Altoé
-- **Participantes:** Altoé; Codex; Rogério como owner de `CTR-API-001`
-- **Categoria:** architecture | Git/integration | quality
-- **Escopo:** LUM2-39, `app/api/incidents.py`, `CMP-API-001` → `CMP-MEM-001`
-- **Links:** CTR-API-001 v1, CTR-MEM-001 v1.1, LUM2-15, LUM2-39, PR #1
-- **Supersedes / superseded by:** não aplicável
-
-#### Contexto e pergunta
-
-O endpoint de incidente consumia somente uma memória em RAM, embora o runtime
-Neo4j e seu fallback já existissem na branch. Era necessário avançar a
-integração sem esperar o RCA real e sem trocar a fonte fixture de `Incident`.
-
-#### Decisão
-
-Para os incidentes enriquecidos existentes, a API tentará construir o runtime
-Neo4j de Altoé; se a configuração, o driver ou a conexão local não estiverem
-disponíveis, usará uma memória em RAM explicitamente marcada como fallback,
-semeada no horário do incidente consultado. O runtime aberto pela request é
-sempre fechado. A resposta HTTP e os fixtures de incidentes não mudam.
-
-#### Critérios e por que agora
-
-O handoff `CTR-MEM-001 v1.1` já é estável e a API precisa provar sua fronteira
-real antes da entrega do RCA. Fallback verificável evita bloquear a demo em
-ambientes sem Neo4j, sem ocultar o estado no `retrieval_trace`.
-
-#### Alternativas consideradas
-
-| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
-| --- | --- | --- | --- | --- |
-| Manter somente fixture em RAM | Menor diff | Neo4j permanece desconectado da API | FACT: o runtime Neo4j já existe | Não prova o handoff real |
-| Exigir Neo4j em toda request | Exercita sempre o grafo | Bloqueia dev/demo sem configuração | FACT: `NEO4J_PASSWORD` é opcional no ambiente da API | Incompatível com o fallback planejado |
-| Preferir Neo4j e cair para memória marcada | Integração real e demo resiliente | Cria caminho operacional adicional para testar | TEST: pendente nesta entrada | Escolhida |
-
-#### Evidência, hipóteses e desconhecidos
-
-- **FACT:** `CTR-MEM-001 v1.1` possui `fallback_used`; `CTR-API-001 v1` mantém
-  memória separada de `root_cause`.
-- **TEST:** NOT RUN — testes unitários/API e smoke do grafo serão executados
-  após a implementação.
-- **ASSUMPTION:** o RCA real substituirá somente `_fixture_records()`, pois a
-  fronteira aceita `Incident.from_contract`.
-- **UNKNOWN:** o lifecycle ideal de driver no deploy; a abertura por request é
-  segura para a fatia atual, mas pode exigir pool no ciclo de vida da app.
-
-#### Trade-offs aceitos
-
-- **Ganhamos:** integração progressiva e estado de fallback auditável.
-- **Abrimos mão de:** reutilizar uma conexão global nesta primeira fatia.
-- **Dívida/limitação:** cada request configurada constrói/fecha um driver.
-- **Risco residual:** seed demonstrativo pode não representar o histórico
-  produtivo; o trace e a evidência distinguem o caminho usado.
-
-#### Consequências e propagação
-
-- **Produto/demo:** o mesmo endpoint funciona com Neo4j local ou sem ele.
-- **Arquitetura/contratos:** nenhum schema ou contrato muda.
-- **Pessoas/branches:** Rogério conserva a fonte fixture até RCA; Altoé mantém
-  runtime e fallback compatíveis.
-- **Plano/Linear:** registrar evidência em LUM2-39, sem marcar a tarefa inteira
-  concluída enquanto RCA permanecer pendente.
-- **Testes/observabilidade:** cobrir runtime configurado, ausência de runtime,
-  fechamento do driver e resposta HTTP.
-
-#### Validação e trial by fire
-
-- **Hipótese verificável:** a API retorna `MATCH_FOUND` e `fallback_used=true`
-  sem grafo, e consome o serviço do runtime quando ele existe.
-- **Caminho feliz:** `GET /incidents/{id}` usa o grafo configurado.
-- **Caso difícil/adverso:** driver/configuração ausente não muda a causa atual
-  nem derruba a resposta.
+- **Hipótese verificável:** somente transações com vínculo triplo aparecem.
+- **Caminho feliz:** duas transações possuem evidência de classificação e
+  apontam para o mesmo Incident.
+- **Caso difícil/adverso:** ID de incidente sem evidência ou correlação cruzada
+  não é exposto.
 - **Resultado observado:** NOT RUN.
-- **Fallback:** memória em RAM com seed D-2 alinhado ao `detected_at` da query.
+- **Fallback:** trace vazio; ExplanationBundle do Incident continua válido.
 
 #### Gatilhos de revisão
 
-Adicionar lifecycle compartilhado/pool se latência ou concorrência o exigir;
-revisar quando RCA substituir fixtures ou o histórico Neo4j passar a ser
-ingerido por incidentes reais.
+Novo contrato que separe correlation por subfluxo, ou necessidade de explicar
+evidência agregada sem transação individual, exige change control antes de
+relaxar a regra.
 
 #### Adendos
 
-- **2026-08-29T19:38:23-03:00:** a primeira prova contra a instância Neo4j
-  local encontrou incompatibilidade real: o driver instalado aceita `auth`
-  somente como argumento nomeado, enquanto `create_memory_runtime()` o passava
-  por posição. A correção e um teste com factory keyword-only são obrigatórios
-  antes de validar a rota configurada; até então o caminho Neo4j é `FAIL` e o
-  fallback continua `PASS`.
+- **2026-08-29T20:06:13-03:00:** PASS: 22 testes focados passaram, incluindo
+  múltiplas transações, correlação divergente, Incident diferente, evidência
+  ausente e `INCONCLUSIVE` sem promoção. `scripts/validate_contracts.py` e
+  `compileall` passaram. A revisão descobriu que os fixtures v2 usam
+  namespaces distintos para evidência transacional e agregada; a regra foi
+  corrigida antes do gate para validar evidência da classificação, não igualdade
+  textual entre esses namespaces.
+- **2026-08-29T20:06:13-03:00:** PASS: a suíte completa executou 57 testes
+  sem falhas depois da correção.
+- **2026-08-29T21:24:57-03:00:** PASS: LUM2-63 adicionou o resolvedor
+  `transaction_id → evidence → Incident → ExplanationBundle`, filtrado pela
+  transação solicitada e sem chamada LLM por item. Nove testes focados passaram
+  cobrindo no-incident, um/múltiplos Incidents, evidência ausente, correlação
+  cruzada, isolamento entre transações e falhas de memória/modelo. Um Incident
+  sem bundle é exposto como `PARTIAL`, não como resolvido, preservando a falha
+  explícita; nenhum contrato público ou API foi alterado.
+- **2026-08-29T21:55:16-03:00:** A branch foi rebaseada sobre a `origin/main`
+  local que contém ingestion/detection/API. O adaptador interno agora aceita as
+  respostas existentes de `GET /incidents/{id}` e reutiliza somente bundles já
+  produzidos; bundle ausente, inválido ou com `incident_id` divergente permanece
+  `PARTIAL`, sem chamada de modelo e sem mudar schema/endpoints. PASS: 27 testes
+  de memória, explicação e trace passaram via `unittest`. A descoberta completa
+  ficou BLOCKED pelo ambiente: o Python disponível é 3.12.13, mas o projeto
+  exige 3.14.4, e faltam `duckdb` e `jsonschema`.
+- **2026-08-29T22:15:19-03:00:** INTEGRATED: o filtro
+  `GET /v1/incidents?transaction_id=` passou a ler o registro persistido e a
+  aplicar o resolvedor de trace antes de devolver qualquer Incident. Assim,
+  `related_incident_ids` sozinho não autoriza exposição: classificação com
+  evidência vazia ou `correlation_id` divergente retorna lista vazia. A resposta
+  pública e os contratos não mudaram; o trace continua interno até o formato de
+  apresentação ser definido. PASS: `validate_contracts.py` e a suíte completa
+  executaram com 109 testes aprovados. Browser acceptance ficou BLOCKED pela
+  política do navegador local para `127.0.0.1`; os testes HTTP automatizados
+  cobrem o endpoint.
 
+### FL-20260829-ALTOE-006 — Separar lista de Incidents do detalhe grounded da transação
+
+- **Timestamp:** 2026-08-29T22:20:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Gabriel Altoé
+- **Contexto:** `GET /v1/incidents` passou a devolver objetos diferentes quando
+  recebia `transaction_id`, o que tornava o contrato ambíguo para o cliente
+  Next.js e para geração de tipos.
+- **Decisão:** manter a lista sempre homogênea e publicar o detalhe em
+  `GET /v1/transactions/{transaction_id}/incidents` (`CTR-TDI-001 v1`). A nova
+  resposta expõe estado, links autorizados, Incident, memória, ExplanationBundle
+  e limitações; transação conhecida sem vínculo retorna `NO_INCIDENT`, e uma
+  inexistente retorna `404`.
+- **Trade-off:** há uma rota e um schema a mais, mas nenhum consumidor precisa
+  inferir a forma da resposta pelo parâmetro de consulta.
+- **Guardrails:** a associação requer `related_incident_ids`, evidência de
+  classificação e `correlation_id` compatível; nenhum LLM é chamado por item e
+  precedente histórico não altera a causa atual.
+- **Validação concluída:** schema/fixture/OpenAPI, testes HTTP para
+  `RESOLVED`, `NO_INCIDENT`, correlação/evidência inválida e `404`; `112`
+  testes passaram e `scripts/validate_contracts.py` retornou `OK`.
+- **Gate visual:** bloqueado pela política do navegador local nesta máquina;
+  o endpoint foi coberto por testes HTTP e continua pendente de aceite visual
+  no ambiente de integração.
+
+### FL-20260829-ALTOE-008 — Avaliar o detalhe transacional sem expor dados internos
+
+- **Timestamp:** 2026-08-29T22:58:09-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Gabriel Altoé
+- **Escopo:** `TASK-MEM-009 / LUM2-64`, `CTR-TDI-001 v1`
+- **Contexto:** a extensão transacional de memória precisa provar tanto o
+  isolamento entre transações quanto a separação entre dados públicos e os
+  controles internos do gerador.
+- **Decisão:** avaliar a rota pública com registros de transação controlados,
+  sem importar ou alterar o harness de background traffic ainda bloqueado.
+  Os casos verificam falha sem Incident, duas transações no mesmo Incident com
+  evidências isoladas, ausência de seed/configuração/ground truth e
+  `MEMORY_UNAVAILABLE` preservando causa atual e ExplanationBundle
+  determinístico.
+- **Trade-off:** esta evidência não substitui o ensaio ponta a ponta com tráfego
+  de fundo; ele permanece dependente de `LUM2-62`, `LUM2-61` e `LUM2-48`.
+- **Validação concluída:** `18` testes de grounding/API passaram e
+  `scripts/validate_contracts.py` retornou `OK`.
+
+### FL-20260829-ALTOE-009 — Integrar background traffic ao detalhe grounded
+
+- **Timestamp:** 2026-08-29T23:18:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Gabriel Altoé
+- **Escopo:** `LUM2-61`, `LUM2-62`, `LUM2-63`, `LUM2-64`; `CTR-TXL-001` e
+  `CTR-TDI-001 v1`
+- **Contexto:** a `main` recebeu o adapter determinístico e o harness de
+  tráfego, mas mantinha um import circular e ainda não carregava o contrato de
+  detalhe grounded.
+- **Decisão:** montar uma branch de integração sobre a `main`, aplicar a
+  cadeia de trace/contrato/evals e mover o import do harness para o handler
+  `/demo/background-traffic`. O teste de regressão importa o módulo em processo
+  novo para impedir o retorno do ciclo.
+- **Resultado:** tráfego de fundo entra pela batch API, o worker persiste os
+  eventos, métricas passam a refletir o batch processado e o detalhe de cada
+  transação sem vínculo RCA retorna `NO_INCIDENT` sem expor a seed. A associação
+  continua requerendo `related_incident_ids`, evidência e `correlation_id`.
+- **Validação concluída:** `44` testes integrados passaram e
+  `scripts/validate_contracts.py` retornou `OK`.
+- **Pendente:** revisão/merge na `main` e RCA real para autorizar links a
+  Incident em tráfego não controlado.
+
+### FL-20260829-ALTOE-010 — Operacionalizar a memória Neo4j sem duplicar o lifecycle da API
+
+- **Timestamp:** 2026-08-29T23:59:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Gabriel Altoé
+- **Escopo:** `CTR-MEM-001 v1.1`, `CMP-MEM/EXP-001`, runtime Neo4j, Compose e API de Incidents
+- **Decisão:** integrar o runtime, bootstrap e Compose Neo4j, mas preservar na API o driver reutilizável já adotado pela `main`. O adapter local continua opcional; sem configuração ou falha do driver, a memória em RAM permanece o fallback da aplicação.
+- **Trade-off:** abre mão de criar/fechar um driver a cada request para evitar custo e conexões transitórias; o lifecycle compartilhado será revisado se houver concorrência, latência ou mudança no deploy.
+- **Guardrails:** Neo4j recebe somente memória de Incident; transações completas, segredos e estado de fallback não são expostos ao navegador. A instalação do driver segue o extra `neo4j` do projeto, não um segundo manifesto divergente.
+- **Validação planejada:** suíte completa, testes de runtime/bootstrap, validação de contratos e smoke local Compose + bootstrap antes do merge.
 
 ## Rogério
 
@@ -1521,6 +2603,215 @@ Reabrir se Renato retomar qualquer uma das 6 tarefas assumidas (risco de trabalh
 #### Adendos
 
 - Nenhum.
+
+### FL-20260829-ROGERIO-004 — Retomar a entrega transaction-first exclusivamente na branch de plataforma
+
+- **Timestamp:** 2026-08-29T20:06:30-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério e Codex
+- **Categoria:** Git/integration | operations
+- **Escopo:** `OBJ-ROGERIO-001`; `TASK-TXN-API-001`, `TASK-TXN-WORKER-001`, `TASK-DEPLOY-API-001`; branch `feat/OBJ-ROGERIO-001-platform-core`
+- **Links:** `docs/plans/system-plan.md` v2.0.0; `docs/plans/people/rogerio.md`; commits `067546e`, `45202d6`; `FL-20260829-ROGERIO-003`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+As alterações locais da frente de dados/detecção permanecem em `RENATO_CONTINUCAO_ROGERIO`, enquanto o plano 2.0 exige mudanças em contratos, API, lifecycle e deploy sob o ownership de Rogério. Era necessário escolher onde retomar o trabalho sem misturar duas frentes independentes nem perder o plano aprovado, pois a branch de plataforma ainda continha somente o plano 1.3.1.
+
+#### Decisão
+
+Executar exclusivamente no worktree da branch `feat/OBJ-ROGERIO-001-platform-core`. Trazer para ela apenas os commits documentais aprovados do replanejamento 2.0 (`067546e` e `45202d6`) e preservar, sem alteração, a working tree e a branch `RENATO_CONTINUACAO_ROGERIO`.
+
+#### Critérios e por que agora
+
+O plano 2.0 nomeia Rogério como owner de `CMP-API-001`, `CMP-TXN-001` e `CMP-DEPLOY-001`; trabalhar em outra branch criaria atribuição e integração ambíguas. A documentação 2.0 é a fonte de verdade e precisa estar no mesmo histórico do código que a implementará.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Branch de plataforma com somente os commits documentais 2.0 | ownership e plano coerentes; preserva trabalho paralelo | requer validar a integração documental antes do código | FACT: a branch estava limpa e os commits são somente docs | escolhida |
+| Continuar em `RENATO_CONTINUACAO_ROGERIO` | evita trocar de worktree | mistura ownership e mudanças locais não relacionadas | FACT: há alterações não commitadas nessa working tree | viola a separação solicitada |
+| Mesclar a branch inteira do Renato | disponibiliza também dados/detecção | integra código fora do escopo e antecipa conflitos semânticos | FACT: o plano mantém `TASK-DATA-008` sob Renato | fora do escopo desta retomada |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `feat/OBJ-ROGERIO-001-platform-core` estava limpa em `cd7c293`; a worktree do Renato tem alterações locais em API, dependências, testes e documentação.
+- **TEST:** PASS — cherry-picks documentais concluídos em `067546e` e `45202d6`; `git diff --check HEAD~2..HEAD` passou.
+- **ASSUMPTION:** os contratos frozen do draft `cc24c7a` serão integrados por microtarefa, não copiados sem validação. Owner: Rogério; gatilho: início de `TASK-TXN-API-001`.
+- **UNKNOWN:** o Linear atualmente conectado não contém o projeto ou as issues `LUM2-*` registradas no plano; requer preview e confirmação antes de recriação/sincronização externa.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** fronteira de ownership auditável e código futuro alinhado ao plano 2.0.
+- **Abrimos mão de:** integrar imediatamente o adapter de outcome ainda pertencente a Renato.
+- **Dívida/limitação:** a sincronização de status no Linear fica bloqueada até o projeto/questões ausentes serem recriados ou o workspace correto ser conectado.
+- **Risco residual:** o contrato draft pode divergir da base atual; cada microtarefa terá testes de schema, contrato e revisão antes de ser aceita.
+
+#### Consequências e propagação
+
+- **Produto/demo:** nenhuma mudança pública nesta etapa documental.
+- **Arquitetura/contratos:** aplica `CTR-TXN-001`, `CTR-TXL-001` e `CTR-API-001 v3` como especificações frozen para a implementação subsequente.
+- **Pessoas/branches:** Rogério trabalha em `feat/OBJ-ROGERIO-001-platform-core`; a branch de Renato permanece inalterada.
+- **Plano/Linear:** planos 2.0 e preview foram trazidos à branch; Linear permanece `NOT SYNCED` no workspace conectado até decisão explícita de recriação.
+- **Testes/observabilidade:** cada microtarefa exige testes focados, `code-review-gate` e validação de integração; browser gate quando houver fluxo consumidor executável.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** alterações de `TASK-TXN-*` aparecem somente no histórico e no worktree de plataforma, preservando a working tree de Renato.
+- **Caminho feliz:** API v3 e worker serão implementados e testados na branch de plataforma.
+- **Caso difícil/adverso:** dependência de outcome indisponível; worker permanece bloqueado por interface/fixture, sem substituir o módulo de Renato.
+- **Resultado observado:** PASS para isolamento de branch e sincronização documental; implementação ainda `NOT RUN`.
+- **Fallback:** manter os endpoints v1 apenas como harness interno e usar fixtures de contrato até o handoff de `TASK-DATA-008`.
+
+#### Gatilhos de revisão
+
+Qualquer necessidade de modificar um contrato frozen, integrar código da branch de Renato ou recriar o Linear sem preview aprovado exige novo change control.
+
+#### Adendos
+
+- Nenhum.
+
+### FL-20260829-ROGERIO-005 — Integrar `origin/main` por merge preservando a branch e o trabalho local
+
+- **Timestamp:** 2026-08-29T21:09:16-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como integration coordinator
+- **Categoria:** Git/integration | operations
+- **Escopo:** branch `RENATO_CONTINUCAO_ROGERIO`; upstream `origin/main@03857ee`; dirty state local
+- **Links:** `docs/plans/system-plan.md` v2.0.0; `FL-20260829-ROGERIO-003`; commits locais `47a1d97`, `8b0d556`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A branch local está 32 commits à frente de sua referência remota e diverge de `origin/main`: possui dois commits exclusivos, enquanto a main possui quatro commits novos relacionados ao harness histórico. Há também alterações locais não commitadas de incident memory, dependência Neo4j, testes e documentação. Era necessário atualizar a base sem descartar esse trabalho ou reescrever commits que ainda não foram publicados.
+
+#### Decisão
+
+Criar um stash temporário incluindo arquivos não rastreados, fazer merge de `origin/main` em `RENATO_CONTINUCAO_ROGERIO` e reaplicar o stash. Não usar rebase nem force-push. Se a reaplicação produzir conflito semântico, interromper a integração e preservar ambos os lados para decisão do owner.
+
+#### Critérios e por que agora
+
+O merge preserva os hashes dos commits locais e torna explícita a integração do harness de `main`; o stash permite atualizar sem transformar trabalho em curso em commit artificial. Os diffs conhecidos em `pyproject.toml` são aditivos e distintos (`numpy` na main e o extra opcional `neo4j` local), mas a reaplicação ainda será validada por teste e diff.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Merge com stash recuperável | preserva histórico e alterações locais; rollback simples | cria commit de merge e exige validar o stash | FACT: branch tem 32 commits não publicados; `main` tem 4 commits exclusivos | escolhida |
+| Rebase sobre `origin/main` | histórico linear | reescreve 32 commits locais e pode dificultar recuperação/coordenação | FACT: commits locais ainda são divergentes da main | risco desnecessário |
+| Descartar ou commitar forçadamente o dirty state | atualização imediata | perda de trabalho ou commit fora da microtarefa | FACT: arquivos locais incluem testes e código em progresso | incompatível com preservação do trabalho |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** preflight do integration-contract-guardian identificou merge-base `4318eba`, 2 commits exclusivos locais e 4 commits exclusivos na main.
+- **FACT:** `git diff --check` passou antes da integração; nenhum arquivo local de incident memory coincide com o código novo da main; `pyproject.toml` tem hunks distintos.
+- **TEST:** NOT RUN — testes e smoke pós-merge serão executados após a integração.
+- **UNKNOWN:** o repositório remoto possui metadados obsoletos de worktrees que impediram o prune no `git fetch`, sem impedir a atualização das referências; avaliar só se voltar a afetar operações Git.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** base atualizada e rastreável, sem perder trabalho local.
+- **Abrimos mão de:** histórico linear nesta branch.
+- **Dívida/limitação:** o commit de merge e o stash demandam validação adicional antes de publicação.
+- **Risco residual:** conflito tardio na reaplicação do stash; mitigado por parar antes de escolher automaticamente uma resolução.
+
+#### Consequências e propagação
+
+- **Produto/demo:** incorpora o harness histórico da main sem alterar contratos públicos por decisão desta integração.
+- **Arquitetura/contratos:** nenhuma mudança de contrato pretendida; conferir `CTR-SCN-001` e componentes de streaming no diff final.
+- **Pessoas/branches:** preserva a frente de Rogério e os commits que ainda não estão em `origin/RENATO_CONTINUCAO_ROGERIO`.
+- **Plano/Linear:** nenhum estado do Linear será escrito; o plano permanece a fonte arquitetural.
+- **Testes/observabilidade:** rodar os testes afetados pelo harness e pelo incidente, além de `git diff --check`; comportamento observável requer browser gate se a API/UI local for alterada.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** após merge e reaplicação, a branch contém os commits de `origin/main`, as alterações locais continuam presentes e a suíte relevante passa.
+- **Caminho feliz:** merge limpo, stash aplicado e imports/testes de `simulation`, `streaming` e `incidents` executados.
+- **Caso difícil/adverso:** conflito no `pyproject.toml` ou no Flight Log; preservar as duas alterações e classificar a integração como bloqueada até decisão explícita.
+- **Resultado observado:** NOT RUN — integração em andamento.
+- **Fallback:** abortar o merge ou reaplicar o stash no `ORIG_HEAD`; nenhum push ou reescrita remota será feito.
+
+#### Gatilhos de revisão
+
+Conflito de reaplicação, falha de testes críticos, descoberta de mudança contratual não documentada ou necessidade de publicar a branch; qualquer um exige novo parecer de integração.
+
+#### Adendos
+
+- **2026-08-29T21:14:00-03:00:** `git merge origin/main` foi interrompido e abortado de forma segura. Há dois conflitos semânticos: `app/api/__init__.py` precisa decidir se expõe apenas `transactions_router` ou também `events_router`; `main.py` precisa compor ou priorizar o `reconcile_stuck()` do lifecycle de transações e o worker de ingestão histórica. Nenhum lado foi escolhido automaticamente. O stash temporário foi reaplicado com sucesso e removido; o trabalho local permanece preservado. Classificação do integration-contract-guardian: `BLOCKED` até decisão do owner sobre essa composição e validação subsequente.
+- **2026-08-29 (Claude, suplência):** merge real de `RENATO_CONTINUCAO_ROGERIO` e `feat/OBJ-ROGERIO-001-platform-core` em `main`, feito primeiro numa branch de simulação. Os dois conflitos semânticos acima foram resolvidos preservando ambos os lados: `app/api/__init__.py` inclui `events_router` e `transactions_router`; `main.py` compõe `create_app()` (CORS + `reconcile_stuck()`) e o `IngestionListenerWorker` no mesmo `lifespan`. Suíte completa validada após cada merge (`pytest -q`).
+
+### FL-20260829-ROGERIO-006 — Usar CORS opt-in e health crítico para o Railway Volume
+
+- **Timestamp:** 2026-08-29T21:20:57-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador
+- **Categoria:** operations | contract | security
+- **Escopo:** `TASK-DEPLOY-API-001` / `LUM2-60`; `CMP-DEPLOY-001`; `CTR-DEP-001 v1`
+- **Links:** `DEC-016`; `DEC-017`; `docs/plans/system-plan.md` v2.0.0; `docs/plans/deployment-vercel-railway.md`; `railway.toml`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A API v3 e o worker usam DuckDB persistente, mas o runtime ainda não aplicava CORS nem distinguia uma aplicação viva de um store ou reconciliação indisponível. A Vercel só pode acessar a API Railway por browser, enquanto o Volume impede múltiplas réplicas simultâneas no MVP.
+
+#### Decisão
+
+Manter uma única réplica Railway com Volume em `/data`; configurar CORS somente por `CORS_ALLOWED_ORIGINS` em lista explícita, sem wildcard e sem credentials; e configurar `/v1/health` como health check de deploy, retornando `503` se DuckDB ou a reconciliação inicial do worker falharem. Neo4j e OpenAI permanecem dependências opcionais e aparecem como estado degradado sem impedir o boot.
+
+#### Critérios e por que agora
+
+O browser precisa de origins exatos para consumir a API, e um deploy não pode receber tráfego antes de abrir o banco montado e reconciliar registros presos. Permitir `*` facilitaria a demo local, mas quebraria a fronteira definida em DEC-016. Tratar Neo4j/OpenAI como críticos impediria o fallback determinístico já contratado.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Allowlist CORS e health crítico de API/store/worker | protege a fronteira e bloqueia deploy inconsistente | exige configurar cada origin Vercel | FACT: DEC-016 exige allowlist e domínio Railway público | escolhida |
+| `CORS=*` para a demo | configuração rápida | expõe a API a origins não autorizadas | FACT: browser acessa o data plane Railway | viola DEC-016 |
+| Falhar o health por Neo4j/OpenAI indisponível | sinalização máxima de dependências | derruba os fallbacks contratados | FACT: `MEMORY_UNAVAILABLE` e template determinístico são estados válidos | incompatível com contratos |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** Railway usa um endpoint HTTP 200 no deploy e Volume-backed deployments não têm sobreposição sem pequena indisponibilidade.
+- **FACT:** `CORS_ALLOWED_ORIGINS` e `LUMEN_DATA_DIR` são as variáveis previstas pelo plano de deployment.
+- **TEST:** NOT RUN — deploy real requer conta/Volume Railway e será registrado apenas se executado.
+- **UNKNOWN:** os domínios Vercel production/preview ainda não existem; devem ser configurados sem inventar URLs antes do deploy.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** deploy falha cedo quando não pode preservar nem retomar o lifecycle, sem expor stores ao browser.
+- **Abrimos mão de:** CORS local automático e zero-downtime em volume persistente.
+- **Dívida/limitação:** há uma réplica e health não substitui monitoramento contínuo pós-deploy.
+- **Risco residual:** allowlist esquecida bloqueia uma preview; a resposta CORS e o runbook tornam a causa observável.
+
+#### Consequências e propagação
+
+- **Produto/demo:** `BACKEND UNAVAILABLE` é honesto quando API crítica não sobe; browser só usa a API HTTPS autorizada.
+- **Arquitetura/contratos:** implementa sem alterar `CTR-DEP-001 v1`, `CTR-API-001 v3` ou dados públicos.
+- **Pessoas/branches:** André recebe a variável de base URL e deve fornecer origins reais para a allowlist antes da preview.
+- **Plano/Linear:** `LUM2-60` está em andamento; nenhum outro estado é atualizado por esta decisão.
+- **Testes/observabilidade:** cobrir CORS permitido/negado, health degradado, restart local e smoke HTTP; validar Railway real em seguida.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** uma origin autorizada recebe headers CORS, uma alheia não; o health só retorna 200 após DuckDB e reconciliação inicial.
+- **Caminho feliz:** Volume `/data` preserva um batch após restart e `/v1/health` fica 200.
+- **Caso difícil/adverso:** mount ausente ou worker falha na reconciliação; deploy não passa no health check e não é promovido.
+- **Resultado observado:** NOT RUN — implementação e testes locais pendentes.
+- **Fallback:** manter o deploy anterior; corrigir env/mount sem trocar API pública ou migrar store.
+
+#### Gatilhos de revisão
+
+Necessidade de mais de uma réplica, falha do Volume, autenticação por cookie, ou mudança nos domínios Vercel exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T21:34:00-03:00:** durante o smoke local, um Volume legado sem `lease_owner`/`lease_expires_at` fez a reconciliação retornar `BinderException` e o health ficou `503`. Foi adicionada migração DuckDB aditiva e idempotente (`ADD COLUMN IF NOT EXISTS`) antes da reconciliação; não altera contrato público nem apaga registros. PASS: `python -m pytest -q tests/test_deploy_runtime.py` executou 5 testes, incluindo upgrade de schema legado e persistência de batch em arquivo através de restart; `python -m pytest -q` executou 78 testes. `railway.toml` foi validado por `tomllib` e `git diff --check` passou. Docker não está instalado localmente; o build de imagem e o smoke Railway com Volume/origins reais permanecem `NOT RUN`. O navegador embutido bloqueou `localhost`/`127.0.0.1` antes de carregar a API; CORS foi validado por TestClient, sem declarar browser acceptance executado.
+- **2026-08-29T21:38:00-03:00:** `code-review-gate` classificou o diff de `LUM2-60` como `PASS` após rejeitar origins CORS com path. `integration-contract-guardian` em modo `INTEGRATION` classificou o checkpoint local como `READY WITH WARNINGS`: nenhum schema/contrato público foi alterado, `scripts/validate_contracts.py`, `compileall`, `git diff --check` e a suíte de 78 testes passaram, e os IDs do Flight Log são únicos. Warning bloqueante apenas para encerrar a issue: build/deploy Railway, Volume e browser consumer reais continuam sem evidência local.
 
 ## Renato
 
@@ -1794,6 +3085,524 @@ Necessidade de recuperar histórico local exclusivo da raiz pai ou falha do repo
 #### Adendos
 
 - **2026-08-29T18:10:00-03:00:** a primeira movimentação encontrou atributos ocultos/somente leitura e deixou o Git pai parcialmente deslocado. O backup foi validado com `HEAD=1b39bdd`, igual a `LumenPrep/`; os arquivos de controle foram restaurados apenas para recuperar o estado, e o `.git` residual do pai foi removido depois dessa confirmação. PASS: `Projeto/.git` não existe, o backup datado existe e `git -C LumenPrep status` continua saudável. Para reverter, restaure o backup ao nome `.git` na pasta pai.
+
+### FL-20260829-RENATO-005 — Reclassificar o stream histórico validado como harness interno do plano transaction-first
+
+- **Timestamp:** 2026-08-29T19:54:56-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Codex como recorder; plano 2.0 publicado por André
+- **Categoria:** architecture | data | contract | integration
+- **Escopo:** `LUM2-44` concluída, `renato/tarefa44@602ae9d`, `CMP-DATA-001`, `CMP-HARNESS-001`, `TASK-DATA-009 / LUM2-62`, `CTR-TXN-001 v1`, `CTR-TXL-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.0.1; `docs/plans/people/renato.md`; `FL-20260829-TEAM-015`; `FL-20260829-TEAM-017`
+- **Supersedes / superseded by:** não altera as decisões públicas `DEC-015..017`; substitui a classificação local anterior de servidor como fronteira de produto
+
+#### Contexto e pergunta
+
+A branch `renato/tarefa44` implementou e validou geração histórica de 90 dias e publicação/consumo por servidor local. Depois disso, a `main` publicou o plano 2.0, que torna batches de `TransactionInput` a única entrada pública e deixa `CTR-TXN/TXL/API v3` como especificação congelada, porém ainda não implementada. Era necessário decidir se a documentação da tarefa 44 substituiria esses contratos ou seria preservada como evidência reutilizável.
+
+#### Decisão
+
+Preservar a geração determinística, a sazonalidade, o caso de baixa amostra e a separação producer/consumer como harness interno. Não publicar o endpoint/fila local da branch como API pública e não alterar `CTR-TXN/TXL/API v3`. `TASK-DATA-009 / LUM2-62` adapta esse harness para a batch API comum e o lifecycle durável antes de integração funcional.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Decisão |
+| --- | --- | --- | --- | --- |
+| Promover o endpoint local anterior a API pública | entrega rápida de stream | viola batch/idempotência/lifecycle v3 e duplicaria a fronteira | FACT: plano 2.0 declara API v3 pendente | rejeitada |
+| Descartar a implementação da tarefa 44 | elimina diferença documental | perde testes e uma base determinística já validada | TEST: 51 testes e smoke local passaram | rejeitada |
+| Reclassificar como harness e adaptar por LUM2-62 | preserva evidência sem quebrar o plano público | exige trabalho de adaptação posterior | FACT: DEC-017 preserva gerador como adapter | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `renato/tarefa44@602ae9d` foi publicada e contém gerador histórico, servidor local, listener e testes.
+- **TEST:** 51 testes passaram e o smoke local confirmou publicação `202` seguida de listener cursor/backlog zero na branch.
+- **ASSUMPTION:** a lógica determinística pode ser reutilizada sem preservar o transporte local; a validação cabe a `LUM2-62`.
+- **UNKNOWN:** o adapter final para `CTR-TXN/TXL` dependerá das implementações de `LUM2-58/59`.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** continuidade técnica e evidência reprodutível para tráfego de fundo.
+- **Abrimos mão de:** integrar imediatamente o servidor/fila local ao produto público.
+- **Risco residual:** portar o harness pode introduzir divergência de contratos; contract tests de batch e lifecycle são o gate.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** nenhum contrato v3 é rebaixado ou substituído; a mudança fica registrada no plano geral e no plano de Renato.
+- **Pessoas/branches:** Rogério recebe o adapter puro por `LUM2-61`; Renato adapta tráfego por `LUM2-62`; André consome somente a API v3.
+- **Linear:** nenhum item concluído é reaberto; o trabalho de adaptação continua em `LUM2-61/62` já sincronizadas.
+- **Testes:** reprodução, sazonalidade, baixa amostra e producer/consumer informam os novos contract tests, mas não provam a API pública até a integração.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o harness envia carga sintética somente pela batch API e as métricas mudam apenas após o worker processar o batch.
+- **Resultado observado:** NOT RUN para a API v3; implementação correspondente ainda está pendente no plano 2.0.
+- **Fallback:** usar fixtures/samples determinísticos de `LUM2-62` enquanto o tráfego de fundo não estiver conectado.
+
+#### Gatilhos de revisão
+
+Mudança nos schemas `CTR-TXN/TXL`, falha de equivalência entre harness e batch API, ou requisito de transporte persistente exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T20:10:32-03:00:** conflitos de merge de `renato/tarefa44@602ae9d` foram resolvidos preservando o plano transaction-first da `main`; o código foi integrado exclusivamente como `CMP-HARNESS-001` no commit `6d6e0b4`. `CTR-TXN/TXL/API v3` não foram promovidos nem alterados. PASS: revisão sem bloqueadores, `python -m pytest -x -vv` com 59 testes aprovados e smoke do Swagger com `POST /transactions` = `202`, `listener_cursor=1` e `backlog=0`, sem erros de console. `LUM2-61/62` permanecem as tarefas de adapter/lifecycle.
+
+### FL-20260829-RENATO-006 — Configurar perfis de latência e decline com fallback sem alterar CTR-EVT-001
+
+- **Timestamp:** 2026-08-29T20:42:43-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** Renato; Codex como implementador e recorder
+- **Categoria:** data | contract | quality
+- **Escopo:** `LUM2-46`, `TASK-DATA-004`, `CMP-DATA-001`, `CTR-EVT-001 v1`, `CTR-SCN-001`
+- **Links:** `config/generator/v1/default.json`; `app/simulation/outcomes.py`; `app/simulation/historical.py`; `tests/test_simulation_profiles.py`; branch `renato/tarefa46`
+- **Supersedes / superseded by:** substitui os placeholders de latência e decline de `TASK-DATA-002`; não altera o schema congelado
+
+#### Contexto e pergunta
+
+O outcome generator e o harness histórico ainda emitiam uma faixa de latência genérica e `GENERIC_DECLINE`, impedindo calibração de p95/timeout e diagnóstico por código. Era necessário adicionar diferenças por provider e códigos brutos/normalizados sem criar uma versão incompatível de `CTR-EVT-001`.
+
+#### Decisão
+
+Usar perfis versionados no config do gerador: p50/p95, multiplicador de timeout e latência do orquestrador por provider; códigos de decline ponderados por provider e status. Um perfil `default` atende providers novos sem mudança de schema. Timeout e erro recebem somente seus códigos técnicos compatíveis; sucesso não recebe decline.
+
+#### Critérios e por que agora
+
+`LUM2-46` precisa desbloquear benchmark e detector com dados observáveis e reproduzíveis. O contrato já comporta `timing.orchestrator_latency_ms` opcional e `decline` normalizado, portanto uma mudança no payload seria custo de integração sem ganho.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter valores genéricos no código | menor diff | p95 sem calibração e diagnóstico sem código | FACT: placeholders atuais | não atende `LUM2-46` |
+| Adicionar campos ou v2 de `CTR-EVT-001` | pode carregar mais telemetria | exige mudança coordenada de produtores e consumidores | FACT: campos atuais já suportam o dado | custo sem necessidade |
+| Perfis no config com fallback | reproduzível, auditável e extensível | parâmetros exigem calibração futura | TEST: distribuição e coerência são verificáveis localmente | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `CTR-EVT-001 v1` aceita timing por estágio e decline bruto/normalizado sem schema novo.
+- **TEST:** 62 testes passaram; os testes novos comprovam repetição por seed, ordem de p50/p95 entre providers, baixa amostra, ausência de ground truth e compatibilidade status/código.
+- **ASSUMPTION:** os parâmetros representam dados sintéticos plausíveis para a demo, não uma medição de produção.
+- **UNKNOWN:** a calibração definitiva dos thresholds depende de `TASK-DATA-005` e dos evals do detector.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** caudas de latência e declines explicáveis para p95, timeout e RCA.
+- **Abrimos mão de:** fidelidade a uma tabela privada de códigos de um adquirente real.
+- **Dívida/limitação:** os perfis continuam estáticos e precisam de benchmark/eval antes de qualquer ajuste de threshold.
+- **Risco residual:** um provider novo cai no perfil default; o fallback é explícito, mas pode não refletir sua distribuição real.
+
+#### Consequências e propagação
+
+- **Produto/demo:** cenários e tráfego histórico exibem latência e declines coerentes sem expor ground truth.
+- **Arquitetura/contratos:** `CTR-EVT-001 v1` permanece compatível; não há change control de schema.
+- **Pessoas/branches:** `LUM2-47` pode materializar os dados; detector/RCA recebem códigos normalizados.
+- **Plano/Linear:** a issue `LUM2-46` é atualizada para pronta somente após os gates finais e commits desta branch.
+- **Testes/observabilidade:** perfis e fallback são cobertos por teste determinístico; benchmark quantitativo fica em `LUM2-47`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** mesma seed repete os eventos e providers mantêm p50/p95 distintos, enquanto falhas carregam decline compatível.
+- **Caminho feliz:** gerar eventos normal/histórico, validar schema e consumir na ingestão.
+- **Caso difícil/adverso:** provider desconhecido usa fallback, batch de baixa amostra não expõe ground truth e timeout nunca recebe decline de issuer.
+- **Resultado observado:** PASS — suíte completa com 62 testes aprovada; interface pública não foi exercitada porque a mudança é interna de geração/harness.
+- **Fallback:** perfil `default` mantém eventos válidos até que uma distribuição específica seja configurada.
+
+#### Gatilhos de revisão
+
+Benchmark de `LUM2-47` incompatível, novo provider sem perfil aceitável, ou contrato futuro que exija mais estágios/códigos exige nova decisão e possível change control.
+
+#### Adendos
+
+- **2026-08-29T21:00:00-03:00:** browser acceptance local passou em servidor com `DEMO_MODE=true` e `DUCKDB_PATH=:memory:`. Pelo Swagger, `POST /demo/scenarios/scenario_provider_br/inject` retornou `202 ACCEPTED` com `events_published=54`; em seguida `GET /transactions/health` retornou `published=54`, `listener_cursor=54` e `backlog=0`. Console sem erros; há somente warning pré-existente do Swagger CDN sobre deep-link whitespace.
+- **2026-08-29T21:16:00-03:00:** a validação de volume revelou que o correlation ID histórico recalculava o fingerprint completo do config para cada evento. O valor agora é calculado uma vez por gerador, sem alterar payload nem seed. PASS: 13 testes focados em 18,11s e validação de contratos aprovada.
+
+### FL-20260829-ROGERIO-007 — Estender CTR-INC-001 v1 com hipóteses ordenadas sem mudar a causa atual
+
+- **Timestamp:** 2026-08-29T21:50:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** contract | product | integration
+- **Escopo:** `LUM2-37`, `TASK-INC-003`, `CTR-INC-001 v1`, `CMP-INC-001`, `CMP-MEM/EXP-001`, `CMP-WEB-001`
+- **Links:** `docs/plans/system-plan.md` v2.0.3; `contracts/v1/incident.schema.json`; `app/incidents/__init__.py`; `tests/test_incident_serialization.py`
+- **Supersedes / superseded by:** adendo compatível a `CTR-INC-001 v1`; não substitui DEC-014 nem muda `CTR-MEM-001`.
+
+#### Contexto e pergunta
+
+`LUM2-37` exigia publicar alternativas causais ordenadas e uma classe de recomendação, mas o contrato congelado expunha apenas a causa atual e `execution=HUMAN_ONLY`. A mudança precisava informar API, memória e UI sem transformar um precedente ou uma hipótese em confirmação causal.
+
+#### Decisão
+
+Adicionar opcionalmente `root_cause.alternatives` e `recommendation_class` a `CTR-INC-001 v1`. O produtor ordena alternativas por confiança decrescente; elas são hipóteses e não modificam `root_cause.status` ou `category`. Recomendações continuam obrigatoriamente `HUMAN_ONLY` e recebem uma classe declarativa (`INVESTIGATE`, `MONITOR` ou `ESCALATE`). Payloads v1 legados sem os campos permanecem aceitos.
+
+#### Critérios e por que agora
+
+A UI precisa distinguir uma causa suportada de hipóteses concorrentes, e a integração já possui consumidores de Incident. Uma extensão aditiva entrega essa leitura sem uma migração de versão durante o hackathon e preserva a regra de que só o RCA confirma a causa atual.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Tornar alternativas obrigatórias e criar v1.1 incompatível | contrato mais rígido | força migração simultânea de fixtures, API, memória e UI | FACT: `CTR-INC-001 v1` já é consumido por componentes integrados | custo de integração desnecessário |
+| Usar memory matches como alternativas | menos campos | confunde precedente histórico com hipótese causal atual | FACT: `CTR-MEM-001` é eixo independente de `root_cause` | viola a separação causal |
+| Campos aditivos e tolerância a legado | entrega a informação com risco contido | consumidores precisam tratar ausência | TEST: schema e serialização serão cobertos localmente | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `RootCause.status` já restringe a causa atual a `SUPPORTED|INCONCLUSIVE`; `execution` já restringe ações a `HUMAN_ONLY`.
+- **TEST:** NOT RUN no momento deste registro; testes de schema, ordenação e eixos causais serão executados antes de concluir.
+- **ASSUMPTION:** consumidores ignoram campos opcionais que ainda não exibem.
+- **UNKNOWN:** quais classes além de investigação serão úteis na demo final.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** explicação explícita de hipóteses concorrentes e classificação visual da recomendação.
+- **Abrimos mão de:** obrigar todos os payloads legados a carregar alternativas imediatamente.
+- **Risco residual:** classes futuras podem pedir enum maior; isso exigirá novo change control.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** plano geral, schema, modelos, fixtures e testes mudam no mesmo commit.
+- **Pessoas/branches:** André tolera/exibe os campos quando presentes; Altoé não usa memória para promover nem ordenar alternativas.
+- **Linear:** `LUM2-37` só muda para Done após testes, review e gates reais.
+- **Testes/observabilidade:** casos SUPPORTED/INCONCLUSIVE comprovam ordenação e preservação da causa atual.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** Incident serializado contém alternativas em ordem estável e recomendação humana classificada.
+- **Caso difícil/adverso:** `INCONCLUSIVE + MATCH_FOUND` continua inconclusivo; alternativa vazia e payload legado são válidos.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** campos opcionais ausentes preservam o contrato v1 existente.
+
+#### Gatilhos de revisão
+
+Novo tipo de recomendação executável, consumidor que rejeite campo opcional, ou evidência de que memória está promovendo hipótese exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:05:00-03:00:** PASS: `python -m pytest -q` aprovou 91 testes, `python scripts/validate_contracts.py` aprovou schemas e fixtures, `python -m compileall -q app` passou e `git diff --check` não reportou erros. Browser acceptance ficou `PASS WITH LIMITATIONS`: o navegador real do Codex bloqueou `http://127.0.0.1:8091/v1/incidents` com `net::ERR_BLOCKED_BY_CLIENT`; o endpoint e os cenários de contrato foram exercitados pela suíte FastAPI, mas não houve consumidor web local para clicar nesta branch.
+
+### FL-20260829-ROGERIO-008 — Priorizar impacto apenas dentro da mesma moeda sem FX implícito
+
+- **Timestamp:** 2026-08-29T22:20:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** product | data | quality
+- **Escopo:** `LUM2-36`, `TASK-INC-002`, `CTR-INC-001 v1`, `app/incidents/__init__.py`
+- **Links:** `docs/plans/system-plan.md` v2.0.4; `tests/test_incident_priority.py`
+- **Supersedes / superseded by:** não altera a fórmula de impacto local existente; substitui qualquer ordenação global implícita entre moedas.
+
+#### Contexto e pergunta
+
+O módulo calculava GMV em `amount_minor`, mas o ranking preliminar de candidatos não distinguia moedas. Comparar diretamente um valor em BRL com outro em MXN produziria uma prioridade numérica sem taxa, data ou fonte de câmbio.
+
+#### Decisão
+
+Calcular impacto com ticket médio e aprovações perdidas na moeda da janela e priorizar Incidents por `impact.amount_minor` somente dentro de buckets da mesma `currency`. Sem FX versionado, a saída expõe buckets independentes em vez de uma ordem global artificial.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Comparar `amount_minor` entre moedas | implementação curta | ranking financeiramente inválido | FACT: BRL e MXN possuem unidades diferentes | rejeitada |
+| Chamar uma API FX em tempo real | ranking global | nova dependência, latência e dados não reproduzíveis | ASSUMPTION: demo não possui feed FX confiável | fora do MVP |
+| Buckets por moeda com ordenação local | determinístico e auditável | UI não recebe um único ranking global | TEST: BRL/MXN podem ser validados sem câmbio | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `WindowMetrics` fornece `amount_minor` e `currency`; `Impact` preserva a moeda local.
+- **TEST:** NOT RUN no momento deste registro; serão cobertos BRL, MXN, duplicidade de candidato e ausência deliberada de FX.
+- **UNKNOWN:** a moeda de apresentação executiva se a demo exigir comparação internacional.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** priorização honesta e reproduzível dentro de cada mercado.
+- **Abrimos mão de:** ranking único de mercados diferentes.
+- **Risco residual:** o consumidor deve apresentar o bucket de moeda, não concatenar listas como se fossem comparáveis.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** nenhuma conversão ou nova dependência externa é adicionada a `CTR-INC-001`.
+- **Pessoas/branches:** API/UI devem consumir buckets explicitamente quando exibirem múltiplas moedas.
+- **Linear:** `LUM2-36` recebe evidência somente após testes e revisão.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** maior GMV em BRL aparece antes de menor GMV em BRL; MXN permanece separado.
+- **Caso difícil/adverso:** candidatos sobrepostos não duplicam GMV; zero tentativas falha explicitamente; não há FX silencioso.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** apresentar buckets sem conversão até uma decisão de FX versionada.
+
+#### Gatilhos de revisão
+
+Pedido de ranking global, nova moeda de apresentação, ou fonte FX auditável exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:32:00-03:00:** PASS: `python -m pytest -q` aprovou 94 testes; os testes específicos cobriram GMV local, não duplicação de perdas em candidatos correlacionados, buckets BRL/MXN e janela sem tentativas. `python scripts/validate_contracts.py`, `python -m compileall -q app` e `git diff --check` também passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve alteração de rota, UI ou fluxo executável no navegador.
+
+### FL-20260829-ROGERIO-009 — Exigir fingerprint causal exato para separar incidentes simultâneos
+
+- **Timestamp:** 2026-08-29T22:45:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como implementador e recorder
+- **Categoria:** data | product | quality
+- **Escopo:** `LUM2-35`, `TASK-INC-001`, `CTR-DET-001`, `CTR-INC-001`, `app/incidents/__init__.py`
+- **Links:** `docs/plans/system-plan.md` v2.0.5; `tests/test_incident_correlation.py`
+- **Supersedes / superseded by:** substitui a compatibilidade parcial de slices para correlação de Incident.
+
+#### Contexto e pergunta
+
+O agrupamento existente aceitava candidates com uma dimensão compartilhada. Assim, um problema de provider no Brasil e uma queda de issuer no mesmo país podiam formar uma narrativa única mesmo com fingerprints causais diferentes.
+
+#### Decisão
+
+Correlacionar apenas candidates com mesmo `correlation_id`, janelas sobrepostas e fingerprint completo de `slice`. Métricas diferentes para o mesmo slice ainda se unem; causa com qualquer dimensão diferente permanece em Incident separado.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Compatibilidade parcial de slice | agrega possíveis relações pai-filho | pode mesclar causas simultâneas por país ou método | FACT: trial by fire inclui incidentes simultâneos | risco de narrativa falsa |
+| Agrupar só por correlation_id | implementação mínima | une todo o conteúdo da janela | FACT: correlation cobre janela, não causa | insuficiente |
+| Fingerprint exato de slice | determinístico e auditável | pode separar relação pai-filho até haver RCA explícito | TEST: provider BR e issuer MX serão independentes | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `slice` é a saída causal de `CTR-DET-001`; `correlation_id` sozinho representa a janela.
+- **TEST:** NOT RUN no momento deste registro; casos de mesmo slice, provider BR e issuer MX serão executados.
+- **UNKNOWN:** se o RCA futuro precisa ligar explicitamente uma hipótese pai e filha; isso exigirá contrato de relação, não heurística implícita.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** dois problemas simultâneos não viram uma causa narrativa falsa.
+- **Abrimos mão de:** deduzir hierarquia causal por sobreposição parcial.
+- **Risco residual:** um incidente real com slices complementares pode aparecer dividido até o RCA publicar vínculo explícito.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** não muda schema; muda a semântica da correlação do produtor de Incident.
+- **Pessoas/branches:** LUM2-36 recebe grupos independentes para priorização; memória/API/UI recebem IDs distintos.
+- **Linear:** LUM2-35 recebe evidência após testes e review.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** métricas approval/latency para o mesmo provider BR formam um Incident.
+- **Caso difícil/adverso:** provider BR e issuer MX simultâneos formam dois; mesma country isolada não basta para unir.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** expor incidents separados até existir vínculo causal explícito.
+
+#### Gatilhos de revisão
+
+RCA que publique relação pai-filho ou trial que demonstre fragmentação inadequada exige novo change control.
+
+#### Adendos
+
+- **2026-08-29T22:55:00-03:00:** PASS: 97 testes completos aprovados; os casos específicos cobriram métricas múltiplas no mesmo slice, provider BR + issuer MX simultâneos e provider/issuer no mesmo país sem mesclagem indevida. Contratos, compilação e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve alteração de rota, UI ou fluxo executável no navegador.
+
+### FL-20260829-RENATO-007 — Explorar hipóteses por beam determinístico sem afirmar causa
+
+- **Timestamp:** 2026-08-29T23:25:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** solicitante; Codex como implementador e recorder
+- **Categoria:** architecture | data | quality | integration
+- **Escopo:** `LUM2-54` / `TASK-RCA-001`, `CMP-DET/RCA-001`, `CTR-DET-001 v1`, `CTR-INC-001 v1`
+- **Links:** `app/detection/models.py`, `docs/plans/system-plan.md`, `LUM2-53`, `LUM2-55`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+`LUM2-53` já publica `AnomalyCandidate` numérico, mas não existe implementação de `LUM2-54`. O RCA precisa explorar combinações dimensionais sem ler ground truth nem transformar uma hipótese estatística em Incident ou causa confirmada.
+
+#### Decisão
+
+Implementar um módulo interno de beam search que recebe apenas `AnomalyCandidate`, expande prefixes dimensionais configuráveis, elimina ramos abaixo do support mínimo e devolve hipóteses ordenadas com score, evidências e IDs de candidatos. O módulo não cria `Incident`, não muda schemas e não afirma `SUPPORTED`.
+
+#### Critérios e por que agora
+
+O contrato `CTR-DET-001 v1` é a entrada congelada disponível e `LUM2-54` desbloqueia `LUM2-55`. Separar busca de ranking final preserva o handoff planejado e evita que a correlação de Incident assuma causalidade prematuramente.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Buscar diretamente nos eventos/raw | Mais combinações possíveis | mistura armazenamento/ground truth com RCA e aumenta acoplamento | FACT: `LUM2-54` depende de `LUM2-53` | Fora da fronteira da microtarefa |
+| Escolher o maior candidate sem exploração | Implementação pequena | perde combinações e pruning hierárquico | FACT: a issue exige beam search top-down | Não satisfaz o aceite |
+| Beam interno sobre candidatos | Reproduzível, testável e compatível com contratos v1 | qualidade depende da granularidade dos candidates disponíveis | TEST: a busca terá fixtures de normal, dominante e baixa amostra | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `CTR-DET-001` contém slice, support, efeito, confiança e evidências; não contém causa declarada.
+- **TEST:** NOT RUN — testes de ordem, pruning e ausência de hipótese em baixa amostra serão executados antes do Linear.
+- **UNKNOWN:** o score de dominância e as alternativas públicas pertencem a `LUM2-55`.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** uma busca causal auditável sem vazamento de ground truth.
+- **Abrimos mão de:** explicar relações não representadas pelos slices de entrada.
+- **Dívida/limitação:** dimensões ausentes no candidate não podem ser exploradas; o produtor precisa publicar a granularidade necessária.
+- **Risco residual:** score de exploração não é confiança causal; o consumidor deve mantê-lo como hipótese.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** `CTR-DET-001 v1` é somente consumido; `CTR-INC-001 v1` não muda.
+- **Pessoas/branches:** `LUM2-55` recebe hipóteses ordenadas; Incident continua responsável por serialização.
+- **Plano/Linear:** marcar somente `LUM2-54` depois de testes, review, integração e push primeiro na branch de Renato.
+- **Testes/observabilidade:** cobrir ganho dominante, combinações, baixa amostra e determinismo.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** candidates iguais produzem hypotheses iguais e um ramo esparso nunca ultrapassa o pruning.
+- **Caminho feliz:** provider/country dominante chega ao primeiro resultado com referências de evidência.
+- **Caso difícil/adverso:** candidatos simultâneos ou suporte insuficiente permanecem hipóteses distintas ou não são retornados.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** retornar lista vazia e conservar `INCONCLUSIVE`; nunca fabricar uma causa.
+
+#### Gatilhos de revisão
+
+Novo contrato de agregação dimensional, requisito de causa confirmada ou consumo direto pela API exige change control.
+
+#### Adendos
+
+- **2026-08-29T23:39:00-03:00:** PASS: a busca validou determinismo, slice dominante, pruning por suporte, ausência de candidates, grupos de correlação mistos e parâmetros inválidos. `14` testes focados e `116` testes completos passaram; `scripts/validate_contracts.py`, `compileall` e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve rota, UI ou fluxo local observável novo; o módulo só será exposto pelo consumidor de `LUM2-55`.
+
+### FL-20260829-RENATO-008 — Ranquear alternativas sem elevar hipótese a causa suportada
+
+- **Timestamp:** 2026-08-29T23:49:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** solicitante; Codex como implementador e recorder
+- **Categoria:** data | quality | integration
+- **Escopo:** `LUM2-55` / `TASK-RCA-002`, `CMP-DET/RCA-001`, `CTR-INC-001 v1`
+- **Links:** `app/rca/beam.py`, `app/incidents/__init__.py`, `LUM2-54`, `LUM2-56`, `LUM2-35`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O beam de `LUM2-54` encontra slices com evidência quantitativa, mas não define como comparar contribuição, abrangência e especificidade nem como expressar empate sem que o consumidor confunda ranking com causalidade confirmada.
+
+#### Decisão
+
+Ranquear hipóteses com score determinístico ponderando contribuição observada, affected share e especificidade. Expor a lista ordenada como `RootCause.alternatives` de `CTR-INC-001` e manter o `RootCause` em `INCONCLUSIVE` com categoria nula: o ranking escolhe uma hipótese de investigação, mas não tem evidência independente para emitir `SUPPORTED`.
+
+#### Critérios e por que agora
+
+`LUM2-55` é a ponte entre busca e consumo de Incident. O contrato já permite alternativas ordenadas e o status inconclusivo, portanto o handoff não precisa alterar schema nem assumir que a maior anomalia é a causa real.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Promover o maior score a `SUPPORTED` | Interface aparentemente simples | confunde associação estatística com confirmação e pode acionar explicação indevida | FACT: `AnomalyCandidate` não declara causa | Rejeitada por segurança causal |
+| Retornar apenas um vencedor sem alternativas | Menos payload | esconde empates e mix shifts | FACT: `CTR-INC-001` prevê alternativas | Não satisfaz o aceite |
+| Ranking determinístico inconclusivo com alternativas | Auditável e compatível com o contrato | requer investigação humana para confirmar | TEST: fixtures cobrirão dominante, mix shift e empate | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** o contrato de `RootCause` ordena alternativas por confiança e permite `INCONCLUSIVE` com categoria nula.
+- **ASSUMPTION:** contribution, cobertura relativa e profundidade do slice são sinais suficientes para priorizar investigação, não para provar causalidade.
+- **UNKNOWN:** quais evidências externas podem elevar uma hipótese a `SUPPORTED`; isso exige change control e owner de Incident.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** uma ordem estável e explicável para a demo sem ground truth.
+- **Abrimos mão de:** causa confirmada automática.
+- **Dívida/limitação:** pesos e margem de ambiguidade são heurísticos internos, sujeitos a eval posterior.
+- **Risco residual:** uma hipótese dominante pode ainda ser falsa; a serialização declara `INCONCLUSIVE` para reduzir esse risco.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** produz instância compatível com `CTR-INC-001 v1`; não altera o schema nem cria Incident.
+- **Pessoas/branches:** `LUM2-35` recebe alternativas já ordenadas; `LUM2-56` avalia o comportamento em batches mistos.
+- **Plano/Linear:** atualizar após evidência real, revisão, push na branch de Renato e integração.
+- **Testes/observabilidade:** verificar dominante, mix shift, empate e a preservação de `INCONCLUSIVE`.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** resultados iguais preservam ordem; margem pequena remove vencedor único, mas conserva alternativas.
+- **Caminho feliz:** hipótese de provider dominante aparece antes das alternativas.
+- **Caso difícil/adverso:** empate e mix shift não recebem categoria suportada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** nenhuma hipótese retorna `INCONCLUSIVE` sem alternativas; nunca fabricar categoria confirmada.
+
+#### Gatilhos de revisão
+
+Disponibilidade de evidência independente, novo contrato de contribuição ou pedido para automação de decisão exige change control.
+
+#### Adendos
+
+- **2026-08-29T23:58:00-03:00:** PASS: cobertos hipótese dominante, mix shift, empate inconclusivo, entrada vazia, grupos de correlação incompatíveis e valores inválidos. `19` testes focados e `122` testes completos passaram; contratos, compilação e `git diff --check` passaram. Code review gate: PASS após validar limites numéricos de suporte/score e a preservação de `INCONCLUSIVE`. Browser acceptance não se aplica: nenhuma rota, UI ou fluxo observável foi alterado; o ranking é consumido internamente pela etapa de Incident.
+
+### FL-20260830-RENATO-009 — Avaliar fluxo transaction-first por invariantes observáveis
+
+- **Timestamp:** 2026-08-30T00:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** solicitante; Codex como implementador e recorder
+- **Categoria:** quality | data | integration
+- **Escopo:** `LUM2-56` / `TASK-EVAL-001`, `CTR-TXN-001`, `CTR-EVT-001`, `CTR-DET-001`, `CTR-INC-001`
+- **Links:** `app/simulation/background_traffic.py`, `app/simulation/transaction_outcomes.py`, `app/detection/detector.py`, `app/rca/ranking.py`, `LUM2-57`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O fluxo público e o harness agora compartilham o lifecycle de batch, mas faltava uma prova conjunta de que casos mistos, baixo volume e ambiguidades preservam os limites corretos antes do holdout final.
+
+#### Decisão
+
+Criar uma matriz de testes reprodutível a partir de inputs públicos e contextos fixos do adapter: verificar success/failure/unknown, que amostras manuais e de background produzem eventos canônicos equivalentes, que baixo volume não gera candidate e que ranking ambíguo continua `INCONCLUSIVE`. A matriz não lê ou ajusta ground truth.
+
+#### Critérios e por que agora
+
+`LUM2-56` é pré-requisito do holdout de `LUM2-57`; validar invariantes de transporte e honestidade de abstention primeiro impede que o holdout use uma API diferente ou uma causa inventada.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Executar somente testes isolados existentes | Rápido | não prova interação dos limites do fluxo | FACT: casos estavam distribuídos por módulos | Insuficiente para EVAL-001 |
+| Ajustar thresholds até produzir casos desejados | Pode melhorar números locais | contamina a futura validação holdout | FACT: issue proíbe ajuste pelo holdout | Rejeitada |
+| Matriz fixa de invariantes sem ground truth | Reprodutível e prepara holdout honesto | não mede accuracy final | TEST: cobrirá quatro limites do fluxo | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `OTHER` gera resultado `UNKNOWN` determinístico; o detector já protege a janela abaixo do support mínimo.
+- **ASSUMPTION:** equivalência de caminho é comprovada por contrato canônico, resultado terminal e ausência de campos de outcome no input.
+- **UNKNOWN:** accuracy de causa no conjunto escondido; pertence a `LUM2-57`.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** regressão rápida e auditável sem contaminar o holdout.
+- **Abrimos mão de:** um número de accuracy nesta etapa.
+- **Dívida/limitação:** a matriz testa invariantes com fixture pequena, não distribuição de produção.
+- **Risco residual:** regressões estatísticas amplas continuam demandando holdout separado.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** sem novo contrato; confirma os quatro existentes.
+- **Pessoas/branches:** libera `LUM2-57` com seeds e comportamento de abstention já preservados.
+- **Plano/Linear:** atualizar somente após execução, review e integração.
+- **Testes/observabilidade:** registrar os comandos e contagens reais no adendo.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o mesmo input canônico tem output compatível independente de ser submetido manualmente ou pelo harness.
+- **Caminho feliz:** batch misto entrega os três estados terminais.
+- **Caso difícil/adverso:** baixo volume e empate não recebem alerta ou causa suportada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** manter status e causa inconclusivos, sem reclassificar por fixture.
+
+#### Gatilhos de revisão
+
+Alteração no contrato de input/evento, estratégia do worker ou threshold do detector exige repetir a matriz.
+
+#### Adendos
+
+- **2026-08-30T00:22:00-03:00:** PASS: a matriz registrou batch misto com os três estados, equivalência de input manual/background pela seed `404`, zero candidate no low volume 11/12 e empate inconclusivo. `32` testes focados e `126` testes completos passaram; contratos, compilação e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve nova rota ou UI; a matriz chama as interfaces internas já cobertas pelos testes de API/worker.
 
 ## Prontidão para a banca
 

@@ -1,100 +1,125 @@
 # Plano individual — André
 
-## Missão
+## Missão 2.1
 
-- **Plano geral:** 1.3.1
+> A pasta `web/` e os contratos/fixtures v3 estão publicados na `main` para integração compartilhada. O formulário usa o client v3; Logs, Detail e Incidents seguem fixtures explícitas até `LUM2-12`. Deploy e smoke Railway/Vercel continuam pendentes.
+
+- **Plano geral:** 2.1.1
 - **Objetivo:** `OBJ-ANDRE-001`
-- **Papel:** frontend, experiência da demo, recorder transversal e pitch.
-- **Orçamento:** 6–7h de implementação; H15–H19 prioritariamente integração visual, acceptance, ensaio e pitch.
-- **Resultado:** um estranho entende o incidente em uma linha executiva e consegue auditar causa, evidência, memória e playbook no drill-down.
+- **Papel:** frontend Next.js, experiência transaction-first, integração Vercel → Railway e acceptance visual.
+- **Resultado:** inserir uma ou várias transações manualmente ou gerar samples por quantidade, acompanhar logs e abrir classificação/incidentes sem calcular nenhum fato no navegador; seed permanece capacidade opcional da API.
+- **Prioridade atual:** sistema front funcional; pitch só depois da fatia ao vivo.
 
-## Context pack
+## O que mudou
 
-O Lumen observa attempts de pagamentos, detecta quedas de approval/latência, localiza o slice causal, separa incidentes, recupera precedentes confirmados no Neo4j e recomenda ação humana. A UI não recalcula fatos nem consulta DuckDB/Neo4j diretamente; ela renderiza contratos do backend.
+O Streamlit de `TASK-UI-001` continua como protótipo visual e fallback. O produto final passa a ser Next.js na Vercel. O construtor de efeitos de `TASK-UI-005` não é mais uma tela pública: cenários ficam internos para gerar tráfego/evals. André não pede approval rate, queda, latência, timeout, decline, causa ou ground truth.
 
-A memória nunca decide o estado causal. André renderiza dois sinais independentes: `root_cause.status` (`SUPPORTED` ou `INCONCLUSIVE`) e memória (`MATCH`, `NO_PRECEDENT` ou `UNAVAILABLE`). Mesmo `INCONCLUSIVE` consulta memória. Com match, a UI mostra o precedente e a solução anterior como orientação; sem match, declara que não há causa atual sustentada nem precedente.
+A tela inicial aceita de 1 a 100 `TransactionInput`. Para acelerar a demo, `Generate sample transactions` chama o Railway somente com a quantidade visível, recebe inputs válidos e editáveis e os mostra antes do `Submit batch`; seed permanece opcional/interna na API. Todos os outcomes, classificações, métricas e incidentes surgem depois, no backend.
 
-Quando houver precedente, a UI mostra separadamente o playbook usado antes, por que ele parece aplicável agora e quais diferenças exigem validação humana. O botão/controle nunca executa a solução.
-
-No roteiro, André demonstra: silêncio no normal, provider degradado no Brasil, emissor mexicano simultâneo, repetição Mastercard de dois dias antes, `INCONCLUSIVE` e trial by fire.
+O shell desktop usa sidebar `sticky` e conteúdo em colunas separadas; em mobile, os mesmos destinos ficam numa barra inferior fixa com safe area. Logs destacam dados retornados para `FAILED` e `UNKNOWN`; Incidents expõe diagnóstico, memória e uma atenção técnica sem inventar causa para `UNKNOWN`.
 
 ## Ownership e limites
 
-- **Own:** `CMP-UI-001`, diretório proposto `app/ui/`, roteiro da demo e materiais de pitch.
-- **Consome:** `CTR-API-001` e fixtures `CTR-INC-001`/`CTR-LLM-001`.
-- **Somente leitura:** contratos, detector, DuckDB e Neo4j.
-- **Hotspot compartilhado:** alterações no endpoint passam por Rogério; decisões transversais são registradas na lane Team do Flight Log.
-- **Fora de escopo:** estatística, ingestão, query Cypher, prompts de produção e mudança de schema.
+- **Own:** `CMP-WEB-001`, diretório `web/`, rotas `/transactions/*`, `/incidents/*`, client HTTP e configuração Vercel.
+- **Consome:** `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CTR-INC-001` (incluindo `root_cause.alternatives` e `recommendation_class` quando presentes), `CTR-MEM-001` e `CTR-LLM-001`.
+- **Somente API:** nenhuma query a DuckDB/Neo4j e nenhum cálculo de taxa, causa, confiança ou impacto.
+- **Segurança:** campos allowlisted; não coletar PAN, CVV, nome, e-mail ou PII; não oferecer ação financeira.
+- **Hotspot:** contratos e env são coordenados por Rogério; André coordena somente `web/`.
 
-## Interfaces
+## Rotas e estados
 
-### CTR-API-001 v1 — consumido
+### `/transactions/new`
 
-- `GET /health` → estados `api`, `duckdb`, `neo4j`, `openai`, `demo_mode`.
-- `GET /metrics/current` → janelas com current/baseline.
-- `GET /incidents` → lista `CTR-INC-001`.
-- `GET /incidents/{id}` → Incident completo + `memory` (`CTR-MEM-001 v1.1`) + `explanation`; a UI lê `memory_status` e nunca infere indisponibilidade por lista vazia.
-- `POST /demo/scenarios/{scenario_id}/inject` → `202` com `correlation_id`; somente ambiente demo.
-- UI timeout: 2s; fallback: renderizar fixtures marcadas `DEMO FALLBACK`.
+- linhas dinâmicas com add, duplicate, remove e validação por campo;
+- gerador de samples: quantidade 1..100, `POST /v1/transaction-samples`; seed é opcional/interna na API;
+- review dos samples; nada é persistido até `Submit batch`;
+- `POST /v1/transaction-batches` com idempotency key; resposta `202` redireciona para o log do batch;
+- erro preserva todas as linhas e indica exatamente o item/campo inválido.
 
-### CTR-INC-001 v1 — campos necessários
+### `/transactions`
 
-`incident_id`, `state`, `detected_at`, `estimated_started_at`, `title`, `scope`, `metrics`, `root_cause.{status,category,confidence,confidence_factors}`, `impact.{metric,amount_minor,currency,method,bounds}`, `evidence[]`, `memory_matches[]`, `recommendations[]`, `limitations[]`, `correlation_id`.
+- filtros `ALL|SUCCEEDED|FAILED|PROCESSING|UNKNOWN` e paginação por cursor;
+- polling 1–2s somente quando há item `PROCESSING`;
+- progress bar recebe `stage` e `progress_percent` do Railway; sem timer simulado;
+- status não depende apenas de cor; loading, empty, error, stale e retry são explícitos.
+- cada linha expõe somente outcome, classificação, reason, confidence, evidence IDs e incidentes retornados pelo backend.
 
-## Plano de execução
+### `/transactions/[id]`
 
-### TASK-ANDRE-001 — Montar dashboard a partir de fixture
+- input, timeline, outcome, classification, evidence IDs e incidentes relacionados;
+- decline de negócio não é confundido com `PIPELINE_FAILED`;
+- sem incidente relacionado é um estado normal, não erro.
 
-- **Tempo:** H1–H3.
-- **Input:** `contracts/fixtures/incident-mastercard-recurrence.json`.
-- **Output:** cards de incidentes, gráfico current/baseline, impacto local e drill-down de evidência.
-- **Aceite:** funciona sem backend; nenhuma evidência é inventada; `INCONCLUSIVE` tem visual próprio.
-- **Teste:** render desktop e resolução de apresentação; smoke sem API.
-- **Handoff:** URL/comando local para Rogério integrar em H3.
+### `/incidents`
 
-### TASK-ANDRE-002 — Implementar controles e estados da demo
+- migra os cards já construídos, incluindo recorrência e limites causais;
+- mostra separadamente causa atual e memória histórica, incluindo recommendation `HUMAN_ONLY`, limitations e trace.
+- inclui fila de atenção para `UNKNOWN`; somente `CTR-INC-001` recebe causa/recommendation de Incident.
 
-- **Tempo:** H3–H5.
-- **Inclui:** normal, injecting, detected, recovered, backend unavailable, memory unavailable e LLM fallback.
-- **Aceite:** botões chamam apenas scenario IDs existentes; estado de fallback é explícito.
-- **Teste:** mock de 202/4xx/timeout.
+## Microtarefas e ordem
 
-### TASK-ANDRE-003 — Criar visual de recorrência explicável
+### TASK-UI-001 / LUM2-8 — protótipo Streamlit
 
-- **Tempo:** H5–H6:30.
-- **Inclui:** “aconteceu há 2 dias”, confirmação humana anterior, fatores iguais/diferentes e scores separados.
-- **Aceite:** não usa “mesma causa” quando status corrente não sustenta; linka evidence IDs; cobre visualmente `SUPPORTED + MATCH`, `SUPPORTED + NO_PRECEDENT`, `INCONCLUSIVE + MATCH` e `INCONCLUSIVE + NO_PRECEDENT`; no terceiro caso mostra precedente sem afirmar a causa atual.
-- **Handoff:** Altoé revisa semântica e groundedness.
+- **Estado:** concluída; preservar como referência/fallback, sem expandir para o produto final.
+- **Evidência existente:** shell, fixtures, estados causais e UI de recorrência.
 
-### TASK-ANDRE-004 — Preparar pitch e roteiro resiliente
+### TASK-UI-002 / LUM2-9 — Next.js + formulário multi-input + samples
 
-- **Tempo:** H11–H15 e H17–H19, intercalado sem bloquear código.
-- **Inclui:** problema, insight, arquitetura, demo, trade-offs, limites e Q&A.
-- **Aceite:** demo de 5–7 minutos com caminho normal e fallback; uma linha executiva e detalhe ops.
-- **Evidência:** roteiro cronometrado e ao menos dois ensaios completos.
+- **Linear:** `Done`; a integração live permanece em `LUM2-12`.
 
-### TASK-ANDRE-005 — Acceptance visual
+- Criar shell Next.js responsivo, client tipado, `NEXT_PUBLIC_API_BASE_URL` e `/transactions/new`.
+- Implementar 1..100 linhas, add/duplicate/remove e `Generate sample transactions` por quantidade.
+- **Mock:** catálogo, sample request/response e batch fixtures.
+- **Aceite:** nenhum option hardcoded; geração preenche lote editável; envio 1 e múltiplos funciona; erro preserva formulário.
+- **Independe de:** backend real; começa pelas fixtures congeladas.
 
-- **Tempo:** H15–H17.
-- **Aceite:** browser gate cobre normal, dois incidentes, recurrence, no-answer, console e rede.
-- **Stop condition:** somente bug bloqueante após H17.
+### TASK-UI-003 / LUM2-10 — log, filtros, progresso e detalhe
 
-## Git e handoffs
+- Implementar `/transactions`, `/transactions/[id]`, filtros, cursor, polling e estados.
+- **Aceite:** processing mostra stage real; filtros não misturam falha técnica e decline; falha/UNKNOWN exibem diagnóstico disponível; refresh preserva URLs; detalhe linka Incident sem fabricar action.
+- **Independe de:** API real usando `transaction-list.json` e records.
 
-- Branch sugerida: `feat/OBJ-ANDRE-001-dashboard-pitch`.
-- Commits separados: shell/fixture; incident cards; recurrence; demo states; pitch assets.
-- Não editar schemas/lockfile sem Rogério.
-- `READY TO HAND OFF`: fixture e API produzem a mesma UI; screenshots/fluxo documentados.
-- `READY TO MERGE`: review gate, browser gate e CTR-API compatível.
+### TASK-UI-004 / LUM2-11 — incidentes e recorrência dentro do novo fluxo
 
-## Riscos e autonomia
+- Migrar cards para `/incidents`, adicionar o destino à sidebar e linkar a partir do detalhe da transação.
+- **Aceite:** `INCONCLUSIVE + MATCH` continua inconclusivo; diagnóstico contratado fica legível; `UNKNOWN` aparece em atenção técnica sem causa inventada.
+- **Bloqueio live:** `TASK-EXP-004` e filtro `transaction_id` de Rogério; layout pode avançar por fixture.
 
-- Pode decidir layout, hierarquia visual e copy sem mudar significado técnico.
-- Deve parar se UI precisar derivar confiança, causa ou impacto.
-- Fallback: fixtures locais rotuladas, nunca fingir conexão live.
+### TASK-UI-005 / LUM2-12 — adapter Railway e estados live
 
-## Sincronização Linear
+- Substituir o adapter de cenário público por catalog/sample/batch/list/detail/incident.
+- Centralizar timeout, base URL, error mapping e polling cancellation.
+- **Aceite:** browser não acessa store/secret; API down mostra `BACKEND UNAVAILABLE`; chamadas duplicadas preservam idempotência.
+- **Bloqueio live:** `TASK-TXN-API-001`; pode avançar por OpenAPI/mocks.
 
-- Parent: [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-narrativa-dashboard-e-demo-executiva).
-- Microtarefas: `TASK-UI-001`→`LUM2-8`, `TASK-UI-002`→`LUM2-9`, `TASK-UI-003`→`LUM2-10`, `TASK-UI-004`→`LUM2-11`, `TASK-UI-005`→`LUM2-12`, `TASK-UI-006`→`LUM2-13`, `TASK-DEMO-001`→`LUM2-14`.
-- Fonte completa de dependências: `docs/plans/linear-preview.md`.
+### TASK-UI-006 / LUM2-13 — Vercel e browser acceptance
+
+- Configurar production/preview env, executar build e validar Vercel → Railway.
+- Cobrir teclado, foco, contraste, reduced motion, add/remove, samples, batch misto, filtros, progress, detail, refresh, API down, console e rede.
+- **Bloqueio:** API Railway e CORS prontos.
+
+### TASK-DEMO-001 / LUM2-14 — demo final
+
+- Somente após a fatia deployed: seed de ensaio, lote rápido, incidente e fallback honesto.
+
+## Paralelismo recomendado para André
+
+Rodar simultaneamente três tasks Codex sem colisão de arquivos:
+
+1. **Lane A:** `web/app/transactions/new/**` e componentes de formulário/sample.
+2. **Lane B:** `web/app/transactions/**` exceto `new`, tabela, filtros, progress e detail.
+3. **Lane C:** client tipado/testes/fixtures em `web/lib/api/**` e `web/tests/**`.
+
+Um único integrador edita `web/package.json`, lockfile, layout raiz e env. Integrar A/B sobre o client de C somente depois de seus tipos estarem estáveis.
+
+## Definition of Done
+
+- testes unitários/contract do client passam;
+- `code-review-gate` sem achado bloqueante;
+- `browser-acceptance-gate` executado no fluxo local e deployed;
+- `integration-contract-guardian` confirma `CTR-API-001 v3` antes do merge;
+- nenhum claim de teste ou deploy sem evidência real.
+
+## Linear
+
+Parent: [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-frontend-transaction-first-vercel-e-demo). `LUM2-9`–`14` foram replanejadas para o fluxo 2.0. Dependências novas principais: `TASK-TXN-API-001`→`LUM2-58`, `TASK-DEPLOY-API-001`→`LUM2-60` e `TASK-EXP-004`→`LUM2-63`.

@@ -54,7 +54,7 @@ def create_memory_runtime(
         try:
             from neo4j import GraphDatabase
         except ImportError as error:
-            raise RuntimeError("Install the optional Neo4j driver: pip install -r requirements-neo4j.txt") from error
+            raise RuntimeError("Install the optional Neo4j driver: pip install '.[neo4j]'") from error
         driver_factory = GraphDatabase.driver
 
     driver = driver_factory(resolved.uri, auth=(resolved.user, resolved.password))

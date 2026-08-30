@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -32,11 +33,27 @@ PAIRS: dict[str, list[str]] = {
         "explanation-bundle-inconclusive-with-precedent.json",
     ],
     "scenario.schema.json": ["scenario-provider-br.json"],
+    "transaction-catalog.schema.json": ["transaction-catalog.json"],
+    "transaction-sample-request.schema.json": ["transaction-sample-request.json"],
+    "transaction-sample-response.schema.json": ["transaction-sample-response.json"],
+    "transaction-batch-request.schema.json": ["transaction-batch-request.json"],
+    "transaction-batch-accepted.schema.json": ["transaction-batch-accepted.json"],
+    "transaction-list.schema.json": ["transaction-list.json"],
+    "transaction-record.schema.json": [
+        "transaction-processing.json",
+        "transaction-succeeded.json",
+        "transaction-failed.json",
+    ],
+    "transaction-incident-detail.schema.json": ["transaction-incident-detail-no-incident.json"],
 }
 
 
 def validate_fixtures() -> list[str]:
     errors = []
+    schemas = [json.loads(path.read_text(encoding="utf-8")) for path in SCHEMAS.glob("*.schema.json")]
+    registry = Registry().with_resources(
+        (schema["$id"], Resource.from_contents(schema)) for schema in schemas if "$id" in schema
+    )
     for schema_name, fixture_names in PAIRS.items():
         schema_path = SCHEMAS / schema_name
         if not schema_path.exists():
@@ -44,7 +61,7 @@ def validate_fixtures() -> list[str]:
             continue
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(schema)
-        validator = Draft202012Validator(schema)
+        validator = Draft202012Validator(schema, registry=registry)
         for fixture_name in fixture_names:
             fixture_path = FIXTURES / fixture_name
             if not fixture_path.exists():

@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "count": 3,
+  "seed": 29082026,
+  "defaults": {"merchant_id": "merchant_br_01", "country": "BR", "currency": "BRL"}
+}

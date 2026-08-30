@@ -11,10 +11,22 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
-from app.explanation import GroundedExplainer
-from app.memory import Incident, IncidentMemoryService, InMemoryIncidentRepository, create_memory_runtime
+from app.config import settings
+from app.explanation import (
+    GroundedExplainer,
+    TransactionGrounding,
+    resolve_transaction_grounding_from_api_responses,
+)
+from app.ingestion.storage import transaction_record_for_grounding
+from app.memory import (
+    Incident,
+    IncidentMemoryService,
+    InMemoryIncidentRepository,
+    Neo4jIncidentRepository,
+)
+from app.memory.repository import IncidentMemoryRepository
 from app.memory.seed import seed_mastercard_d2
 
 router = APIRouter()
@@ -22,6 +34,36 @@ _FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
 _REAL_ENRICHMENT_INCIDENT_IDS = frozenset(
     {"inc_current_mastercard_001", "inc_current_mastercard_uncertain_002"}
 )
+
+_neo4j_driver: Any | None = None
+_neo4j_driver_failed = False
+
+
+def _neo4j_driver_instance() -> Any | None:
+    """Build the Neo4j driver once; a construction failure disables the driver for the process."""
+    global _neo4j_driver, _neo4j_driver_failed
+    if _neo4j_driver is not None or _neo4j_driver_failed:
+        return _neo4j_driver
+    try:
+        from neo4j import GraphDatabase
+
+        _neo4j_driver = GraphDatabase.driver(
+            settings.neo4j_uri,
+            auth=(settings.neo4j_user, settings.neo4j_password),
+        )
+    except Exception:
+        _neo4j_driver_failed = True
+    return _neo4j_driver
+
+
+def _memory_repository() -> IncidentMemoryRepository | None:
+    """Neo4j primary when configured and reachable; None makes fallback the sole repository."""
+    if not settings.neo4j_uri:
+        return None
+    driver = _neo4j_driver_instance()
+    if driver is None:
+        return None
+    return Neo4jIncidentRepository(driver)
 
 
 def _fixture(name: str) -> dict[str, Any]:
@@ -56,6 +98,7 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
             "category": "PROVIDER_DEGRADATION",
             "confidence": 0.88,
             "confidence_factors": {"fixture_fallback": 0.88},
+            "alternatives": [],
         },
         "impact": {
             "metric": "GMV_AT_RISK",
@@ -76,6 +119,7 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
             {
                 "playbook_id": no_precedent_explanation["playbook_id"],
                 "action": no_precedent_explanation["recommended_action"],
+                "recommendation_class": "INVESTIGATE",
                 "execution": "HUMAN_ONLY",
                 "rationale_evidence_ids": no_precedent_explanation["evidence_ids"],
             }
@@ -90,26 +134,6 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
     }
 
 
-def _fallback_memory_service(incident: Incident) -> IncidentMemoryService:
-    """Keep the fixture-backed API demonstrable when Neo4j is not configured."""
-    fallback = InMemoryIncidentRepository()
-    seed_mastercard_d2(fallback, now=incident.detected_at)
-    return IncidentMemoryService(InMemoryIncidentRepository(available=False), fallback=fallback)
-
-
-def _retrieve_memory(incident: Incident):
-    """Prefer the configured graph runtime without changing the HTTP contract."""
-    try:
-        runtime = create_memory_runtime()
-    except (OSError, RuntimeError, ValueError):
-        return _fallback_memory_service(incident).retrieve(incident)
-
-    try:
-        return runtime.service.retrieve(incident)
-    finally:
-        runtime.close()
-
-
 def _memory_and_explanation(incident_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     incident_id = str(incident_payload["incident_id"])
     if incident_id not in _REAL_ENRICHMENT_INCIDENT_IDS:
@@ -118,7 +142,11 @@ def _memory_and_explanation(incident_payload: dict[str, Any]) -> tuple[dict[str,
         raise KeyError(incident_id)
 
     incident = Incident.from_contract(incident_payload)
-    memory = _retrieve_memory(incident)
+    fallback = InMemoryIncidentRepository()
+    seed_mastercard_d2(fallback, now=incident.detected_at)
+    primary = _memory_repository()
+    service = IncidentMemoryService(primary, fallback=fallback) if primary else IncidentMemoryService(fallback)
+    memory = service.retrieve(incident)
     explanation = GroundedExplainer(()).explain(incident, memory)
     return memory.to_contract(), explanation.to_contract()
 
@@ -139,10 +167,88 @@ def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], ex
     return {"incident": serialized_incident, "memory": memory, "explanation": explanation}
 
 
+def _grounding_for_transaction(
+    transaction_id: str,
+) -> tuple[dict[str, dict[str, Any]], TransactionGrounding] | None:
+    """Build candidate detail responses, then let the trace resolver authorize them."""
+    transaction_record = transaction_record_for_grounding(transaction_id)
+    if transaction_record is None:
+        return None
+
+    classification = transaction_record.get("classification")
+    related_ids = classification.get("related_incident_ids", []) if isinstance(classification, dict) else []
+    records = _fixture_records()
+    candidate_responses: dict[str, dict[str, Any]] = {}
+    for incident_id in related_ids:
+        if not isinstance(incident_id, str):
+            continue
+        incident = records.get(incident_id)
+        if incident is None:
+            continue
+        memory, explanation = _memory_and_explanation(incident)
+        candidate_responses[incident_id] = build_incident_response(incident, memory, explanation)
+
+    grounding = resolve_transaction_grounding_from_api_responses(
+        transaction_id,
+        [transaction_record],
+        candidate_responses,
+    )
+    return candidate_responses, grounding
+
+
+def _grounding_detail_contract(
+    transaction_id: str,
+    candidate_responses: dict[str, dict[str, Any]],
+    grounding: TransactionGrounding,
+) -> dict[str, Any]:
+    """Serialize CTR-TDI-001 without changing the homogeneous incidents list."""
+    incidents = []
+    for link in grounding.incident_links:
+        response = candidate_responses[link.incident_id]
+        incidents.append(
+            {
+                "incident": response["incident"],
+                "memory": response["memory"],
+                "explanation": response["explanation"],
+                "evidence_ids": list(link.evidence_ids),
+                "limitations": list(link.limitations),
+            }
+        )
+    return {
+        "schema_version": "1.0",
+        "transaction_id": transaction_id,
+        "status": grounding.status,
+        "incidents": incidents,
+        "rejected_incident_ids": list(grounding.rejected_incident_ids),
+        "limitations": list(grounding.limitations),
+    }
+
+
 @router.get("/incidents")
-def list_incidents() -> list[dict[str, Any]]:
-    """List current records. Fixture-only until TASK-RCA-002 lands."""
-    return list(_fixture_records().values())
+def list_incidents(transaction_id: str | None = Query(default=None, min_length=1)) -> list[dict[str, Any]]:
+    """List records; transaction filtering exposes only evidence-authorized Incidents."""
+    records = _fixture_records()
+    if transaction_id is None:
+        return list(records.values())
+
+    resolved = _grounding_for_transaction(transaction_id)
+    if resolved is None:
+        # An unknown transaction and one without a correlated Incident both have no
+        # authorized Incident to expose.  The public collection contract therefore
+        # remains an empty list instead of manufacturing an error or a record.
+        return []
+    candidate_responses, grounding = resolved
+    return [candidate_responses[incident_id]["incident"] for incident_id in grounding.incident_ids]
+
+
+@router.get("/transactions/{transaction_id}/incidents")
+def get_transaction_incidents(transaction_id: str) -> dict[str, Any]:
+    """Return CTR-TDI-001, the explicit grounded detail for one transaction."""
+    resolved = _grounding_for_transaction(transaction_id)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="TRANSACTION_NOT_FOUND")
+    candidate_responses, grounding = resolved
+    return _grounding_detail_contract(transaction_id, candidate_responses, grounding)
 
 
 @router.get("/incidents/{incident_id}")

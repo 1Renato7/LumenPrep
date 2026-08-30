@@ -33,11 +33,11 @@ if ($Bootstrap) {
         }
     }
     if (-not $pythonExecutable) {
-        throw 'Python was not found. Run scripts/bootstrap-python.ps1, then install the driver with: uv pip install --python .\.python-runtime\python.exe -r requirements-neo4j.txt'
+        throw "Python was not found. Run scripts/bootstrap-python.ps1, then install the driver with: uv pip install --python .\.python-runtime\python.exe '.[neo4j]'"
     }
     & $pythonExecutable -c 'import neo4j'
     if ($LASTEXITCODE -ne 0) {
-        throw 'The Neo4j driver is missing. For the project runtime, run: uv pip install --python .\.python-runtime\python.exe -r requirements-neo4j.txt'
+        throw "The Neo4j driver is missing. For the project runtime, run: uv pip install --python .\.python-runtime\python.exe '.[neo4j]'"
     }
 }
 

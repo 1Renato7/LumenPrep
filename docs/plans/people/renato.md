@@ -1,111 +1,72 @@
 # Plano individual — Renato
 
-## Missão
+## Missão 2.0
 
-- **Plano geral:** 1.3.1
+> A `main` recebeu primeiro este replanejamento documental. Os drafts de sample/batch/scenario v2 estão em `codex/andre-dashboard-pitch@cc24c7a` e exigem revisão do owner antes da integração.
+
+- **Plano geral:** 2.0.0
 - **Objetivo:** `OBJ-RENATO-001`
-- **Papel:** geração sintética, baselines, detector estatístico, RCA e avaliação causal.
-- **Orçamento:** 13–14h de implementação; H15–H19 integração/validação.
-- **Resultado:** máxima precisão top-1 no holdout de novas combinações, com falsos alertas baixos e `INCONCLUSIVE` calibrado.
+- **Papel:** geração sintética, outcome adapter, tráfego de fundo, baseline, detector, RCA e avaliação.
+- **Resultado:** inputs sintéticos viram outcomes/events reprodutíveis; o conjunto de logs gera métricas/anomalias sem o usuário informar efeitos.
 
-## Context pack
+## O que mudou
 
-O LLM não gera milhões de linhas e não diagnostica. O gerador vetorizado produz 90 dias reprodutíveis e um stream acelerado; o ground truth fica separado. O detector recebe WindowMetrics e devolve candidatos. O RCA explora dimensões hierarquicamente e retorna evidências numéricas, sem narrativa.
+`TASK-DATA-006 / LUM2-48` concluída não é descartada: o scenario generator passa a `CMP-HARNESS-001`, interno. O formulário público não recebe mais `approval_rate_multiplier`, latency, timeout ou causa esperada. Renato deve adaptar o motor para duas entradas:
 
-Renato decide suficiência causal exclusivamente com dados atuais. O RCA deve conseguir sustentar uma combinação inédita sem consultar Neo4j; a memória posterior não participa do score nem do limiar de `INCONCLUSIVE`. Tanto o resultado suportado quanto o inconclusivo precisam carregar escopo, métricas, sinais e limitações suficientes para Altoé consultar precedentes.
+1. um `TransactionInput` individual, que produz outcome/evento determinístico;
+2. uma configuração interna de cenário/tráfego, usada para volume de fundo e evals, enviada pela mesma batch API do produto.
 
-O holdout deve privilegiar combinações nunca vistas, pois a capacidade principal do sistema é descobrir problemas novos; recorrência é avaliada separadamente por Altoé.
+Também fornece geração rápida de `TransactionInput` a partir de quantidade + seed. Essa geração apenas escolhe fatos válidos do catálogo; outcome e anomalia continuam posteriores.
 
 ## Ownership e limites
 
-- **Own:** `CMP-DATA-001`, `CMP-DET-001`, `CMP-RCA-001`; diretórios propostos `app/simulation/`, `app/detection/`, `app/diagnosis/`, `tests/evals/`.
-- **Produz:** `CTR-SCN-001`, `CTR-DET-001` e candidates para `CTR-INC-001`.
-- **Consome:** `CTR-AGG-001`.
-- **Hotspots:** não alterar canonical/incident schema; dependency changes passam por Rogério.
-- **Fora de escopo:** texto LLM, Neo4j, frontend, antifraude real e RL.
+- **Own:** `CMP-DATA-001`, `CMP-HARNESS-001`, `CMP-DET/RCA-001`.
+- **Produz:** domínio do `CTR-TXN-001`, outcomes/events `CTR-EVT-001` e `CTR-DET-001`.
+- **Consome:** `TransactionInput` e `CTR-AGG-001`.
+- **Fora de escopo:** API/persistência, UI, Neo4j, narrativa LLM, cálculo no browser e dados reais.
+- **Ground truth:** separado do runtime, API pública, log e RAG.
 
-## Interfaces
+## Trabalho preservado
 
-### CTR-SCN-001 v1 — produzido
+Histórico de 90 dias, distributions, stream, scenarios, baseline, detector e RCA continuam válidos. A implementação de `renato/tarefa44@602ae9d`, integrada como harness interno, prova geração histórica reprodutível com sazonalidade horária/semanal, tendência, baixa amostra e publicação/consumo separados por servidor local; seus 51 testes e smoke de navegador são evidência para o harness, não para a API pública v3. Scenario schemas/fixtures v2 permanecem para teste interno e nunca reaparecem como formulário público.
 
-Schema: `contracts/v1/scenario.schema.json`. Filtros aceitam qualquer dimensão conhecida; efeitos incluem approval multiplier, latency multiplier, timeout rate e decline distribution. `ground_truth` é persistido em caminho separado e nunca entra em payload de detecção.
+## Novas microtarefas
 
-### CTR-AGG-001 v1 — consumido
+### TASK-DATA-008 — Transaction outcome adapter
 
-Campos: window, dimensions, attempt/payment counts, amount/currency, approval/payment conversion, p50/p95, timeout, declines, quality, revision e correlation.
+- Receber os fatos allowlisted de `TransactionInput`.
+- Gerar IDs/timestamps de evento, status/outcome, provider response, decline normalizado e latência com PRNG seedado e regras condicionais existentes.
+- Não receber nem emitir approval rate, effect multiplier, expected cause ou ground truth na interface pública.
+- **Teste:** mesma seed/contexto produz mesmo outcome; invariantes por método; nenhum PAN/PII; success/failure/unknown; retry não duplica.
+- **Desbloqueia:** worker Rogério e primeira fatia live.
 
-### CTR-DET-001 v1 — produzido
+### TASK-DATA-009 — Samples e background traffic pela API comum
 
-```text
-AnomalyCandidate {
-  candidate_id:string; window:{start,end}; slice:map<string,string>;
-  metric:"APPROVAL_RATE"|"LATENCY_P95"|"TIMEOUT_RATE";
-  observed:float; expected:float; sample_size:int;
-  effect_absolute:float; effect_relative:float;
-  statistical_strength:float; lost_approvals:float;
-  loss_coverage:float; temporal_consistency:float; data_quality:float;
-  evidence_refs:string[]; detector_version:string
-}
-```
+- Gerar 1..100 inputs válidos por quantidade/seed para `POST /transaction-samples`.
+- Fazer o harness de tráfego de fundo submeter `CTR-TXN-001` pela mesma batch API, em vez de escrever direto no banco.
+- Reaproveitar somente o gerador determinístico e seus testes de `renato/tarefa44`; substituir o endpoint/fila local anterior pelo contrato batch de `CTR-TXN-001` e pelo lifecycle de `CTR-TXL-001`.
+- Permitir defaults opcionais de merchant/country/currency sem hardcode no frontend.
+- **Teste:** seed reproduzível, todos os valores pertencem ao catálogo, sample não contém outcome; cenário interno altera distribuição só depois do processamento.
+- **Desbloqueia:** demo rápida e volume suficiente para analytics.
 
-Nenhum texto causal livre. Sem evidência: zero candidates ou candidato marcado para `INCONCLUSIVE` pelo correlator.
+## Tarefas existentes impactadas
 
-## Plano de execução
+- `TASK-DATA-007 / LUM2-49`: reforçar que ground truth e config de efeitos ficam apenas no harness/eval.
+- `TASK-DET-001..004 / LUM2-50..53`: métricas derivadas exclusivamente dos eventos persistidos.
+- `TASK-EVAL-001/002 / LUM2-56/57`: adicionar batches mistos, low volume honesto e equivalência entre tráfego manual e interno.
 
-### TASK-RENATO-001 — Gerar 90 dias determinísticos
+## Handoffs
 
-- **Tempo:** H1–H3.
-- **Ferramentas:** NumPy/Polars, Parquet particionado, seed fixa.
-- **Distribuições:** merchant/provider/country/method/issuer/brand, sazonalidade hora/dia, approval condicional, latency lognormal/robusta e decline mapping.
-- **Aceite:** >=1M attempts por default ou máximo que gere em <=60s no laptop; mesma seed produz os mesmos aggregates.
-- **Teste:** distribuição, invariantes, referential integrity e no accidental anomalies.
+- Para Rogério: interface pura `TransactionInput + seed/context → outcome/events` e catálogo/sample generator.
+- Para André: somente catálogo e sample API via Rogério; nenhum import direto do generator.
+- Para Altoé: Incident/signature derivado; nunca ground truth ou config interna.
 
-### TASK-RENATO-002 — Implementar scenario injector e stream
+## Definition of Done
 
-- **Tempo:** H3–H4.
-- **Aceite:** nova combinação via JSON sem código; múltiplos efeitos simultâneos; ground truth isolado.
-- **Teste:** provider BR e issuer MX simultâneos.
+Reprodutibilidade, contract tests, evals, review gate e integração ponta a ponta. A demo deve funcionar com lote aleatório e com seed fixa de ensaio; nenhum threshold é ajustado usando o holdout final.
 
-### TASK-RENATO-003 — Implementar baseline e detector
+## Linear
 
-- **Tempo:** H3–H7.
-- **Método:** 5m windows; weekday/time bucket; pooling; Beta-Binomial/Wilson para approval; p95/MAD para latency; min n e persistence.
-- **Aceite:** normal não alerta; provider BR produz candidate; low volume não afirma causa.
+Parent: [LUM2-7](https://linear.app/lumenhack/issue/LUM2-7/entregar-dados-sinteticos-deteccao-e-rca). Novas issues: `TASK-DATA-008`→`LUM2-61` e `TASK-DATA-009`→`LUM2-62`. `LUM2-49/56/57` foram atualizadas sem mudar seus estados.
 
-### TASK-RENATO-004 — Implementar RCA hierárquico
-
-- **Tempo:** H7–H10.
-- **Método:** beam search depth <=3, contribuição para lost approvals, complexity penalty e dominance pruning.
-- **Aceite:** exact scope no caso provider-country e merchant-issuer; não superespecializa quando provider global cai.
-
-### TASK-RENATO-005 — Separação e casos difíceis em fixtures
-
-- **Tempo:** H10–H12.
-- **Casos:** simultaneous, latency-only, mix shift/Simpson, duplicates, unknown code, late data, recurrence signature e diffuse inconclusive.
-- **Handoff:** candidates esperados para Rogério e signatures para Altoé, inclusive para casos `INCONCLUSIVE`, sem inserir causa histórica no score atual.
-
-### TASK-RENATO-006 — Holdout e tuning por evidência
-
-- **Tempo:** H12–H15.
-- **Aceite:** reporta top-1 accuracy, scope exact match, false alerts e inconclusive; inclui causa nova suportada sem precedente; thresholds congelados antes do holdout final.
-- **Regra:** não ajustar usando o caso secreto de trial by fire.
-
-## Git e handoffs
-
-- Branch sugerida: `feat/OBJ-RENATO-001-simulation-detection`.
-- Entregar primeiro scenario/candidate fixtures, depois implementação.
-- Commits: generator; injector; detector; RCA; evals.
-- `READY TO MERGE`: seed reproducível, ground truth isolado, holdout report e contract tests.
-
-## Riscos e autonomia
-
-- Pode ajustar parâmetros estatísticos com dev evals; decisão material de threshold recebe Flight Log.
-- Deve parar se precisão depender de hardcode do cenário ou do ground truth.
-- Fallback: baseline pré-agregado; preservar 90 dias lógicos mesmo reduzindo raw row count.
-
-## Sincronização Linear
-
-- Parent: [LUM2-7](https://linear.app/lumenhack/issue/LUM2-7/entregar-dados-sinteticos-deteccao-e-rca).
-- Microtarefas: `TASK-DATA-001`→`LUM2-43`, `TASK-DATA-002`→`LUM2-45`, `TASK-DATA-003`→`LUM2-46`, `TASK-DATA-004`→`LUM2-44`, `TASK-DATA-005`→`LUM2-47`, `TASK-DATA-006`→`LUM2-48`, `TASK-DATA-007`→`LUM2-49`, `TASK-DET-001`→`LUM2-50`, `TASK-DET-002`→`LUM2-51`, `TASK-DET-003`→`LUM2-52`, `TASK-DET-004`→`LUM2-53`, `TASK-RCA-001`→`LUM2-54`, `TASK-RCA-002`→`LUM2-55`, `TASK-EVAL-001`→`LUM2-56`, `TASK-EVAL-002`→`LUM2-57`.
-- **Correção (2026-08-29):** o campo "ID estável" dentro de `LUM2-44/45/46` no Linear está rotacionado (cada um cita o ID errado dos três) — confiar no título real da issue e neste mapa, não no texto interno da issue. `LUM2-44` = "Gerar 90 dias com sazonalidade" (`TASK-DATA-004`); `LUM2-45` = "Gerar outcomes condicionais e retries" (`TASK-DATA-002`); `LUM2-46` = "Gerar latências e decline codes coerentes" (`TASK-DATA-003`).
-- Fonte completa de dependências: `docs/plans/linear-preview.md`.
+Mapeamento corrigido já publicado: `LUM2-44` = Gerar 90 dias com sazonalidade (`TASK-DATA-004` no texto legado), `LUM2-45` = outcomes condicionais/retries (`TASK-DATA-002`) e `LUM2-46` = latências/declines (`TASK-DATA-003`). Não reescrever esses IDs concluídos; o preview 2.0 só adiciona tarefas novas e atualiza descrições ainda abertas.
