@@ -1,12 +1,19 @@
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.api import incidents as incidents_api
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
 from main import app
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _explicit_demo_incident_adapter(monkeypatch):
+    monkeypatch.setattr(incidents_api.settings, "demo_mode", True)
 
 
 def _submit_transaction() -> str:

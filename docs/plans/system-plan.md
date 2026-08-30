@@ -2,10 +2,10 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.1.1
-- **Data:** 2026-08-29
+- **Versão:** 2.2.0
+- **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
-- **Change class:** `MINOR`; preserva o frontend 2.1.0 e publica extensões aditivas compatíveis de `CTR-INC-001 v1`, sem alterar `CTR-API-001 v3`.
+- **Change class:** `RECOVERY`; preserva contratos públicos e concentra a integração real de pipeline, persistência e deploy sem alterar `CTR-API-001 v3`.
 - **Fonte de verdade:** este arquivo; planos em `docs/plans/people/` são projeções.
 - **Produto:** observabilidade e diagnóstico de pagamentos a partir de transações sintéticas inseridas pelo usuário ou emitidas pelo gerador interno.
 - **Deploy:** Next.js na Vercel; FastAPI, worker e estado operacional no Railway.
@@ -16,6 +16,7 @@
 - **Changelog 2.0.2:** integra `renato/tarefa44@602ae9d` na `main` como `CMP-HARNESS-001`; `CTR-TXN/TXL/API v3` continuam sendo a única fronteira pública planejada, e `LUM2-61/62` continuam responsáveis pelo adapter e tráfego de fundo compatíveis.
 - **Changelog 2.1.0:** publica a pasta única `web/` com shell desktop/mobile, formulário, logs, detalhes e Incidents. O formulário consome a API v3; Logs, Detail e Incidents permanecem em fixtures explícitas até o adapter live de `LUM2-12`. Não confirma deploy/live acceptance.
 - **Changelog 2.1.1:** integra `feat/OBJ-ROGERIO-001-platform-core` sobre o frontend 2.1.0, preservando `web/` e adicionando a `CTR-INC-001 v1` hipóteses causais ordenadas, classe de recomendação humana, priorização local por moeda e correlação por fingerprint causal exato. Não adiciona adapter live ao frontend nem altera `CTR-API-001 v3`.
+- **Changelog 2.2.0:** replaneja a recuperação de integração a partir de `main@613df52`, depois de confirmar que os incrementos de Neo4j, RCA, grounding e Parquet já estão na base. A execução restante é concentrada em duas lanes: Rogério integra core/dados/backend; André integra produto/deploy web. Nenhum contrato público recebe nova versão nesta revisão; o objetivo é tornar real a cadeia já contratada.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -297,3 +298,96 @@ Checkpoints:
 - Railway networking: https://docs.railway.com/networking/private-networking
 - Next.js on Vercel: https://vercel.com/docs/frameworks/full-stack/nextjs
 - Vercel environments: https://vercel.com/docs/deployments/environments
+
+## 15. Recuperação de integração 2.2 — duas lanes
+
+### Base, resultado e não objetivos
+
+- **Base auditada:** `main@613df52` / `origin/main@613df52`, limpa e alinhada em 2026-08-30. A referência anterior `db4f1f6` já está contida nessa base.
+- **Resultado verificável:** `batch` persistido antes do `202` atravessa worker, canonical, métricas, detector, RCA, Incident persistido, vínculo autorizado à transação e memory/explanation grounded; Logs, Detail e Incidents o exibem pela API real.
+- **Fatos confirmados:** o worker atual persiste lifecycle e `ingest_event`, mas não chama detector/RCA/Incident; `app/api/incidents.py` usa `_fixture_records()` no runtime; detector, beam/ranking, trace grounded e benchmark Parquet existem na base; antes de A1, `Dockerfile` usava Python 3.12 enquanto `tests/test_environment.py` exigia 3.14.4.
+- **Não objetivos desta recuperação:** trocar a API pública, introduzir queue externa, múltiplas réplicas, Postgres, RAG por transação, FX implícito ou reproduzir o benchmark de 90 dias já concluído.
+
+### Decisões e hipóteses controladas
+
+| ID | Estado | Escolha e consequência | Owner | Flight Log |
+| --- | --- | --- | --- | --- |
+| DEC-022 | DECIDED | Executar a recuperação em duas lanes: Rogério é Pessoa A, coordenador único de backend/contratos/docs; André é Pessoa B, owner exclusivo de `web/`. Os módulos já entregues por Renato e Altoé são dependências integradas, não novas lanes de código. | Rogério | `FL-20260830-ROGERIO-010` |
+| DEC-023 | DECIDED | Manter `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CTR-DET-001 v1`, `CTR-INC-001 v1`, `CTR-TDI-001 v1`, `CTR-MEM-001 v1.1` e `CTR-LLM-001 v1`; implementar a persistência e o encadeamento ausentes por trás dessas fronteiras. | Rogério | `FL-20260830-ROGERIO-010` |
+| DEC-024 | DECIDED | Python 3.14.4 é o runtime canônico local e de deploy; `Dockerfile` fixa `python:3.14.4-slim`. `requires-python >=3.11` é somente a faixa declarada de dependências, não uma permissão para publicar imagem não testada. | Rogério | `FL-20260830-ROGERIO-011` |
+| ASM-008 | ASSUMED | Uma réplica com worker in-process e DuckDB/Volume é suficiente para a demo; o worker é restart-safe por leases. Volume/restart no Railway decide se este pressuposto se sustenta. | Rogério | validar em `TASK-DEP-002` |
+
+### Contratos congelados e handoffs
+
+| Contrato | Produtor → consumidor | Estado e regra de mudança | Mock/teste e checkpoint |
+| --- | --- | --- | --- |
+| `CTR-TXN-001 v1` / `CTR-TXL-001 v1` | API/worker → web | `FROZEN`; batch 1..100, `202` só após persistência, lifecycle e idempotência não mudam. | fixtures + testes de batch; Checkpoint 2 |
+| `CTR-AGG-001 v1` → `CTR-DET-001 v1` | aggregation → detector/RCA | `FROZEN`; detector recebe somente janelas derivadas, baixa amostra produz ausência/inconclusão, nunca causa fabricada. | testes de agregação/detecção; Checkpoint 3 |
+| `CTR-INC-001 v1` | correlator → API/memory/explanation/web | `FROZEN`; upsert idempotente por janela e fingerprint causal exato. Campos de recommendation continuam `HUMAN_ONLY`. | schema + repository/E2E; Checkpoint 3 |
+| `CTR-TDI-001 v1` | API → web | `FROZEN`; `RESOLVED`, `PARTIAL` e `NO_INCIDENT` são explícitos; `404` somente para transação inexistente. | fixture, OpenAPI e teste HTTP; Checkpoint 2/3 |
+| `CTR-MEM-001 v1.1` / `CTR-LLM-001 v1` | memory/explanation → API/web | `FROZEN`; precedente não confirma causa atual; indisponibilidade produz fallback limitado e honesto. | evals grounded e memory-down; Checkpoint 3 |
+| `CTR-SCN-001 v1` | harness interno → simulation | `FROZEN INTERNAL`; não vira endpoint web nem recebe v2 nesta fatia. Ground truth segue isolado. | scenario tests; fora do caminho live |
+
+Qualquer mudança de schema, endpoint, estado terminal, erro, timeout ou semântica acima exige `CHANGE CONTROL`: atualizar primeiro este plano, informar a outra lane, versionar/migrar se incompatível e só então implementar.
+
+### Ownership, hotspots e sequência segura
+
+| Área | Owner primário | Consumidor/revisor | Regra |
+| --- | --- | --- | --- |
+| `app/`, `contracts/v1/`, migrations DuckDB, `main.py`, `.env.example`, Docker/Railway, `docs/plans/system-plan.md`, `docs/flight-log.md` | Rogério (Pessoa A) | André | Pessoa B envia divergência/evidência; não edita esses hotspots em paralelo. |
+| `web/`, `web/.env.example`, rotas/componentes/client, Vercel e evidências de browser | André (Pessoa B) | Rogério | Pessoa A não altera UI nem adapta payload sem change control. |
+| detector/RCA, memory/explanation, Parquet já entregues | Rogério como integrador | autores originais quando disponíveis | Reusar APIs e testes existentes; não reaplicar branches antigas. |
+
+```text
+TASK-REC-001/002 → TASK-PIPE-001 → TASK-PIPE-002 → TASK-PIPE-003 → TASK-PIPE-004
+                                                         ├→ handoff HTTP para André
+                                                         └→ TASK-INT-003 → TASK-DEP-002
+André: mock explícito → client live → Logs/Detail → Incidents → browser/Vercel
+```
+
+### Objetivos e microtarefas de execução
+
+**OBJ-ROGERIO-002 — Core, dados e backend integrado.** Entregar uma API caixa-preta que recebe um lote real e devolve Incidents persistidos/grounded. O primeiro bloco é independente do frontend; usa fixtures só em testes ou `DEMO_MODE` explícito.
+
+| Task | Escopo e saída | Bloqueios / testes binários |
+| --- | --- | --- |
+| `TASK-REC-001` | Alinhar documentação/configuração a Python Docker 3.14.4, paths DuckDB/Volume, CORS e comandos de runtime. | instalar e rodar no container, `validate_contracts`, suite Python; não muda contrato. |
+| `TASK-REC-002` | Congelar worker in-process de uma réplica, janela determinística pós-evento e `CTR-SCN-001 v1` interno. | checagem deste plano e `FL-20260830-ROGERIO-010`; `main` inicia e reconcilia. |
+| `TASK-PIPE-001` | Criar `IncidentRepository` DuckDB com migration segura, upsert/list/get/filter por window + causal fingerprint. | reentrega não duplica; fingerprints diferentes simultâneos não colapsam. |
+| `TASK-PIPE-002` | Encadear AGG → DET → RCA → Incident após evento terminal e gravar só links autorizados em `classification.related_incident_ids`. | alta amostra anômala cria Incident; baixa amostra não inventa causa; failure/correlation observáveis. |
+| `TASK-PIPE-003` | Substituir `_fixture_records()` por repository real em list/get/transaction detail; `DEMO_MODE` é a única rota de fixture offline. | list homogênea, TDI `NO_INCIDENT/PARTIAL/RESOLVED`, memory down e isolamento entre transações. |
+| `TASK-PIPE-004` | E2E sem inserção direta de Incident: batch → worker → canonical → metrics → detector/RCA → persistência/link → grounding. | sem Incident, supported, inconclusive, duplicado, restart, simultâneos, leakage e memory down. |
+| `TASK-INT-003` | Usar somente o benchmark/relatório Parquet já integrado; fazer holdout sem reexecutar os 90 dias sem autorização. | thresholds congelados antes do ground truth; relatar exact match, falso Incident e abstention. |
+| `TASK-DEP-002` | Railway com uma réplica/Volume, restart, CORS estrito e health; entregar URL `/v1`, env names e error map. | health, persistência e origens allow/deny comprovadas. |
+
+**OBJ-ANDRE-002 — Produto live e aceitação.** Pode iniciar por mocks congelados e não depende do banco de Pessoa A para construir o client. O handoff obrigatório de A4/A5 contém OpenAPI validado, comando local, base URL e exemplos reais de `NO_INCIDENT`, `PARTIAL`, `RESOLVED`, `404/409/422/503` e `BACKEND_UNAVAILABLE`.
+
+| Task | Saída | Aceite |
+| --- | --- | --- |
+| `TASK-WEB-001..004` | factory live/offline explícita, Logs/Detail/Incidents ligados aos contratos e testes de client. | nenhuma rota live importa fixture; polling cancela; API down não parece dado live. |
+| `TASK-WEB-005` | fatia local com API de A. | formulário → log/detail → Incident sem refresh manual. |
+| `TASK-DEP-003` / `TASK-QA-001` | Vercel e browser acceptance. | console/rede sem fixture/local file, desktop/mobile/teclado e cenários de queda. |
+
+### Checkpoints, simulação e parecer do guardian — PLANNING
+
+1. **CP0 — freeze:** A1/A2 deixam contrato e runtime executáveis; André usa mock explícito. Smoke: schemas, Python e build web.
+2. **CP1 — interfaces:** repository/migration e client/factory existem, ainda sem fixture default em modo live.
+3. **CP2 — primeira fatia local:** batch termina no log/detail com `NO_INCIDENT` legítimo, sem fixture live.
+4. **CP3 — analytics/grounding:** lote determinístico cria Incident persistido e o TDI preserva causa, alternativas e memória como eixos separados.
+5. **CP4 — deploy:** Railway Volume/restart/CORS e Vercel→Railway; browser gate.
+6. **CP5 — freeze:** suites, E2E, holdout/evidência ou corte explícito, demo dupla e docs reconciliados.
+
+**Simulação de handoff:** Pessoa A pode iniciar A1 com a base atual. Pessoa B pode iniciar pelo mock localizado. O único acoplamento é o handoff A4/A5; ele usa contratos já congelados, portanto não cria ciclo. Um merge futuro deverá seguir CP1 → CP3 → CP4, com testes da lane, smoke de contrato, revisão de diff e guardian em modo `INTEGRATION`; esta revisão não executa merge, rebase ou push.
+
+**Resultado do Integration Contract Guardian — `PLAN READY` para implementação.** Há owner único para cada hotspot, contratos públicos congelados, mock explícito para a UI, sequência acíclica e critérios verificáveis. URLs reais de Railway/Vercel são pré-requisito apenas do CP4, não bloqueiam A1–A5 nem B1–B4.
+
+### Evidências da execução de Pessoa A
+
+| Task | Estado | Evidência honesta |
+| --- | --- | --- |
+| `TASK-REC-001/002` | localmente concluída | Python 3.14.4, `.env.example`, CORS e imagem Docker foram alinhados; `validate_contracts`, compilação e testes passam. Build da imagem é `NOT RUN` porque Docker não está instalado neste host. |
+| `TASK-PIPE-001` | concluída | `DuckDBIncidentRepository` persiste/upserta por janela + fingerprint causal e protege links por correlação/evidência. |
+| `TASK-PIPE-002/003` | concluída localmente | worker chama aggregation/detector/RCA/repository; API usa repository no modo live e fixtures só com `DEMO_MODE`. |
+| `TASK-PIPE-004` | concluída localmente | teste público batch → terminal → Incident `INCONCLUSIVE` → TDI grounded, sem fixture, passou. Suite completa: 168 testes. |
+| `TASK-INT-003` | parcialmente concluída / holdout bloqueado | benchmark existente lido: 8.256 eventos, 90 partições e digest `d3fb…5d2461`; não será repetido. O conjunto de avaliação confirma invariantes, mas `root_cause_accuracy`, `scope_exact_match`, `false_incidents` e abstention estatística são `NOT RUN` sem ground truth de holdout. |
+| `TASK-DEP-002` | bloqueada externamente | requer serviço Railway, Volume, domínio e origins reais para CORS/restart/health. |

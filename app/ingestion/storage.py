@@ -7,7 +7,7 @@ canonical_attempts: estado atual por attempt_id, só atualizado quando ordering.
 
 import json
 from datetime import datetime
-from threading import Lock
+from threading import RLock
 
 import duckdb
 
@@ -20,7 +20,7 @@ from app.config import settings
 # see app.api.transactions._create_batch and app.worker.transaction_worker for the
 # pattern. Reproduced directly without it: concurrent access corrupts query parameter
 # binding across threads and DuckDB raises TransactionException / ConversionException.
-CONNECTION_LOCK = Lock()
+CONNECTION_LOCK = RLock()
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS raw_events (
@@ -73,6 +73,25 @@ CREATE TABLE IF NOT EXISTS transaction_records (
     correlation_id VARCHAR NOT NULL,
     lease_owner VARCHAR,
     lease_expires_at TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS incident_records (
+    incident_id VARCHAR PRIMARY KEY,
+    causal_fingerprint VARCHAR UNIQUE NOT NULL,
+    correlation_id VARCHAR NOT NULL,
+    window_start TIMESTAMP NOT NULL,
+    window_end TIMESTAMP NOT NULL,
+    state VARCHAR NOT NULL,
+    payload_json VARCHAR NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+CREATE TABLE IF NOT EXISTS transaction_incident_links (
+    transaction_id VARCHAR NOT NULL,
+    incident_id VARCHAR NOT NULL,
+    correlation_id VARCHAR NOT NULL,
+    evidence_ids_json VARCHAR NOT NULL,
+    linked_at TIMESTAMP NOT NULL,
+    PRIMARY KEY (transaction_id, incident_id)
 );
 """
 

@@ -82,3 +82,22 @@ Contract tests, worker restart/idempotency, review gate, integration guardian e 
 ## Linear
 
 Parent: [LUM2-6](https://linear.app/lumenhack/issue/LUM2-6/entregar-ingestao-contratos-e-api-integradora). Novas issues: `TASK-TXN-API-001`→`LUM2-58`, `TASK-TXN-WORKER-001`→`LUM2-59`, `TASK-DEPLOY-API-001`→`LUM2-60`. `LUM2-39/41/42` foram atualizadas sem mudar seus estados.
+
+## Recuperação 2.2 — Pessoa A confirmada
+
+- **Plano geral:** 2.2.0; **objetivo:** `OBJ-ROGERIO-002`; **base:** `main@613df52`.
+- **Missão:** integrar o que já está na `main` em uma cadeia persistida `batch → worker → detector/RCA → Incident → grounding`, sem mudar contratos públicos e sem editar `web/`.
+- **Autonomia:** pode alterar somente `app/`, `contracts/v1/`, migrations DuckDB, runtime/configuração/deploy e os hotspots documentais. Uma mudança de endpoint/schema/estado exige change control antes do código.
+
+### Primeiro bloco verificável
+
+1. Executar `TASK-REC-001/002`: fixar Python 3.14.4 também no Docker, confirmar paths DuckDB/Volume, CORS opt-in, worker de uma réplica e `CTR-SCN-001 v1` interno.
+2. Rodar `python scripts/validate_contracts.py` e a suite Python no ambiente equivalente ao container. Não afirmar a conclusão se essa equivalência não for executada.
+3. Implementar `TASK-PIPE-001` com migration idempotente e rollback/estratégia segura antes de tocar em `app/api/incidents.py`.
+
+### Handoffs e condições de parada
+
+- **Para André:** após `TASK-PIPE-003/004`, entregar comando para API local, OpenAPI validado, URL/base `/v1`, mapa `404/409/422/503`, exemplos reais de `NO_INCIDENT`, `PARTIAL` e `RESOLVED` e indicação explícita de `BACKEND_UNAVAILABLE`.
+- **Parar e sincronizar:** se `CTR-*`, estado, erro, timeout, CORS público ou modelo de persistência precisar mudar; atualizar primeiro o plano geral e `FL-20260830-ROGERIO-010`/adendo.
+- **Pronto para handoff:** E2E cria Incident sem inserir Incident/link diretamente; duplicado/restart/simultâneos/memory down/leakage passam; fixtures não são fonte live.
+- **Pronto para integração futura:** testes afetados, `code-review-gate`, guardian `INTEGRATION`, e browser gate conjunto com André para qualquer fluxo observável.

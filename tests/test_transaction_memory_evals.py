@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from itertools import count
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api import incidents as incidents_api
@@ -17,6 +18,11 @@ from main import app
 
 client = TestClient(app)
 _REQUEST_SEQUENCE = count()
+
+
+@pytest.fixture(autouse=True)
+def _explicit_demo_incident_adapter(monkeypatch):
+    monkeypatch.setattr(incidents_api.settings, "demo_mode", True)
 
 
 def _transaction() -> dict[str, object]:

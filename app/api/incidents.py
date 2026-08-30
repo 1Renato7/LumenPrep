@@ -19,6 +19,7 @@ from app.explanation import (
     TransactionGrounding,
     resolve_transaction_grounding_from_api_responses,
 )
+from app.incidents import DuckDBIncidentRepository
 from app.ingestion.storage import transaction_record_for_grounding
 from app.memory import (
     Incident,
@@ -31,9 +32,6 @@ from app.memory.seed import seed_mastercard_d2
 
 router = APIRouter()
 _FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
-_REAL_ENRICHMENT_INCIDENT_IDS = frozenset(
-    {"inc_current_mastercard_001", "inc_current_mastercard_uncertain_002"}
-)
 
 _neo4j_driver: Any | None = None
 _neo4j_driver_failed = False
@@ -135,12 +133,7 @@ def _fixture_records() -> dict[str, dict[str, Any]]:
 
 
 def _memory_and_explanation(incident_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    incident_id = str(incident_payload["incident_id"])
-    if incident_id not in _REAL_ENRICHMENT_INCIDENT_IDS:
-        if incident_id == "inc_new_provider_country_001":
-            return _fixture("similar-incidents-empty.json"), _fixture("explanation-bundle-no-precedent.json")
-        raise KeyError(incident_id)
-
+    """Enrich a current Incident without treating historical memory as its cause."""
     incident = Incident.from_contract(incident_payload)
     fallback = InMemoryIncidentRepository()
     seed_mastercard_d2(fallback, now=incident.detected_at)
@@ -149,6 +142,16 @@ def _memory_and_explanation(incident_payload: dict[str, Any]) -> tuple[dict[str,
     memory = service.retrieve(incident)
     explanation = GroundedExplainer(()).explain(incident, memory)
     return memory.to_contract(), explanation.to_contract()
+
+
+def _incident_records() -> dict[str, dict[str, Any]]:
+    """Use fixtures only in the explicitly selected offline demo adapter."""
+    if settings.demo_mode:
+        return _fixture_records()
+    return {
+        incident.incident_id: incident.model_dump(mode="json")
+        for incident in DuckDBIncidentRepository().list()
+    }
 
 
 def build_incident_response(incident: dict[str, Any], memory: dict[str, Any], explanation: dict[str, Any]) -> dict[str, Any]:
@@ -177,7 +180,7 @@ def _grounding_for_transaction(
 
     classification = transaction_record.get("classification")
     related_ids = classification.get("related_incident_ids", []) if isinstance(classification, dict) else []
-    records = _fixture_records()
+    records = _incident_records()
     candidate_responses: dict[str, dict[str, Any]] = {}
     for incident_id in related_ids:
         if not isinstance(incident_id, str):
@@ -227,7 +230,7 @@ def _grounding_detail_contract(
 @router.get("/incidents")
 def list_incidents(transaction_id: str | None = Query(default=None, min_length=1)) -> list[dict[str, Any]]:
     """List records; transaction filtering exposes only evidence-authorized Incidents."""
-    records = _fixture_records()
+    records = _incident_records()
     if transaction_id is None:
         return list(records.values())
 
@@ -253,7 +256,7 @@ def get_transaction_incidents(transaction_id: str) -> dict[str, Any]:
 
 @router.get("/incidents/{incident_id}")
 def get_incident(incident_id: str) -> dict[str, Any]:
-    incident = _fixture_records().get(incident_id)
+    incident = _incident_records().get(incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
     memory, explanation = _memory_and_explanation(incident)
