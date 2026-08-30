@@ -11,8 +11,11 @@ class MemoryRepositorySelectionTest(unittest.TestCase):
     def setUp(self) -> None:
         incidents._neo4j_driver = None
         incidents._neo4j_driver_failed = False
+        self._demo_mode = patch.object(incidents.settings, "demo_mode", True)
+        self._demo_mode.start()
 
     def tearDown(self) -> None:
+        self._demo_mode.stop()
         incidents._neo4j_driver = None
         incidents._neo4j_driver_failed = False
 

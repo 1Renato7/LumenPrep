@@ -20,6 +20,7 @@ from uuid import uuid4
 from app.ingestion import ingest_event
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
 from app.simulation.transaction_outcomes import AdaptedTransaction, adapt_transaction
+from app.worker.incident_pipeline import derive_incidents_for_correlation
 
 STAGE_ORDER = ["RECEIVED", "NORMALIZING", "CLASSIFYING", "AGGREGATING", "ANALYZING", "COMPLETE"]
 _PROGRESS_BY_STAGE = {stage: index * 20 for index, stage in enumerate(STAGE_ORDER)}
@@ -91,6 +92,7 @@ def _advance_locked(con, transaction_id: str) -> None:
         ingestion = ingest_event(adapted.event)
         if ingestion.status not in {"ACCEPTED", "DUPLICATE"}:
             raise RuntimeError(f"canonical event was {ingestion.status}")
+        derive_incidents_for_correlation(con, row[3])
     except Exception as exc:  # a technical worker failure must never read as a business decline
         con.execute(
             """UPDATE transaction_records

@@ -18,7 +18,7 @@ As skills usam progressive disclosure: cada `SKILL.md` contém o fluxo central e
 
 ## Ambiente Python
 
-O runtime do projeto é **Python 3.14.4**, indicado em `.python-version` e em `pyproject.toml`. Quando o Python install manager não estiver disponível, inicialize o runtime local reproduzível (ignorado pelo Git) com:
+O runtime canônico do projeto é **Python 3.14.4**, indicado em `.python-version`, validado em `tests/test_environment.py` e fixado na imagem Docker de deploy. `pyproject.toml` declara a faixa de compatibilidade mínima das dependências; não substitui essa pinagem operacional. Quando o Python install manager não estiver disponível, inicialize o runtime local reproduzível (ignorado pelo Git) com:
 
 ```powershell
 .\scripts\bootstrap-python.ps1

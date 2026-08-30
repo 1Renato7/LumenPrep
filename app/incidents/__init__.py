@@ -253,3 +253,23 @@ def to_incident(
         limitations=list(limitations),
         correlation_id=correlated.correlation_id,
     )
+
+
+from .repository import DuckDBIncidentRepository, IncidentIdConflictError, causal_fingerprint  # noqa: E402
+
+__all__ = [
+    "CorrelatedCandidates",
+    "DuckDBIncidentRepository",
+    "Evidence",
+    "Impact",
+    "Incident",
+    "IncidentIdConflictError",
+    "Recommendation",
+    "RootCause",
+    "RootCauseAlternative",
+    "causal_fingerprint",
+    "compute_impact",
+    "correlate_candidates",
+    "prioritize_incidents_by_local_impact",
+    "to_incident",
+]

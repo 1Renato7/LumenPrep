@@ -3677,3 +3677,198 @@ Qualquer mudança no envelope do servidor, no contrato canônico, na semântica 
 
 - **2026-08-30T00:20:00-03:00:** PASS: `20` testes focados (ingestão, listener, histórico, agregação e Parquet), `compileall` e validação de contratos passaram. O smoke do CLI com banco novo confirmou `52/52` eventos gerados/publicados/aceitos e `52` linhas em uma partição. Um run tentou reutilizar armazenamento já populado; a proteção foi adicionada para recusar esse estado, sem apagar dados existentes.
 - **2026-08-30T00:22:00-03:00:** O solicitante determinou que o benchmark de 90 dias já concluído não deve ser repetido. Uma nova execução iniciada para atualização de configuração foi interrompida antes de produzir relatório final; os únicos números publicados permanecem os do relatório salvo de `90` dias.
+
+### FL-20260830-ROGERIO-010 — Concentrar a recuperação live em duas lanes sem trocar os contratos públicos
+
+- **Timestamp:** 2026-08-30T00:23:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério (Pessoa A confirmada pelo solicitante)
+- **Participantes:** Rogério; André como owner já documentado de `web/`; Codex como recorder
+- **Categoria:** scope | architecture | contract | Git/integration
+- **Escopo:** `DEC-022`, `DEC-023`, `OBJ-ROGERIO-002`, `OBJ-ANDRE-002`, `CTR-TXN-001 v1`, `CTR-TXL-001 v1`, `CTR-API-001 v3`, `CTR-INC-001 v1`, `CTR-TDI-001 v1`
+- **Links:** `docs/plans/system-plan.md` v2.2.0; `docs/plans/people/rogerio.md`; `docs/plans/people/andre.md`; base `main@613df52`
+- **Supersedes / superseded by:** não substitui as decisões de produto anteriores; concentra a execução restante e corrige o estado de integração.
+
+#### Contexto e pergunta
+
+Após atualizar a base local por fast-forward até `main@613df52`, detector/RCA, trace grounded, Neo4j e benchmark Parquet já estavam integrados. Ainda faltavam a cadeia real no worker e o repository live de Incident; o endpoint ainda lia fixtures. A proposta de recuperação precisava definir quem integra os módulos existentes e evitar reabrir contratos que o frontend já consome.
+
+#### Decisão
+
+Rogério integra core, dados, backend, runtime e documentos; André mantém ownership exclusivo de `web/`, Vercel e browser evidence. A recuperação implementa a persistência e o encadeamento por trás de `CTR-*` já congelados, com worker in-process de uma réplica e DuckDB/Volume para o MVP. `CTR-SCN-001 v1` permanece interno; não haverá endpoint ou schema novo só para a recuperação.
+
+#### Critérios e por que agora
+
+A fatia demonstrável depende de uma API real antes da integração visual. As duas lanes podem começar já: backend pela base integrada e frontend por mock explícito. Trocar schemas multiplicaria o custo de sincronização sem corrigir as lacunas observadas.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Reabrir quatro lanes e reaplicar branches antigas | especialização máxima | duplicação e colisão em hotspots já integrados | FACT: commits de módulos estão em `613df52` | não corrige a integração faltante |
+| Criar `CTR-API v4` / schema de scenario novo | fronteira explicitamente nova | força UI e fixtures a migrar sem necessidade | FACT: contratos atuais expressam os estados necessários | custo sem ganho observável |
+| Duas lanes com contratos preservados | caminho crítico curto e mocks estáveis | Rogério concentra integração e deploy | FACT: ownership de `web/` já é de André | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `transaction_worker.py` termina em `ingest_event`; `api/incidents.py` usa `_fixture_records()` no runtime; Docker usa Python 3.12.
+- **TEST:** NOT RUN nesta decisão; a validação começa por contracts/suite/container e termina no E2E sem fixtures live.
+- **ASSUMPTION:** uma réplica com DuckDB/Volume sustenta a demo; Rogério valida em `TASK-DEP-002`, com Postgres como alternativa somente via change control.
+- **UNKNOWN:** domínios finais Vercel/Railway para allowlist; só bloqueiam deploy/CP4, não a implementação local.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** uma cadeia vertical concreta e ownership sem colisão.
+- **Abrimos mão de:** paralelizar integração do detector/memory com seus autores originais.
+- **Dívida/limitação:** worker in-process/uma réplica não é arquitetura de escala.
+- **Risco residual:** um erro no integrador pode atrasar ambas as lanes; checkpoints CP1/CP3 reduzem a descoberta tardia.
+
+#### Consequências e propagação
+
+- **Produto/demo:** Incidents devem nascer de transações reais; fixtures permanecem apenas offline/teste.
+- **Arquitetura/contratos:** versões públicas são preservadas; persistence/links passam a ser implementados atrás delas.
+- **Pessoas/branches:** André não edita backend; Rogério não edita `web/`; nenhum merge/rebase/push foi autorizado ou executado.
+- **Plano/Linear:** planos geral e individuais foram atualizados; Linear não foi escrito porque não houve autorização.
+- **Testes/observabilidade:** exige E2E batch→Incident, idempotência, restart, memory down, leakage, CORS e browser gate.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** um lote determinístico gera ou não gera Incident de modo reproduzível e a UI nunca recebe fixture como dado live.
+- **Caminho feliz:** batch persistido → terminal → Incident grounded → detail no navegador.
+- **Caso difícil/adverso:** baixa amostra, reentrega/restart, causas simultâneas e memória indisponível preservam limites honestos.
+- **Resultado observado:** NOT RUN; somente auditoria de código/base concluída.
+- **Fallback:** `NO_INCIDENT`, `INCONCLUSIVE` e `MEMORY_UNAVAILABLE` continuam respostas explícitas; não simular dado live.
+
+#### Gatilhos de revisão
+
+Falha do Volume/restart, necessidade de alterar schema/estado, ou divergência do cliente com contratos congela a implementação e exige change control antes de qualquer adaptação.
+
+### FL-20260830-ROGERIO-011 — Fixar o deploy no mesmo Python 3.14.4 validado localmente
+
+- **Timestamp:** 2026-08-30T00:23:10-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério
+- **Participantes:** Rogério; Codex como recorder
+- **Categoria:** architecture | quality | operations
+- **Escopo:** `DEC-024`, `TASK-REC-001`, `Dockerfile`, `.python-version`, `tests/test_environment.py`, `README.md`
+- **Links:** `docs/plans/system-plan.md` v2.2.0; `FL-20260829-RENATO-001`; `FL-20260830-ROGERIO-010`
+- **Supersedes / superseded by:** substitui somente a cláusula de Python 3.12 de `FL-20260830-ROGERIO-010`; preserva a decisão original `FL-20260829-RENATO-001` de fixar 3.14.4.
+
+#### Contexto e pergunta
+
+A1 confirmou que o ambiente local e o teste de ambiente exigem Python 3.14.4, enquanto `Dockerfile` declarava `python:3.12-slim`. A divergência permitiria que a suite passasse localmente e falhasse ou fosse pulada no ambiente que publica a API.
+
+#### Decisão
+
+Fixar a imagem em `python:3.14.4-slim`. O mínimo `>=3.11` de `pyproject.toml` descreve compatibilidade de dependências e não substitui o runtime operacional canônico.
+
+#### Critérios e por que agora
+
+O deploy Railway é parte do caminho crítico e precisa executar a mesma geração que a suite valida. O ajuste é limitado à imagem e não muda endpoint, schema ou semântica de produto.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Manter Docker 3.12 | sem mudança de imagem | contradiz teste e runtime declarados | FACT: teste exige `3.14.4` | risco de divergência |
+| Relaxar o teste para 3.12 | build potencialmente mais comum | reverte decisão registrada sem validar a aplicação | FACT: 3.14.4 local passou a suite | esconderia a incompatibilidade |
+| Fixar Docker em 3.14.4 | ambiente reproduzível | imagem precisa ser validada no Docker/Railway | TEST: suite local 160/160 em 3.14.4 | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `python --version` retornou `Python 3.14.4`; `validate_contracts` e 160 testes passaram nesse runtime.
+- **TEST:** `docker` não está instalado nesta máquina; build/container smoke é `NOT RUN`.
+- **ASSUMPTION:** a tag oficial `python:3.14.4-slim` está disponível ao Railway; validar no primeiro build.
+- **UNKNOWN:** tempo de build e compatibilidade de wheels no Railway.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** mesma versão local/deploy e falhas ambientais detectáveis.
+- **Abrimos mão de:** compatibilidade operacional declarada com Python 3.12.
+- **Dívida/limitação:** a validação de imagem depende de ambiente com Docker ou Railway.
+- **Risco residual:** indisponibilidade da tag bloqueia o deploy e requer nova decisão explícita.
+
+#### Consequências e propagação
+
+- **Produto/demo:** nenhuma alteração visual ou de contrato.
+- **Arquitetura/contratos:** somente runtime/deploy; contratos públicos permanecem congelados.
+- **Pessoas/branches:** André continua indiferente ao runtime; Rogério executa o smoke do container antes do CP4.
+- **Plano/Linear:** plano geral, plano de Rogério e runbook foram alinhados; Linear não foi alterado.
+- **Testes/observabilidade:** suites locais passaram; build Docker/Railway e health permanecem obrigatórios.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** a imagem instala dependências, sobe `/v1/health` e executa a suite sob 3.14.4.
+- **Caminho feliz:** `docker build` seguido de contract/smoke no container.
+- **Caso difícil/adverso:** tag ausente ou wheel incompatível falha antes de publicar um deploy parcial.
+- **Resultado observado:** PASS local; container `NOT RUN` por ausência de Docker.
+- **Fallback:** não fazer downgrade silencioso; escolher imagem disponível via change control e repetir a suite.
+
+#### Gatilhos de revisão
+
+Falha de build, incompatibilidade de dependência ou alteração do runtime Python requer nova entrada e revalidação completa.
+
+### Adendo de evidência — FL-20260830-ROGERIO-010 / 011
+
+- **2026-08-30T00:23:10-03:00:** `TASK-REC-001/002`, `TASK-PIPE-001`, `TASK-PIPE-002`, `TASK-PIPE-003` e `TASK-PIPE-004` foram validadas localmente. O worker passou a derivar Incidents somente de janelas persistidas via aggregation → detector → RCA; o RCA permanece `INCONCLUSIVE` e a memória é enriquecimento read-time, sem promoção de precedente. O `DuckDBIncidentRepository` garante idempotência por janela/fingerprint, separa causas simultâneas e exige correlação/evidência para links transacionais. A API live lê o repository; fixtures requerem `DEMO_MODE` explícito. PASS: `python scripts/validate_contracts.py`, `python -m pytest -q` com 168 testes e `python -m compileall -q app`. O E2E público prova batch → worker → canonical → detector/RCA → Incident persistido → `GET /v1/transactions/{id}/incidents`, sem `fixture://`. Code-review gate: `PASS WITH NOTES`, sem achado bloqueante. Build Docker/Railway permanece `NOT RUN` porque Docker não está instalado neste host e não foram fornecidas credenciais/URLs externas.
+
+### FL-20260830-ROGERIO-012 — Publicar a recuperação validada diretamente na main
+
+- **Timestamp:** 2026-08-30T00:39:43-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Rogério (solicitante)
+- **Participantes:** Rogério; Codex como executor e recorder
+- **Categoria:** Git/integration | quality | operations
+- **Escopo:** recuperação 2.2, `main`, `origin/main`, `TASK-REC-001..002`, `TASK-PIPE-001..004`
+- **Links:** `FL-20260830-ROGERIO-010`, `FL-20260830-ROGERIO-011`, `docs/plans/system-plan.md` v2.2.0
+- **Supersedes / superseded by:** substitui somente a restrição operacional de não fazer push registrada em `FL-20260830-ROGERIO-010`; não altera os contratos ou a arquitetura.
+
+#### Contexto e pergunta
+
+A recuperação foi implementada no working tree da `main` já alinhada a `origin/main@613df52`. O solicitante autorizou explicitamente publicar tudo na `main` e fazer push após os gates locais.
+
+#### Decisão
+
+Criar um commit único, com o plano, Flight Log, runtime, pipeline, API e testes da recuperação, diretamente na `main`, então enviar o commit a `origin/main`.
+
+#### Critérios e por que agora
+
+Não há commits remotos divergentes, o diff pertence a esta recuperação e os contratos públicos permanecem congelados. Publicar um único incremento verificável evita deixar o handoff de André dependente de alterações locais não rastreáveis.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Decisão |
+| --- | --- | --- | --- | --- |
+| Manter working tree local | sem operação remota | André não recebe uma base reproduzível | FACT: solicitante pediu push | rejeitada |
+| Criar branch/PR adicional | revisão remota formal | atrasa a integração e contradiz publicação direta pedida | FACT: main está alinhada e os gates locais passaram | rejeitada agora |
+| Commit e push diretos | handoff rastreável imediato | exige preservar todos os gates e documentos | TEST: 168 testes e contratos passaram | escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `HEAD` e `origin/main` apontam para `613df52` antes do commit; não há divergência remota.
+- **TEST:** `validate_contracts`, `pytest` (168) e `compileall` passaram; `git diff --check` passou.
+- **UNKNOWN:** build Docker/Railway continua não executado neste host.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** base compartilhada, commit recuperável e handoff imediato.
+- **Abrimos mão de:** uma revisão remota adicional antes da publicação.
+- **Risco residual:** deploy ainda pode revelar incompatibilidade da imagem/serviço; permanece bloqueado no checkpoint externo.
+
+#### Consequências e propagação
+
+- **Produto/demo:** backend live fica disponível para a próxima integração web após pull.
+- **Arquitetura/contratos:** nenhuma versão pública muda.
+- **Pessoas/branches:** André pode partir do commit publicado; não há merge/rebase de branch alheia.
+- **Testes/observabilidade:** a evidência local acompanha o commit; deploy precisa ser validado posteriormente.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** `git push origin main` atualiza o remoto com o commit esperado.
+- **Caso difícil/adverso:** rejeição por corrida remota exige fetch, guardian e nova decisão — sem force push.
+- **Resultado observado:** PENDING no momento do registro.
+- **Fallback:** preservar o commit local e interromper; não sobrescrever o remoto.
+
+#### Gatilhos de revisão
+
+Rejeição do push, divergência remota, falha de gate ou descoberta de contrato incompatível interrompe a publicação.

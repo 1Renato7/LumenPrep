@@ -1,6 +1,6 @@
 # Deployment — Vercel + Railway
 
-> Estado na `main`: runbook aprovado, implementação pendente. O Docker/Railway atual serve a API anterior; Next.js, API v3, worker/lifecycle e CORS desta topologia serão entregues pelas microtarefas 2.0.
+> Estado na `main`: API v3, lifecycle e CORS já existem no código; a pipeline real de Incident, o smoke Railway e a acceptance Vercel continuam pendentes. Este arquivo é subordinado ao plano geral 2.2.0.
 
 ## Topologia
 
@@ -17,7 +17,7 @@
 | Vercel | `NEXT_PUBLIC_API_BASE_URL` | sim | domínio HTTPS Railway, sem trailing slash |
 | Railway | `CORS_ALLOWED_ORIGINS` | não | lista exata de URLs Vercel/local |
 | Railway | `LUMEN_DATA_DIR` | não | mount path do volume |
-| Railway | `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` | não | memória |
+| Railway | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | não | memória |
 | Railway | `OPENAI_API_KEY` | não | explanation |
 | Railway | `DEMO_MODE` | não | habilita harness interno, nunca endpoints públicos de efeito |
 

@@ -123,3 +123,11 @@ Um único integrador edita `web/package.json`, lockfile, layout raiz e env. Inte
 ## Linear
 
 Parent: [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-frontend-transaction-first-vercel-e-demo). `LUM2-9`–`14` foram replanejadas para o fluxo 2.0. Dependências novas principais: `TASK-TXN-API-001`→`LUM2-58`, `TASK-DEPLOY-API-001`→`LUM2-60` e `TASK-EXP-004`→`LUM2-63`.
+
+## Recuperação 2.2 — Pessoa B
+
+- **Plano geral:** 2.2.0; **objetivo:** `OBJ-ANDRE-002`; **base:** `main@613df52`.
+- **Limite:** `web/` é ownership exclusivo. Não alterar `contracts/v1/`, backend, Docker, migrations ou API em resposta a payload inesperado; abrir contract issue para Rogério.
+- **Início independente:** factory única com live quando `NEXT_PUBLIC_API_BASE_URL` existe e mock somente explícito. Corrigir CTR-TDI para `/transactions/{id}/incidents`; preservar a lista homogênea de `Incident[]` em `/incidents?transaction_id=`.
+- **Handoff esperado de Rogério:** OpenAPI validado, comando/API local, exemplos reais `NO_INCIDENT/PARTIAL/RESOLVED` e mapa de erros. Até recebê-lo, testes usam mocks congelados e rotas live não fazem fallback automático a fixture.
+- **Evidência de entrega:** browser local e deployed mostra submit → log/detail → Incident, cancelamento de polling, API down honesto, console/rede sem fixture, e os gates de review/browser/guardian aplicáveis.
