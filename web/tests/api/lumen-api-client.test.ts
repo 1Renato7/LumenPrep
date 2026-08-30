@@ -151,6 +151,7 @@ test("accepts string-array incident metrics allowed by CTR-INC-001", () => {
 
 test("formats decimal incident metrics with two decimal places", () => {
   assert.equal(formatMetricValue(0.928374), "0,93");
+  assert.equal(formatMetricValue("0.928374"), "0,93");
   assert.equal(formatMetricValue(492), "492");
 });
 
