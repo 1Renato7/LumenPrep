@@ -42,6 +42,8 @@ class LiveDemoTrial:
     title: str
     description: str
     response_code: str
+    country: str
+    currency: str
     start_offset_minutes: int
 
 
@@ -49,17 +51,21 @@ _TRIALS: dict[str, LiveDemoTrial] = {
     "deterministic": LiveDemoTrial(
         trial_id="deterministic",
         flow="DETERMINISTIC",
-        title="Deterministic detection",
-        description="Five approvals and twenty fixed declines are compared with this trial's own healthy baseline.",
-        response_code="insufficient_funds",
+        title="Provider degradation in Mexico",
+        description="Five approvals and twenty provider timeouts in Mexico are compared with this trial's own healthy baseline.",
+        response_code="68",
+        country="MX",
+        currency="MXN",
         start_offset_minutes=0,
     ),
     "graph_enriched": LiveDemoTrial(
         trial_id="graph_enriched",
         flow="GRAPH_ENRICHED",
-        title="Graph-enriched investigation",
-        description="Five approvals and twenty fixed declines create the Incident; precedent retrieval then enriches the investigation.",
+        title="Issuer decline in Brazil",
+        description="Five approvals and twenty issuer declines in Brazil create the Incident; precedent retrieval then enriches the investigation.",
         response_code="do_not_honor",
+        country="BR",
+        currency="BRL",
         start_offset_minutes=10,
     ),
 }
@@ -152,8 +158,8 @@ def _transaction_for(
         merchant_id = _GRAPH_MERCHANTS[index % len(_GRAPH_MERCHANTS)]
         issuer_bank = _GRAPH_ISSUERS[index % len(_GRAPH_ISSUERS)]
     else:
-        merchant_id = "merchant_br_01"
-        issuer_bank = "itau_br"
+        merchant_id = "merchant_mx_01"
+        issuer_bank = "bbva_mx"
 
     return TransactionInput(
         client_reference=f"live-demo-{trial.trial_id}-{response_code}-{index + 1}",
@@ -161,8 +167,8 @@ def _transaction_for(
         merchant_id=merchant_id,
         provider_id="stripe",
         issuer_bank=issuer_bank,
-        country="BR",
-        currency="BRL",
+        country=trial.country,
+        currency=trial.currency,
         amount_minor=12990,
         payment_method_category="CARD",
         card_brand="MASTERCARD",

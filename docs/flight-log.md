@@ -5730,3 +5730,23 @@ A tabela usada pelo formulário possuía 42 códigos Adyen, enquanto o catálogo
 - **Preservar `UNKNOWN` para código Adyen conhecido:** rejeitado, pois confundia ausência de regra com resultado incerto.
 - **Tratar qualquer código futuro como falha automaticamente:** rejeitado; valores fora da tabela continuam `UNKNOWN` para não inventar uma decisão.
 - **Validação:** a regressão percorre todas as opções expostas e exige `MATCH_FOUND` com resultado terminal conhecido; o teste separado de código `99999` preserva o comportamento seguro para valores não catalogados.
+### FL-20260830-TEAM-050 — Diferenciar causa e país entre os dois trials da demo
+
+- **Timestamp:** 2026-08-30T12:45:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** demo | data | RCA | GraphRAG
+- **Escopo:** `CTR-DEMO-002 v1`, causa atual e escopo geográfico dos trials
+- **Links:** `docs/plans/system-plan.md` v2.10.5; `tests/test_live_demo_trials.py`
+
+#### Contexto e decisão
+
+Os dois trials anteriores eram brasileiros e geravam `ISSUER_OUTAGE`, reduzindo a capacidade da banca de comparar hipóteses causais. O cenário determinístico passa a usar Stripe no México, moeda MXN e código `68`, mapeado para `PROVIDER_TIMEOUT`, portanto `PROVIDER_DEGRADATION`. O cenário de grafo permanece no Brasil, BRL e `DO_NOT_HONOR`, portanto `ISSUER_OUTAGE`.
+
+#### Trade-offs e validação
+
+- **Alternativa rejeitada:** alterar o Graph para México; isso perderia a comparabilidade com seu precedente humano confirmado brasileiro.
+- **Ganhamos:** duas causas atuais e dois países visíveis, mantendo a separação entre motor determinístico e contexto histórico.
+- **Limitação:** o precedente do Graph reforça investigação, não prova nem substitui sua causa brasileira atual.
+- **Validação:** testes focados comprovam 5 sucessos, 20 falhas, Incident único, `MX`/`PROVIDER_DEGRADATION` no trial determinístico, `BR`/`ISSUER_OUTAGE` no Graph e recuperação do precedente.

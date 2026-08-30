@@ -72,7 +72,7 @@ def test_each_trial_builds_an_idempotent_baseline_and_one_incident(isolated_tria
         [first["batch_id"]],
     ).fetchall()
     assert len(rows) == 25
-    failure_code = "insufficient_funds" if trial_id == "deterministic" else "do_not_honor"
+    failure_code = "68" if trial_id == "deterministic" else "do_not_honor"
     assert [json.loads(row[0])["provider_response_code"] for row in rows].count("approved") == 5
     assert [json.loads(row[0])["provider_response_code"] for row in rows].count(failure_code) == 20
     assert [row[1] for row in rows].count("SUCCEEDED") == 5
@@ -81,10 +81,19 @@ def test_each_trial_builds_an_idempotent_baseline_and_one_incident(isolated_tria
     assert [json.loads(row[2])["provider_response_code"] for row in rows].count(failure_code) == 20
 
     incidents = isolated_trial_store.execute(
-        "SELECT incident_id FROM incident_records WHERE correlation_id = ?",
+        "SELECT incident_id, payload_json FROM incident_records WHERE correlation_id = ?",
         [first["correlation_id"]],
     ).fetchall()
     assert len(incidents) == 1
+    incident = json.loads(incidents[0][1])
+    root_cause = incident["root_cause"]
+    scope = incident["scope"]
+    if trial_id == "deterministic":
+        assert root_cause["category"] == "PROVIDER_DEGRADATION"
+        assert scope["country"] == ["MX"]
+    else:
+        assert root_cause["category"] == "ISSUER_OUTAGE"
+        assert scope["country"] == ["BR"]
 
 
 def test_graph_trial_recovers_the_seeded_precedent_after_its_incident(isolated_trial_store):
