@@ -180,7 +180,7 @@ function DiagnosticSummary({ record }: { record: TransactionRecord }) {
   return <div className={`${styles.diagnostic} ${record.status === "FAILED" ? styles.failedDiagnostic : styles.successDiagnostic}`}>
     <strong>{classification.category}</strong>
     <span>{classification.reason}</span>
-    <span>Confidence: {Math.round(classification.confidence * 100)}%{outcome?.normalized_decline_code ? ` · ${outcome.normalized_decline_code}` : ""}</span>
+    {outcome?.normalized_decline_code ? <span>Normalized decline: {outcome.normalized_decline_code}</span> : null}
     <span>Evidence: {classification.evidence_ids.length ? classification.evidence_ids.join(", ") : "None returned"}</span>
     {classification.related_incident_ids.length ? <span>Incident: {classification.related_incident_ids.map((id) => <Link key={id} href={`/incidents/${encodeURIComponent(id)}`}>{id}</Link>)}</span> : <span>No related incident.</span>}
   </div>;
