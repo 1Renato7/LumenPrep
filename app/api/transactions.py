@@ -7,7 +7,7 @@ progress are authored by the worker; newly accepted records deliberately remain 
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from hmac import compare_digest
 import json
@@ -45,19 +45,6 @@ _CATALOG = {
     "card_brands": ("MASTERCARD", "VISA"),
     "card_types": ("CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE"),
 }
-_ISSUERS_BY_COUNTRY = {
-    "BR": ("bank_br_a", "bank_br_b", "bank_br_c", "itau_br", "nubank_br", "bb_br"),
-    "MX": ("bank_mx_a", "bbva_mx", "banorte_mx", "nu_mx"),
-    "CO": ("bancolombia_co", "davivienda_co", "banco_bogota_co"),
-}
-_CURRENCY_BY_COUNTRY = {"BR": "BRL", "MX": "MXN", "CO": "COP"}
-_METHODS_BY_COUNTRY = {
-    "BR": ("CARD", "PIX", "DIGITAL_WALLET", "BOLETO"),
-    "MX": ("CARD", "SPEI", "DIGITAL_WALLET", "CASH_IN_STORE"),
-    "CO": ("CARD", "PSE", "DIGITAL_WALLET", "CASH_IN_STORE"),
-}
-
-
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -144,8 +131,6 @@ def _validate_sample_defaults(defaults: SampleDefaults | None) -> SampleDefaults
         raise HTTPException(status_code=422, detail="INVALID_SAMPLE_DEFAULT")
     if defaults.currency and defaults.currency not in _CATALOG["currencies"]:
         raise HTTPException(status_code=422, detail="INVALID_SAMPLE_DEFAULT")
-    if defaults.country and defaults.currency and _CURRENCY_BY_COUNTRY[defaults.country] != defaults.currency:
-        raise HTTPException(status_code=422, detail="INVALID_SAMPLE_DEFAULT")
     return defaults
 
 
@@ -155,25 +140,22 @@ def _sample_transactions(request: SampleRequest) -> tuple[int, list[dict[str, An
     random = Random(seed)
     transactions: list[dict[str, Any]] = []
     for index in range(request.count):
-        country = defaults.country or random.choice(_CATALOG["countries"])
-        currency = defaults.currency or _CURRENCY_BY_COUNTRY[country]
-        method = random.choice(_METHODS_BY_COUNTRY[country])
-        is_card = method == "CARD"
         transactions.append(
             {
-                "client_reference": f"sample-{seed}-{index + 1}",
-                "occurred_at": None,
-                "merchant_id": defaults.merchant_id or random.choice(tuple(item for item in _CATALOG["merchants"] if f"_{country.lower()}_" in item)),
+                "client_reference": f"sample-{index + 1}-{random.randrange(1_000_000, 10_000_000)}",
+                "occurred_at": _iso(datetime(2026, 1, 1) + timedelta(seconds=random.randrange(31_536_000))),
+                "merchant_id": defaults.merchant_id or random.choice(_CATALOG["merchants"]),
                 "provider_id": random.choice(_CATALOG["providers"]),
-                "issuer_bank": random.choice(_ISSUERS_BY_COUNTRY[country]) if is_card else "NOT_APPLICABLE",
-                "country": country,
-                "currency": currency,
-                "amount_minor": random.choice((1990, 7990, 12990, 21990, 25990)),
-                "payment_method_category": method,
-                "card_brand": random.choice(_CATALOG["card_brands"]) if is_card else None,
-                "card_type": random.choice(("CREDIT", "DEBIT", "PREPAID")) if is_card else "NOT_APPLICABLE",
-                "provider_connection_id": f"conn_{country.lower()}_primary",
-                "channel": random.choice(("WEB", "MOBILE")),
+                "issuer_bank": random.choice(_CATALOG["issuer_banks"]),
+                "country": defaults.country or random.choice(_CATALOG["countries"]),
+                "currency": defaults.currency or random.choice(_CATALOG["currencies"]),
+                "amount_minor": random.randint(1, 500_000),
+                "payment_method_category": random.choice(_CATALOG["payment_method_categories"]),
+                "card_brand": random.choice(_CATALOG["card_brands"]),
+                "card_type": random.choice(_CATALOG["card_types"]),
+                "provider_connection_id": f"conn-{random.randrange(1_000_000, 10_000_000)}",
+                "provider_response_code": random.choice(("00", "05", "14", "51", "54", "57", "61", "65", "68", "91")),
+                "channel": random.choice(("WEB", "MOBILE", "POS", "API")),
             }
         )
     return seed, transactions

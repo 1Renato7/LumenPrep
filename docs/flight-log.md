@@ -5669,3 +5669,20 @@ O lote anterior tinha 25 recusas para maximizar a certeza visual do Incident, ma
 - **Abrimos mão de:** queda de aprovação de 100% para 20%; a diferença em relação ao baseline ainda excede o limiar do detector.
 - **Validação requerida:** cada trial deve manter exatamente 5 `SUCCEEDED`, 20 `FAILED`, os dois códigos explícitos e um único Incident; o fluxo de grafo continua recuperando somente contexto histórico.
 - **Fallback:** reverter a distribuição fixa para o cenário anterior sem alterar endpoints, schema ou flag.
+
+### FL-20260830-TEAM-047 — Preencher integralmente lotes sintéticos com escolhas aleatórias
+
+- **Timestamp:** 2026-08-30T09:28:11-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** UX | data
+- **Escopo:** `CTR-TXN-001`, geração de amostras e formulário de novas transações
+
+#### Contexto e decisão
+
+Ao solicitar um lote no formulário, o usuário espera que cada campo visível seja preenchido, sem repetir um template por país, sem valores em branco e sem relações impostas pelo gerador. A geração passa a sortear independentemente cada campo de catálogo, um valor inteiro de `amount_minor`, data/hora, referência, conexão e código de resposta. Valores explicitamente informados em `defaults` continuam sendo preservados.
+
+#### Trade-off e validação
+
+Aceitamos que uma combinação sintética possa não representar uma rota de pagamento real (por exemplo, moeda e país independentes), pois o requisito prioriza aleatoriedade de cada campo e a API aceita essas opções do catálogo. O endpoint continua determinístico quando recebe `seed`, o que permite teste reproduzível; o teste de 50 itens verifica preenchimento, pertencimento ao catálogo e variedade em todos os campos sorteados.

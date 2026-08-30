@@ -48,6 +48,37 @@ def test_catalog_and_seeded_samples_are_public_facts_only():
     assert "status" not in first.json()["transactions"][0]
 
 
+def test_samples_fill_every_form_field_with_independent_catalog_choices():
+    catalog = client.get("/v1/transaction-catalog").json()
+    response = client.post("/v1/transaction-samples", json={"schema_version": "1.0", "count": 50, "seed": 20260830})
+
+    assert response.status_code == 200
+    transactions = response.json()["transactions"]
+    assert len(transactions) == 50
+    catalog_fields = {
+        "merchant_id": "merchants",
+        "provider_id": "providers",
+        "issuer_bank": "issuer_banks",
+        "country": "countries",
+        "currency": "currencies",
+        "payment_method_category": "payment_method_categories",
+        "card_brand": "card_brands",
+        "card_type": "card_types",
+    }
+    for transaction in transactions:
+        assert transaction["client_reference"]
+        assert transaction["occurred_at"]
+        assert transaction["amount_minor"] >= 1
+        assert transaction["provider_connection_id"]
+        assert transaction["provider_response_code"]
+        for transaction_field, catalog_field in catalog_fields.items():
+            assert transaction[transaction_field] in catalog[catalog_field]
+
+    for transaction_field in catalog_fields:
+        assert len({transaction[transaction_field] for transaction in transactions}) > 1
+    assert len({transaction["amount_minor"] for transaction in transactions}) > 1
+
+
 def test_batch_persists_before_202_and_can_be_read_back():
     response = _submit(_batch())
     assert response.status_code == 202

@@ -140,7 +140,7 @@ export function TransactionForm({ api: suppliedApi }: TransactionFormProps) {
         </header>
 
         <section className={styles.panel} aria-labelledby="sample-title">
-          <div className={styles.panelHeader}><div><h2 className={styles.sectionTitle} id="sample-title">Generate samples</h2><p className={styles.sectionHint}>Create valid synthetic inputs, then adjust any value before submit.</p></div></div>
+          <div className={styles.panelHeader}><div><h2 className={styles.sectionTitle} id="sample-title">Generate samples</h2><p className={styles.sectionHint}>Randomly fill every transaction field with valid synthetic values, then adjust any value before submit.</p></div></div>
           <div className={styles.generatorGrid}>
             <TextInput id="sample-count" label="Quantity (1–100)" type="number" min="1" max="100" value={sampleCount} onChange={setSampleCount} />
             <button className={`${styles.button} ${styles.secondaryButton}`} type="button" onClick={() => void generateSamples()} disabled={isGenerating}>{isGenerating ? "Generating samples…" : "Generate samples"}</button>
