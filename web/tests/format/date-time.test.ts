@@ -11,3 +11,7 @@ test("formats transaction timestamps in the Brasília time zone", () => {
 test("uses IANA historical daylight-saving rules instead of a fixed UTC offset", () => {
   assert.match(formatBrasiliaDateTime("2018-01-15T10:00:00Z"), /08:00:00/);
 });
+
+test("renders an invalid timestamp without throwing", () => {
+  assert.equal(formatBrasiliaDateTime("not-a-date"), "Data indisponível");
+});

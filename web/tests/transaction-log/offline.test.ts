@@ -11,6 +11,7 @@ import {
 import { startProcessingPolling } from "../../components/transaction-log/polling";
 import { buildTransactionUrl } from "../../components/transaction-log/url";
 import { getOfflineIncident } from "../../components/incidents/fixture-source";
+import { sortByMostRecent } from "../../lib/format/sort-by-date";
 
 test("all transaction filters use their exact public status", () => {
   for (const status of ["SUCCEEDED", "FAILED", "PROCESSING", "UNKNOWN"] as const) {
@@ -125,6 +126,13 @@ test("memory unavailable is not equivalent to no precedent", async () => {
   const noPrecedent = await getOfflineIncident("inc_new_provider_country_001", "no-precedent");
   assert.equal(unavailable.memory.memory_status, "MEMORY_UNAVAILABLE");
   assert.equal(noPrecedent.memory.memory_status, "NO_PRECEDENT");
+});
+
+test("incidents can be displayed newest-first by detection date", async () => {
+  const older = await getOfflineIncident("inc_current_mastercard_001");
+  const newer = await getOfflineIncident("inc_new_provider_country_001", "no-precedent");
+  const sorted = sortByMostRecent([older.incident, newer.incident], (incident) => incident.detected_at);
+  assert.ok(Date.parse(sorted[0].detected_at) >= Date.parse(sorted[1].detected_at));
 });
 
 test("loading, empty, error, and stale fixture modes remain distinguishable", async () => {

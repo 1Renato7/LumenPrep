@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.9.1
+- **Versão:** 2.9.2
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -31,6 +31,7 @@
 - **Changelog 2.8.0:** adiciona ao `CTR-INC-001 v1` o campo aditivo `recurrence_first_detected_at`, calculado por tipo causal (categoria, métrica e escopo completo) sem misturar janelas ou correlações. O `CTR-TXL-001 v1` expõe a mesma data junto de cada Incident relacionado, para que o log mostre a origem da recorrência.
 - **Changelog 2.9.0:** adiciona `CTR-ADM-001 v1`, uma operação administrativa configurável para limpar atomica e explicitamente os dados sintéticos persistidos. O frontend nunca incorpora a credencial; o operador a informa apenas no momento da confirmação. Catálogos versionados de referência permanecem intactos.
 - **Changelog 2.9.1:** atualiza os defaults internos do agente para `gpt-5.6-sol` e `reasoning.effort=medium`, sem alterar `CTR-AGT-RUN-001 v1`, Responses API, fallback determinístico, política de não retry ou autoridade `HUMAN_ONLY`.
+- **Changelog 2.9.2:** Logs e Incidents ordenam defensivamente data/hora de forma decrescente na interface (`updated_at` e `detected_at`, respectivamente), com o horário de Brasília visível nos cards de Incident. Nenhum contrato de API muda.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -105,6 +106,7 @@ O MVP vence quando uma pessoa:
 ### `/incidents` — diagnóstico agregado
 
 - Preserva o dashboard de incidentes, métricas, causa atual, memória e recomendações humanas.
+- Lista cards por `detected_at` mais recente primeiro e exibe o horário de detecção em Brasília.
 - Inclui uma fila de atenção técnica para `UNKNOWN`, sem fabricar `incident_id`, causa ou recommendation antes da correlação do backend.
 - `SUPPORTED|INCONCLUSIVE` e `MATCH_FOUND|NO_PRECEDENT|MEMORY_UNAVAILABLE` continuam eixos independentes.
 

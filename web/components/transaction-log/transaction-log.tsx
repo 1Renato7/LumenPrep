@@ -8,6 +8,7 @@ import { createPollingController, LumenApiError, pollTransactions, type LumenApi
 import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
 import type { TransactionList, TransactionRecord, TransactionStatus } from "@/lib/api/types";
 import { formatBrasiliaDateTime } from "@/lib/format/date-time";
+import { sortByMostRecent } from "@/lib/format/sort-by-date";
 
 import { normalizeFilter, transactionFilters } from "./filters";
 import { buildTransactionUrl, firstSearchValue, type SearchValues } from "./url";
@@ -47,7 +48,7 @@ export function TransactionLog({ searchValues, api: suppliedApi }: { searchValue
     const polling = createPollingController();
     const apply = (next: TransactionList) => {
       if (!active) return;
-      const visible = batchId && status !== "ALL" ? filterList(next, status) : next;
+      const visible = sortTransactionList(batchId && status !== "ALL" ? filterList(next, status) : next);
       cache.current.set(queryKey, visible);
       setList(visible);
       setLoading(false);
@@ -218,6 +219,10 @@ export function TransactionLog({ searchValues, api: suppliedApi }: { searchValue
 
 function filterList(list: TransactionList, status: TransactionStatus): TransactionList {
   return { ...list, items: list.items.filter((item) => item.status === status), next_cursor: null };
+}
+
+function sortTransactionList(list: TransactionList): TransactionList {
+  return { ...list, items: sortByMostRecent(list.items, (record) => record.updated_at) };
 }
 
 function DiagnosticSummary({ record }: { record: TransactionRecord }) {

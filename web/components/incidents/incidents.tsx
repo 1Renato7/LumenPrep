@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { LumenApiError, type LumenApiClient } from "@/lib/api/client-interface";
 import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
 import type { Incident, TransactionRecord } from "@/lib/api/types";
+import { formatBrasiliaDateTime } from "@/lib/format/date-time";
+import { sortByMostRecent } from "@/lib/format/sort-by-date";
 import styles from "./incidents.module.css";
 
 export function IncidentList({ api: suppliedApi }: { api?: LumenApiClient } = {}) {
@@ -21,7 +23,7 @@ export function IncidentList({ api: suppliedApi }: { api?: LumenApiClient } = {}
     if (!client.api) return;
     const controller = new AbortController();
     void client.api.listIncidents({ signal: controller.signal })
-      .then(setIncidents)
+      .then((result) => setIncidents(sortByMostRecent(result, (incident) => incident.detected_at)))
       .catch((reason: unknown) => {
         if (reason instanceof LumenApiError && reason.code === "CANCELLED") return;
         setIncidentError(apiErrorMessage(reason, "Detected incidents could not be loaded."));
@@ -33,7 +35,7 @@ export function IncidentList({ api: suppliedApi }: { api?: LumenApiClient } = {}
     if (!client.api) return;
     const controller = new AbortController();
     void client.api.listTransactions({ status: "UNKNOWN" }, { signal: controller.signal })
-      .then((result) => setTechnicalAttention(result.items))
+      .then((result) => setTechnicalAttention(sortByMostRecent(result.items, (record) => record.updated_at)))
       .catch((reason: unknown) => {
         if (reason instanceof LumenApiError && reason.code === "CANCELLED") return;
         setAttentionError(apiErrorMessage(reason, "Technical-attention transactions could not be loaded."));
@@ -53,7 +55,7 @@ export function IncidentList({ api: suppliedApi }: { api?: LumenApiClient } = {}
       }} /> : null}
       {!incidents && !incidentError ? <section className={styles.card} role="status">Loading incidents…</section> : null}
       {incidents?.length === 0 && !incidentError ? <section className={styles.card} role="status">No detected incidents were returned by the API.</section> : null}
-      {incidents?.length ? <div className={styles.grid} aria-label="Incident list">{incidents.map((incident) => <article className={`${styles.card} ${styles.incidentCard}`} key={incident.incident_id}><div className={styles.cardTop}><span className={styles.state}>{incident.state}</span><span className={styles.confidence}>{Math.round(incident.root_cause.confidence * 100)}% confidence</span></div><h3>{incident.title}</h3><p>Current cause: <strong>{incident.root_cause.category ?? incident.root_cause.status}</strong></p>{incident.recurrence_first_detected_at ? <p className={styles.muted}><strong>First occurrence:</strong> <time dateTime={incident.recurrence_first_detected_at}>{formatDate(incident.recurrence_first_detected_at)}</time></p> : null}{conversionSummary(incident) ? <p className={styles.warning}><strong>Payment conversion:</strong> {conversionSummary(incident)}</p> : null}<div className={styles.incidentMeta}><span>{formatMoney(incident.impact.amount_minor, incident.impact.currency)} at risk</span><span>{incident.evidence.length} evidence items</span><span>{incident.recommendations.length} human action</span></div><Link className={styles.link} href={`/incidents/${encodeURIComponent(incident.incident_id)}`}>Open full diagnosis <span aria-hidden="true">→</span></Link></article>)}</div> : null}
+      {incidents?.length ? <div className={styles.grid} aria-label="Incident list, most recent first">{incidents.map((incident) => <article className={`${styles.card} ${styles.incidentCard}`} key={incident.incident_id}><div className={styles.cardTop}><span className={styles.state}>{incident.state}</span><span className={styles.confidence}>{Math.round(incident.root_cause.confidence * 100)}% confidence</span></div><h3>{incident.title}</h3><p>Detected: <time dateTime={incident.detected_at}>{formatBrasiliaDateTime(incident.detected_at)}</time></p><p>Current cause: <strong>{incident.root_cause.category ?? incident.root_cause.status}</strong></p>{incident.recurrence_first_detected_at ? <p className={styles.muted}><strong>First occurrence:</strong> <time dateTime={incident.recurrence_first_detected_at}>{formatDate(incident.recurrence_first_detected_at)}</time></p> : null}{conversionSummary(incident) ? <p className={styles.warning}><strong>Payment conversion:</strong> {conversionSummary(incident)}</p> : null}<div className={styles.incidentMeta}><span>{formatMoney(incident.impact.amount_minor, incident.impact.currency)} at risk</span><span>{incident.evidence.length} evidence items</span><span>{incident.recommendations.length} human action</span></div><Link className={styles.link} href={`/incidents/${encodeURIComponent(incident.incident_id)}`}>Open full diagnosis <span aria-hidden="true">→</span></Link></article>)}</div> : null}
     </section>
 
     <section className={styles.sectionBlock} id="technical-attention" aria-labelledby="technical-attention-title">
@@ -64,7 +66,7 @@ export function IncidentList({ api: suppliedApi }: { api?: LumenApiClient } = {}
       }} /> : null}
       {!technicalAttention && !attentionError ? <section className={styles.card} role="status">Loading technical-attention transactions…</section> : null}
       {technicalAttention?.length === 0 && !attentionError ? <section className={styles.card} role="status">No UNKNOWN transactions currently require technical attention.</section> : null}
-      {technicalAttention?.length ? <div className={styles.attentionList}>{technicalAttention.map((record) => <article className={`${styles.card} ${styles.attentionCard}`} key={record.transaction_id}><span className={styles.attentionState}>UNKNOWN</span><div><h3>{record.transaction_id}</h3><p><strong>{record.processing.stage}</strong> · <code>{record.processing.failure_code ?? "No failure code"}</code></p><p className={styles.muted}>No business outcome or causal diagnosis was returned. Open the transaction to inspect lifecycle data.</p></div><Link className={styles.link} href={`/transactions/${encodeURIComponent(record.transaction_id)}`}>Inspect transaction <span aria-hidden="true">→</span></Link></article>)}</div> : null}
+      {technicalAttention?.length ? <div className={styles.attentionList}>{technicalAttention.map((record) => <article className={`${styles.card} ${styles.attentionCard}`} key={record.transaction_id}><span className={styles.attentionState}>UNKNOWN</span><div><h3>{record.transaction_id}</h3><p><strong>{record.processing.stage}</strong> · <code>{record.processing.failure_code ?? "No failure code"}</code></p><p>Updated: <time dateTime={record.updated_at}>{formatBrasiliaDateTime(record.updated_at)}</time></p><p className={styles.muted}>No business outcome or causal diagnosis was returned. Open the transaction to inspect lifecycle data.</p></div><Link className={styles.link} href={`/transactions/${encodeURIComponent(record.transaction_id)}`}>Inspect transaction <span aria-hidden="true">→</span></Link></article>)}</div> : null}
     </section>
   </main>;
 }

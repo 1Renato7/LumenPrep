@@ -5510,3 +5510,35 @@ Usar camadas para experiência web, FastAPI, núcleo determinístico, dados e co
 - **Ganhamos:** menos cruzamentos e leitura de relance.
 - **Abrimos mão de:** inventário de cada arquivo no mesmo desenho.
 - **Gatilho:** mudança de contrato, autoridade do agente ou repositório exige atualizar o diagrama.
+
+### FL-20260830-TEAM-043 — Ordenar Logs e Incidents por data/hora mais recente
+
+- **Timestamp:** 2026-08-30T08:19:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** UX | quality | Git/integration
+- **Escopo:** `CMP-WEB-001`, `/transactions`, `/incidents`
+- **Links:** `docs/plans/system-plan.md` v2.9.2; `CTR-TXL-001 v1`; `CTR-INC-001 v1`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e decisão
+
+Logs dependiam da ordem recebida e Incidents não mostravam ordem temporal. Ordenar defensivamente por `updated_at` e `detected_at`, respectivamente, e exibir o horário de Brasília. Valores inválidos ficam no fim e são exibidos como `Data indisponível`.
+
+#### Alternativas e trade-offs
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| Confiar somente na API | zero processamento no navegador | resposta fora de ordem confunde triagem; Incidents continuam sem ordem explícita | rejeitada |
+| Novo parâmetro de API | controle global de paginação | amplia contrato sem necessidade atual | adiada |
+| Ordenação defensiva na UI | comportamento imediato e compatível | Logs paginados dependem do cursor entre páginas | escolhida |
+
+#### Validação e integração
+
+- **Contratos:** `CTR-TXL-001 v1` e `CTR-INC-001 v1` não mudam; a resposta não é mutada.
+- **Integração:** o rebase preserva recorrência, conversão, administração e todas as entradas remotas; este ID evita colisão com `TEAM-036`–`042`.
+- **Testes:** `npm test` — **41 passed, 1 skipped**; `npm run lint`, `npx tsc --noEmit`, `npm run build` e `git diff --check` passaram.
+- **Code Review Gate:** **PASS** após corrigir o fallback de timestamp inválido.
+- **Browser Acceptance:** **PASS** em API sintética local: Logs exibiu três registros em ordem decrescente de `updated_at`; Incidents exibiu `15:06Z`, `14:06Z`, `14:06Z` por `detected_at`, com horário de Brasília e console sem erros.
+- **Risco residual:** a ordenação global entre páginas ainda depende do cursor do backend; revisar se houver controle ascendente pelo usuário.
