@@ -39,7 +39,7 @@ export function NotificationCenter({ api: suppliedApi }: { api?: LumenApiClient 
       <BellIcon /><span className={styles.screenReaderOnly}>Notifications</span>{unread ? <span className={styles.badge} aria-label={`${unread} unread incidents`}>{unread}</span> : null}
     </button>
     {open ? <div className={styles.popover} id="incident-notifications" role="region" aria-label="New incidents">
-      {feed?.notifications.length ? feed.notifications.map((item) => <article key={item.notification_id} className={item.read_at ? styles.read : undefined}><Link href={`/incidents/${encodeURIComponent(item.incident_id)}`} onClick={() => void markRead(item.notification_id)}><strong>{item.incident.title}</strong><small>{item.read_at ? "Read" : "New"} · {item.incident.root_cause.status}</small></Link><button type="button" onClick={() => void markRead(item.notification_id)} disabled={Boolean(item.read_at)}>Mark read</button></article>) : <p>No notifications yet.</p>}
+      {feed?.notifications.length ? feed.notifications.map((item) => <article key={item.notification_id} className={item.read_at ? styles.read : undefined}><Link href={`/incidents/${encodeURIComponent(item.incident_id)}`} onClick={() => void markRead(item.notification_id)}><strong>{item.incident.title}</strong><small>{item.read_at ? "Read" : "New"} · {item.incident.root_cause.status}</small></Link></article>) : <p>No notifications yet.</p>}
     </div> : null}
   </section>;
 }
