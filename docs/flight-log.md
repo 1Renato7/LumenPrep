@@ -5709,3 +5709,24 @@ O gerador aleatório anterior preenchia código de resposta e conexão sem uma r
 - **Fonte Markdown versionada + catálogo de API:** escolhida; é auditável no GitHub e disponível ao processo real, ao custo de o runtime validar e ler o arquivo no primeiro uso.
 - **Layout:** o campo de código ocupa duas colunas e o de conexão seis, para acomodar os nomes longos sem reduzir os demais campos.
 - **Validação:** testes cobrem as 42 opções, lote de 50 itens com pares válidos, schema/fixture e a rejeição no formulário de combinação ou provider incompatíveis.
+
+### FL-20260830-TEAM-049 — Mapear integralmente os códigos Adyen expostos no formulário
+
+- **Timestamp:** 2026-08-30T10:18:00-03:00
+- **Status:** VALIDATED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** data | quality | runtime
+- **Escopo:** catálogo de códigos de recusa, worker e logs de transação
+- **Links:** `data/adyen-refusal-reasons.md`; `data/refusal-code-catalog.json`; `tests/test_refusal_code_flow.py`
+- **Supersedes / superseded by:** corrige a lacuna operacional revelada após `FL-20260830-TEAM-048`.
+
+#### Contexto e decisão
+
+A tabela usada pelo formulário possuía 42 códigos Adyen, enquanto o catálogo de resolução do worker cobria somente 15 deles. Cada código ausente se tornava `UNKNOWN` por `NOT_FOUND`, mesmo sendo uma recusa conhecida da tabela entregue pelo usuário. A decisão é mapear todos os 42: código `0` permanece `SUCCEEDED`; os 41 demais são recusas `FAILED` com motivo literal da tabela e código normalizado auditável.
+
+#### Trade-offs e validação
+
+- **Preservar `UNKNOWN` para código Adyen conhecido:** rejeitado, pois confundia ausência de regra com resultado incerto.
+- **Tratar qualquer código futuro como falha automaticamente:** rejeitado; valores fora da tabela continuam `UNKNOWN` para não inventar uma decisão.
+- **Validação:** a regressão percorre todas as opções expostas e exige `MATCH_FOUND` com resultado terminal conhecido; o teste separado de código `99999` preserva o comportamento seguro para valores não catalogados.

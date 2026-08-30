@@ -2,6 +2,7 @@ from app.agent.evidence import build_evidence_pack
 from app.api.transactions import TransactionInput
 from app.ingestion.storage import get_connection
 from app.incidents import Incident
+from app.refusal_codes.adyen_refusal_reasons import refusal_reason_options
 from app.worker.transaction_worker import _generate_outcome
 
 
@@ -52,6 +53,17 @@ def test_unknown_response_code_stays_unknown_without_invented_reason():
     assert adapted.result == "UNKNOWN"
     assert adapted.classification["refusal_resolution"]["lookup_status"] == "NOT_FOUND"
     assert adapted.classification["refusal_resolution"]["reason"] is None
+
+
+def test_every_adyen_option_exposed_by_the_form_has_a_terminal_mapping():
+    get_connection()
+
+    for option in refusal_reason_options():
+        adapted = _generate_outcome(f"txn_refusal_adyen_{option.code}", _input(option.code), "corr_refusal")
+
+        assert adapted.result in {"SUCCEEDED", "FAILED"}
+        assert adapted.classification["refusal_resolution"]["lookup_status"] == "MATCH_FOUND"
+        assert adapted.classification["reason"] == option.reason
 
 
 def test_stripe_lowercase_code_resolves_and_preserves_the_raw_provider_value():
