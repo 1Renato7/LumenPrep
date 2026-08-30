@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { createPollingController, LumenApiError, pollTransaction, type LumenApiClient } from "@/lib/api/client-interface";
@@ -17,7 +16,6 @@ export function TransactionDetail({ transactionId, api: suppliedApi }: { transac
 }
 
 function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: string; suppliedApi?: LumenApiClient }) {
-  const router = useRouter();
   const client = useMemo(() => resolveLumenClient(suppliedApi), [suppliedApi]);
   const api = client.api;
   const [record, setRecord] = useState<TransactionRecord | null>(null);
@@ -40,11 +38,6 @@ function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: 
     setLoading(true);
     setReloadKey((value) => value + 1);
   }, [api, client.error]);
-  const refresh = () => {
-    reload();
-    router.refresh();
-  };
-
   useEffect(() => {
     if (!api) return;
     let active = true;
@@ -97,7 +90,6 @@ function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: 
     <main className={styles.shell}>
       <div className={styles.top}>
         <div><Link className={styles.back} href="/transactions" aria-label="Back to transaction log"><BackIcon /></Link><div className={styles.titleRow}><h1>Transaction {record.transaction_id}</h1><span className={`${styles.status} ${record.status === "FAILED" ? styles.failedStatus : record.status === "UNKNOWN" ? styles.unknownStatus : styles.standardStatus}`}>{record.status}</span></div></div>
-        <button className={styles.button} type="button" onClick={refresh}>Refresh data</button>
       </div>
       {error && hasRecord ? <section className={`${styles.card} ${styles.notice}`} role="status">Showing stale transaction data. Refresh failed: {error}</section> : null}
       {needsAttention ? <section className={`${styles.card} ${styles.diagnosticHero} ${isPipelineFailure ? styles.technicalHero : styles.failedHero}`} aria-labelledby="diagnostic-overview-title"><p className={styles.label}>{isPipelineFailure ? "Technical attention" : "Failure diagnosis"}</p><h2 id="diagnostic-overview-title">{isPipelineFailure ? "The processing pipeline did not produce a business outcome." : classification?.reason ?? "The backend returned a failed outcome without a diagnostic reason."}</h2><div className={styles.grid}><Value label="Category" value={classification?.category ?? "Not available"} /><Value label="Failure code" value={record.processing.failure_code ?? "None"} /><Value label="Normalized decline" value={record.outcome?.normalized_decline_code ?? "None"} /></div>{isPipelineFailure ? <div className={styles.actionPanel}><div><p className={styles.label}>Recommended next step</p><p className={styles.actionText}>Review the technical failure before retrying or changing payment routing.</p></div><Link className={styles.actionButton} href="/incidents#technical-attention">View technical attention <span aria-hidden="true">→</span></Link></div> : groundedIncident ? <div className={styles.actionPanel}><div><div className={styles.actionHeading}><p className={styles.label}>Recommended human action</p><span className={styles.actionMode}>{groundedIncident.explanation.execution.replaceAll("_", " ")}</span></div><p className={styles.actionText}>{groundedIncident.explanation.recommended_action}</p></div><Link className={styles.actionButton} href={`/incidents/${encodeURIComponent(groundedIncident.incident.incident_id)}`}>View incident analysis <span aria-hidden="true">→</span></Link></div> : relatedIncidentIds.length ? <div className={styles.actionPanel} role="status"><div><p className={styles.label}>Incident authorization</p><p className={styles.actionText}>{incidentActionLoading ? "Verifying the grounded incident…" : groundingError ?? (rejectedIncidentIds.length ? `The API rejected these Incident IDs for this transaction: ${rejectedIncidentIds.join(", ")}.` : "No Incident was authorized for this transaction.")}</p></div></div> : <div className={styles.actionPanel} role="status"><div><p className={styles.label}>Recommended human action</p><p className={styles.actionText}>No incident-level recommendation was returned for this isolated business failure.</p></div></div>}</section> : null}
