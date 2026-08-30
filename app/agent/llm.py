@@ -97,6 +97,9 @@ def _operations_summary(pack: EvidencePack, category: str) -> str:
 
 
 def _executive_summary(pack: EvidencePack) -> str:
+    # Every currency in the public catalog (BRL, MXN, COP) has two minor units,
+    # so the divisor is safe today. A zero-decimal currency would need a
+    # versioned exponent table before it can be printed here.
     return (
         f"About {pack.impact.amount_minor / 100:,.2f} {pack.impact.currency} of GMV is at risk on "
         f"{_scope_label(pack)}; a human review is required."

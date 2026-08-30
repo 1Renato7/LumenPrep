@@ -159,16 +159,30 @@ def _default_memory_service(pack: EvidencePack) -> IncidentMemoryService:
     return IncidentMemoryService(primary, fallback=fallback)
 
 
-def _neo4j_repository() -> IncidentMemoryRepository | None:
-    if not settings.neo4j_uri:
-        return None
-    try:
-        from neo4j import GraphDatabase
+_neo4j_driver: object | None = None
+_neo4j_driver_failed = False
 
-        driver = GraphDatabase.driver(
-            settings.neo4j_uri,
-            auth=(settings.neo4j_user, settings.neo4j_password),
-        )
-    except Exception:
+
+def _neo4j_repository() -> IncidentMemoryRepository | None:
+    """Build the driver once per process, mirroring the incidents API.
+
+    The agent runs on every persisted Incident, so constructing a driver per
+    call would open a connection pool per Incident and never close any of them.
+    A construction failure disables the driver for the process; the local
+    fallback repository keeps retrieval working.
+    """
+    global _neo4j_driver, _neo4j_driver_failed
+    if not settings.neo4j_uri or _neo4j_driver_failed:
         return None
-    return Neo4jIncidentRepository(driver, database=settings.neo4j_database)
+    if _neo4j_driver is None:
+        try:
+            from neo4j import GraphDatabase
+
+            _neo4j_driver = GraphDatabase.driver(
+                settings.neo4j_uri,
+                auth=(settings.neo4j_user, settings.neo4j_password),
+            )
+        except Exception:
+            _neo4j_driver_failed = True
+            return None
+    return Neo4jIncidentRepository(_neo4j_driver, database=settings.neo4j_database)

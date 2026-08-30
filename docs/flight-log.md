@@ -4419,7 +4419,12 @@ Fechamento de `OPEN-AGT-001`–`003`, primeiro holdout com ground truth, decisã
 
 #### Adendos
 
-- Pendente: resultado da suíte após implementação.
+- **2026-08-30T11:20:00-03:00 — Claude (revisor independente), evidência de execução.** `python -m pytest -q` -> **214 passed**, 0 failed. `python scripts/validate_contracts.py` -> **OK**, incluindo os três pares schema/fixture novos (`agent-evidence-pack`, `agent-retrieval-trace`, `agent-diagnostic-suggestion`). No `web/`: `npx tsc --noEmit` limpo, `npm run lint` limpo, `npm run build` concluído, `npm test` **38 passed / 1 skipped** (o skip é a suíte live que exige backend em execução).
+- **Cobertura dos guardrails (`tests/test_agent_suggestion.py`, `test_agent_api.py`, `test_agent_pipeline_e2e.py`, 29 casos):** sem precedente -> `SUGGESTED`; `NO_PRECEDENT` não vira `INCONCLUSIVE`; uma única fonte de evidência -> `INSUFFICIENT_EVIDENCE` sem chamar o cliente; memória indisponível -> sugestão preservada com limitação; cliente que levanta exceção, JSON malformado, `evidence_id` inventado, `execution: AUTOMATIC`, quatro ações financeiras (retry/reroute/refund/capture), escrita de `root_cause` e promoção a `SUPPORTED` -> todos `UNAVAILABLE`; `SUSPECTED_FRAUD` produz hipótese com ressalva explícita e rejeita linguagem confirmatória; reprocessamento idempotente (uma linha, uma chamada de cliente).
+- **Resultado observado do trial by fire descrito acima: PASS.** O E2E parte de eventos canônicos reais, o pipeline deriva o Incident e a sugestão cita apenas evidence IDs que o pipeline persistiu.
+- **Achado de revisão corrigido no próprio ciclo:** `_neo4j_repository` construía um driver Neo4j por Incident e nunca o fechava; passou a memoizar por processo, como já fazia `app/api/incidents.py`.
+- **Colisão de escrita observada:** os commits paralelos `1f1e90e` e `8a0ddd1` incorporaram `app/agent/**` e adicionaram a superfície de UI e o cliente web da sugestão. Nenhum commit foi feito por este revisor.
+- **Limitação honesta:** o caminho `OpenAISuggestionClient` **não foi executado** (`NOT RUN`); `openai` não está no `uv.lock` da imagem. `$browser-acceptance-gate` contra a stack publicada também é `NOT RUN` aqui: a prova de UI se limita a typecheck, lint, build e suíte `web/`.
 
 ### Adendo de validação — FL-20260830-ROGERIO-029
 
