@@ -22,7 +22,7 @@ from app.simulation.scenario_contract import ScenarioDefinition
 from app.streaming.server import TransactionPublisher
 
 
-WINDOW_SECONDS = 300
+WINDOW_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -97,7 +97,7 @@ class LiveStreamController:
         self._lock = Lock()
 
     def emit_baseline_batch(self, payment_count: int) -> int:
-        """Compatibilidade para um único intervalo normal de cinco minutos."""
+        """Compatibilidade para um único intervalo normal de um minuto."""
         return self.seed_baseline_history(window_count=1, payments_per_window=payment_count).events_published
 
     def seed_baseline_history(self, *, window_count: int, payments_per_window: int) -> BaselineResult:
@@ -105,7 +105,7 @@ class LiveStreamController:
 
         O detector só pode comparar um cenário contra dados anteriores. Por isso
         todos os eventos de uma janela compartilham uma correlação de baseline e
-        recebem timestamps distribuídos dentro do mesmo bucket de cinco minutos.
+        recebem timestamps distribuídos dentro do mesmo bucket de um minuto.
         """
         if window_count <= 0:
             raise ValueError("window_count must be positive")

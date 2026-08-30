@@ -4758,3 +4758,20 @@ Menos de três observações úteis na demo, taxa excessiva de abstention ou qua
 - **Limitação honesta:** o processo FastAPI segura o arquivo DuckDB exclusivo; uma segunda execução não conseguiu inserir um Incident sintético para demonstrar visualmente badge/card/marcar-como-lido no mesmo servidor. A persistência/idempotência de leitura é coberta no repository test, mas browser acceptance desses estados é `NOT RUN` até um seed endpoint de teste ou banco isolado.
 - **Code Review Gate:** `PASS WITH NOTES`. A revisão do diff confirmou que `payment_conversion` usa `payment_id`, a observação não inclui endpoint aberto, o baseline só lê janelas anteriores e o agente continua separado do Incident/pagamentos. Não foi encontrado achado bloqueante.
 - **Integration Contract Guardian (INTEGRATION):** `READY WITH WARNINGS`. `CTR-DET-001 v1` preserva compatibilidade aditiva; `CTR-DET-002 v2` e `CTR-NOT-001 v1` possuem schema/fixture, persistência idempotente, API e consumidor web. Warning: acceptance visual de badge/card/read em dado não vazio permanece `NOT RUN` pela limitação de seed descrita acima.
+
+### FL-20260830-TEAM-037 — Reduzir o bucket da conversão para um minuto
+
+- **Timestamp:** 2026-08-30T06:00:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** data | operations | contract
+- **Escopo:** `DEC-033`, `CTR-DET-002 v2`, agregação e harness sintético
+
+O usuário pediu análise em buckets de um minuto. Mantemos a observação de 60 minutos, que passa de 12 para 60 buckets fechados; mínimo de 10 pagamentos, baseline exclusivamente anterior, limiar de 15 p.p. e ID idempotente permanecem iguais. A alternativa de manter cinco minutos reduz custo de agregação, mas posterga a primeira reavaliação; foi rejeitada pelo requisito explícito. Custo aceito: mais computação e mais revisões potenciais por evento atrasado, mitigadas pelo recompute determinístico e upsert por fingerprint. Testes de agregação/detecção e harness devem provar os novos limites antes do push.
+
+#### Adendo de validação
+
+- `uv run --locked --with pytest pytest -q tests/test_aggregation.py tests/test_detection.py tests/test_payment_conversion_detection.py tests/test_simulation_live_stream.py tests/test_incident_pipeline.py` — **18 passed**.
+- **Code Review Gate:** PASS. O diff muda somente o bucket compartilhado do agregador/harness e expectativas temporais do teste; a janela continua com 60 minutos, o detector mantém o filtro de endpoint fechado e não há alteração em autoridade da LLM, pagamento, API ou idempotência.
+- **Integration Contract Guardian (INTEGRATION):** READY. `CTR-DET-002 v2` mantém unidades/limites; producer e harness usam 60 segundos, enquanto consumidores recebem a mesma janela de 60 minutos e os mesmos campos.

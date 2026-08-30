@@ -1,4 +1,4 @@
-"""TASK-AGG-001. SQL/Python sobre DuckDB, janelas de 5min, dois denominadores (attempt/payment)."""
+"""TASK-AGG-001. SQL/Python sobre DuckDB, buckets de 1min e dois denominadores."""
 
 import json
 from collections import defaultdict
@@ -7,7 +7,7 @@ from itertools import combinations
 
 from . import WindowMetrics
 
-WINDOW_SECONDS = 300
+WINDOW_SECONDS = 60
 TERMINAL_STATUSES = {"SUCCEEDED", "DECLINED", "ERROR", "TIMEOUT", "CANCELLED"}
 # The causal cube is intentionally built from attributes known before the
 # payment outcome. A decline code describes an outcome, so it is retained as
