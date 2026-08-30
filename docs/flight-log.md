@@ -4498,3 +4498,22 @@ Falha de contrato, teste crítico, conflito semântico sem composição ou neces
 #### Adendos
 
 - Pendente: hash do commit, resultado do rebase e push.
+
+### Adendo de integração — FL-20260830-TEAM-030
+
+- **Timestamp:** 2026-08-30T03:50:00-03:00
+- **Resultado do rebase:** PASS sem conflito textual sobre `origin/main@144299d`; commit rebaseado `4c9797d` (hash provisório antes do corretivo).
+- **Achado pós-integração:** a suíte remota revelou que `scenario_effects: null` mudava o seed do gerador e que controles internos de cenário vazavam no `CTR-TXL-001` retornado. Ambos são incompatibilidades observáveis, não diferenças de teste.
+- **Correção:** normalizar `scenario_effects: null` antes de derivar o seed; retirar `scenario_effects` exclusivamente da projeção pública de `TransactionRecord`, mantendo-o disponível somente ao worker sintético. Não houve alteração do contrato público ou autorização de pagamento.
+- **Evidência focal:** `python -m pytest -q tests/test_transaction_flow_evaluation.py tests/test_transaction_worker.py tests/test_diagnostic_agent.py tests/test_simulation_live_stream.py` — 24 passed.
+- **Próximo gate:** executar contratos, suíte completa e testes web após o corretivo antes do push.
+
+### Correção factual — FL-20260830-TEAM-030
+
+- **Timestamp:** 2026-08-30T03:51:00-03:00
+- O hash `4c9797d` mencionado no adendo anterior não foi verificado e não deve ser usado. O commit efetivamente rebaseado antes do corretivo é `1f1e90e`; a publicação final receberá novo hash após os testes e o commit corretivo.
+
+### Adendo de cobertura — FL-20260830-TEAM-030
+
+- **Timestamp:** 2026-08-30T03:53:00-03:00
+- Foram adicionados e executados testes de contrato/API/pipeline do agente e teste de não vazamento de controles internos. `python -m pytest -q tests/test_agent_suggestion.py tests/test_agent_api.py tests/test_agent_pipeline_e2e.py tests/test_transaction_flow_evaluation.py tests/test_transaction_worker.py` — **45 passed**.

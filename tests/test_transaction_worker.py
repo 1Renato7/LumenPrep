@@ -211,6 +211,38 @@ def test_terminal_records_validate_against_ctr_txl_001_schema():
     assert seen_statuses <= {"SUCCEEDED", "FAILED", "UNKNOWN"}
 
 
+def test_internal_scenario_effects_do_not_leak_from_a_terminal_record():
+    transaction_id = _new_transaction_id(key="worker-scenario-effects-contract")
+    get_connection().execute(
+        "UPDATE transaction_records SET input_json = ? WHERE transaction_id = ?",
+        [
+            json.dumps(
+                {
+                    "merchant_id": "merchant_br_01",
+                    "provider_id": "provider_alpha",
+                    "issuer_bank": "bank_br_a",
+                    "country": "BR",
+                    "currency": "BRL",
+                    "amount_minor": 12990,
+                    "payment_method_category": "CARD",
+                    "card_brand": "VISA",
+                    "card_type": "CREDIT",
+                    "scenario_effects": {"timeout_rate": 1.0},
+                }
+            ),
+            transaction_id,
+        ],
+    )
+    worker.run_to_completion(transaction_id)
+    row = get_connection().execute(
+        "SELECT transaction_id, batch_id, created_at, updated_at, status, input_json, processing_json, outcome_json, classification_json, correlation_id "
+        "FROM transaction_records WHERE transaction_id = ?",
+        [transaction_id],
+    ).fetchone()
+
+    assert "scenario_effects" not in _record_from_row(row)["input"]
+
+
 def test_transaction_batch_reaches_terminal_state_via_background_worker():
     client = TestClient(app)
     payload = {

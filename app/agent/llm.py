@@ -106,10 +106,15 @@ def _executive_summary(pack: EvidencePack) -> str:
 def _reasons(pack: EvidencePack, trace: AgentRetrievalTrace) -> list[SuggestionReason]:
     reasons: list[SuggestionReason] = []
     decline_evidence = [item for item in pack.detector_evidence if item.kind == "DECLINE_PROFILE"]
-    for item in pack.detector_evidence[:3]:
+    # One detector candidate can carry several evidence refs. Grouping by
+    # statement keeps every ID citable without repeating the same sentence.
+    grouped: dict[str, list[str]] = {}
+    for item in pack.detector_evidence:
         if item.kind == "DECLINE_PROFILE":
             continue
-        reasons.append(SuggestionReason(statement=item.statement, evidence_ids=[item.evidence_id]))
+        grouped.setdefault(item.statement, []).append(item.evidence_id)
+    for statement, evidence_ids in list(grouped.items())[:3]:
+        reasons.append(SuggestionReason(statement=statement, evidence_ids=evidence_ids))
     dominant_decline = _dominant_decline(pack)
     if dominant_decline is not None and decline_evidence:
         code, count = dominant_decline

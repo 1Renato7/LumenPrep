@@ -183,6 +183,11 @@ def _record_from_row(row: tuple[Any, ...]) -> dict[str, Any]:
         classification_json,
         correlation_id,
     ) = row
+    public_input = json.loads(input_json)
+    # Scenario controls are retained only inside the synthetic worker so it can
+    # derive a demonstrable outcome. They are not transaction facts and are not
+    # part of frozen CTR-TXL-001, therefore never expose them in a record.
+    public_input.pop("scenario_effects", None)
     return {
         "schema_version": "1.0",
         "transaction_id": transaction_id,
@@ -190,7 +195,7 @@ def _record_from_row(row: tuple[Any, ...]) -> dict[str, Any]:
         "created_at": _iso(created_at),
         "updated_at": _iso(updated_at),
         "status": state,
-        "input": json.loads(input_json),
+        "input": public_input,
         "processing": json.loads(processing_json),
         "outcome": json.loads(outcome_json) if outcome_json else None,
         "classification": json.loads(classification_json) if classification_json else None,

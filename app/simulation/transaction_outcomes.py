@@ -91,7 +91,14 @@ def adapt_transaction(
 
 
 def _seed(transaction: Mapping[str, Any], seed_context: str, config_fingerprint: str) -> int:
-    material = json.dumps(transaction, sort_keys=True, separators=(",", ":"), default=str)
+    # ``scenario_effects`` is an internal, optional demo control. Pydantic
+    # materializes its absent value as ``None`` while raw synthetic inputs omit
+    # the key. Those two representations are the same transaction facts and
+    # must derive the same deterministic outcome.
+    normalized = dict(transaction)
+    if normalized.get("scenario_effects") is None:
+        normalized.pop("scenario_effects", None)
+    material = json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str)
     digest = sha256(f"{config_fingerprint}:{seed_context}:{material}".encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big")
 
