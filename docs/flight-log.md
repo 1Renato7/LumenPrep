@@ -1572,6 +1572,7 @@ Isolar `WindowMetrics` por `correlation_id`; executar canonical → analytics �
 
 - **2026-08-30T01:03:17-03:00:** PASS local — 174 testes Python; contratos/OpenAPI, `compileall`, `uv lock --check`, lint e build Next passaram; imagem Python 3.14.4 foi construída com lock/Neo4j/config e health `200`; suite web live passou 35/35 exigindo `COMPLETE` e outcome. O browser real confirmou sample → submit → log `FAILED` de negócio/`COMPLETE` → detalhe `NO_INCIDENT`, lista de Incidents, memória `MATCH_FOUND` com um candidato e `Fallback: Not used`, layout mobile e console sem warnings/errors. Code review: `PASS WITH NOTES`; guardian: `READY WITH WARNINGS`. Railway Volume/restart/CORS e Vercel/browser deployed permanecem `NOT RUN`.
 - **2026-08-30T01:04:43-03:00:** commit integrado `05c61d8` (`fix(integration): harden live incident pipeline`) criado sobre o merge A+B `9be8853`. Push permanece PENDING até o último fetch confirmar que `origin/main` ainda aponta para `23b9061`; force push é proibido.
+- **2026-08-30T01:05:20-03:00:** PASS — o fetch anti-race confirmou `origin/main@23b9061`, ancestral de `HEAD`; `git push origin HEAD:main` publicou por fast-forward até `6de8c02`, sem force. Este adendo será publicado em commit documental subsequente; os gates deployed permanecem pendentes.
 
 #### Gatilhos de revisão
 
