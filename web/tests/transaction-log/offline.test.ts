@@ -104,6 +104,19 @@ test("incident detail exposes diagnosis, evidence, action, memory trace, and lim
   assert.ok(detail.memory.retrieval_trace.index_version);
   assert.equal(detail.explanation.incident_id, detail.incident.incident_id);
   assert.ok(detail.explanation.evidence_ids.length > 0);
+  const calculationLogs = detail.incident.evidence.filter((item) => item.kind !== "PAST_INCIDENT");
+  assert.ok(calculationLogs.length > 0);
+  assert.ok(calculationLogs.every((item) => item.source_ref.startsWith("duckdb://")));
+  assert.ok(!calculationLogs.some((item) => item.kind === "PAST_INCIDENT"));
+});
+
+test("inconclusive diagnoses expose the current logs without treating history as a calculation input", async () => {
+  const detail = await getOfflineIncident("inc_current_mastercard_uncertain_002", "inconclusive");
+  const calculationLogs = detail.incident.evidence.filter((item) => item.kind !== "PAST_INCIDENT");
+
+  assert.equal(detail.incident.root_cause.status, "INCONCLUSIVE");
+  assert.deepEqual(calculationLogs.map((item) => item.evidence_id), ["evd_uncertain_current_rate", "evd_uncertain_low_coverage"]);
+  assert.ok(detail.incident.evidence.some((item) => item.kind === "PAST_INCIDENT"));
 });
 
 test("memory unavailable is not equivalent to no precedent", async () => {
