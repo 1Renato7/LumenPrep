@@ -3338,6 +3338,73 @@ Disponibilidade de evidência independente, novo contrato de contribuição ou p
 
 - **2026-08-29T23:58:00-03:00:** PASS: cobertos hipótese dominante, mix shift, empate inconclusivo, entrada vazia, grupos de correlação incompatíveis e valores inválidos. `19` testes focados e `122` testes completos passaram; contratos, compilação e `git diff --check` passaram. Code review gate: PASS após validar limites numéricos de suporte/score e a preservação de `INCONCLUSIVE`. Browser acceptance não se aplica: nenhuma rota, UI ou fluxo observável foi alterado; o ranking é consumido internamente pela etapa de Incident.
 
+### FL-20260830-RENATO-009 — Avaliar fluxo transaction-first por invariantes observáveis
+
+- **Timestamp:** 2026-08-30T00:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** Renato
+- **Participantes:** solicitante; Codex como implementador e recorder
+- **Categoria:** quality | data | integration
+- **Escopo:** `LUM2-56` / `TASK-EVAL-001`, `CTR-TXN-001`, `CTR-EVT-001`, `CTR-DET-001`, `CTR-INC-001`
+- **Links:** `app/simulation/background_traffic.py`, `app/simulation/transaction_outcomes.py`, `app/detection/detector.py`, `app/rca/ranking.py`, `LUM2-57`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+O fluxo público e o harness agora compartilham o lifecycle de batch, mas faltava uma prova conjunta de que casos mistos, baixo volume e ambiguidades preservam os limites corretos antes do holdout final.
+
+#### Decisão
+
+Criar uma matriz de testes reprodutível a partir de inputs públicos e contextos fixos do adapter: verificar success/failure/unknown, que amostras manuais e de background produzem eventos canônicos equivalentes, que baixo volume não gera candidate e que ranking ambíguo continua `INCONCLUSIVE`. A matriz não lê ou ajusta ground truth.
+
+#### Critérios e por que agora
+
+`LUM2-56` é pré-requisito do holdout de `LUM2-57`; validar invariantes de transporte e honestidade de abstention primeiro impede que o holdout use uma API diferente ou uma causa inventada.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência ou hipótese | Por que não foi escolhida agora |
+| --- | --- | --- | --- | --- |
+| Executar somente testes isolados existentes | Rápido | não prova interação dos limites do fluxo | FACT: casos estavam distribuídos por módulos | Insuficiente para EVAL-001 |
+| Ajustar thresholds até produzir casos desejados | Pode melhorar números locais | contamina a futura validação holdout | FACT: issue proíbe ajuste pelo holdout | Rejeitada |
+| Matriz fixa de invariantes sem ground truth | Reprodutível e prepara holdout honesto | não mede accuracy final | TEST: cobrirá quatro limites do fluxo | Escolhida |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `OTHER` gera resultado `UNKNOWN` determinístico; o detector já protege a janela abaixo do support mínimo.
+- **ASSUMPTION:** equivalência de caminho é comprovada por contrato canônico, resultado terminal e ausência de campos de outcome no input.
+- **UNKNOWN:** accuracy de causa no conjunto escondido; pertence a `LUM2-57`.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** regressão rápida e auditável sem contaminar o holdout.
+- **Abrimos mão de:** um número de accuracy nesta etapa.
+- **Dívida/limitação:** a matriz testa invariantes com fixture pequena, não distribuição de produção.
+- **Risco residual:** regressões estatísticas amplas continuam demandando holdout separado.
+
+#### Consequências e propagação
+
+- **Arquitetura/contratos:** sem novo contrato; confirma os quatro existentes.
+- **Pessoas/branches:** libera `LUM2-57` com seeds e comportamento de abstention já preservados.
+- **Plano/Linear:** atualizar somente após execução, review e integração.
+- **Testes/observabilidade:** registrar os comandos e contagens reais no adendo.
+
+#### Validação e trial by fire
+
+- **Hipótese verificável:** o mesmo input canônico tem output compatível independente de ser submetido manualmente ou pelo harness.
+- **Caminho feliz:** batch misto entrega os três estados terminais.
+- **Caso difícil/adverso:** baixo volume e empate não recebem alerta ou causa suportada.
+- **Resultado observado:** NOT RUN.
+- **Fallback:** manter status e causa inconclusivos, sem reclassificar por fixture.
+
+#### Gatilhos de revisão
+
+Alteração no contrato de input/evento, estratégia do worker ou threshold do detector exige repetir a matriz.
+
+#### Adendos
+
+- **2026-08-30T00:22:00-03:00:** PASS: a matriz registrou batch misto com os três estados, equivalência de input manual/background pela seed `404`, zero candidate no low volume 11/12 e empate inconclusivo. `32` testes focados e `126` testes completos passaram; contratos, compilação e `git diff --check` passaram. Code review gate: PASS, sem achados bloqueantes. Browser acceptance não se aplica: não houve nova rota ou UI; a matriz chama as interfaces internas já cobertas pelos testes de API/worker.
+
 ## Prontidão para a banca
 
 _Preencher no modo `FINALIZE`._
