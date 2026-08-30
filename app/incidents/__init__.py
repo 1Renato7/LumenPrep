@@ -178,7 +178,7 @@ class Incident(BaseModel):
     estimated_started_at: str
     title: str
     scope: dict[str, list[str]]
-    metrics: dict[str, int | float | str | None]
+    metrics: dict[str, Any]
     root_cause: RootCause
     impact: Impact
     evidence: list[Evidence]
@@ -221,6 +221,7 @@ def to_incident(
     limitations: Iterable[str] = (),
     detected_at: str | None = None,
     estimated_started_at: str | None = None,
+    decline_codes: Iterable[str] = (),
 ) -> Incident:
     """Serialize an incident without changing the RCA-owned diagnosis."""
     cause = root_cause if isinstance(root_cause, RootCause) else RootCause.model_validate(root_cause)
@@ -234,6 +235,9 @@ def to_incident(
         "approval_rate_expected": candidate.get("expected"),
         "lost_approvals": int(round(max(float(item.get("lost_approvals", 0)) for item in correlated.candidates))),
     }
+    normalized_declines = sorted({str(code) for code in decline_codes if str(code)})
+    if normalized_declines:
+        metrics["decline_codes"] = normalized_declines
     serialized_evidence = [item if isinstance(item, Evidence) else Evidence.model_validate(item) for item in evidence]
     serialized_recommendations = [
         item if isinstance(item, Recommendation) else Recommendation.model_validate(item) for item in recommendations

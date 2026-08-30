@@ -110,6 +110,7 @@ def test_batch_to_incident_to_grounded_detail_uses_no_fixture(monkeypatch):
     incident = body["incidents"][0]["incident"]
     assert incident["state"] == incident["root_cause"]["status"] == "SUPPORTED"
     assert incident["root_cause"]["category"] == "PROVIDER_DEGRADATION"
+    assert incident["metrics"]["decline_codes"] == ["PROVIDER_TIMEOUT"]
     assert body["incidents"][0]["evidence_ids"] == [f"evd_{anomaly_transaction_ids[0]}"]
     assert "fixture://" not in str(body)
 
