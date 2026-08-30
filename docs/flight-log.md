@@ -4694,3 +4694,14 @@ O health da `main@0b6e9c8` retornou `503` com `worker=unavailable` e `FileNotFou
 
 - `uv run --locked pytest -q tests/test_deploy_runtime.py tests/test_refusal_code_flow.py tests/test_transaction_worker.py` passou com **22 testes**; `git diff --check` passou.
 - O build Docker local é `NOT RUN`: Docker Desktop não está em execução neste host. A validação pendente é o health do Railway após publicar a imagem corrigida.
+
+### FL-20260830-TEAM-035 — Não executar sugestões remotas na reconciliação de startup
+
+- **Timestamp:** 2026-08-30T05:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** operação | worker | disponibilidade
+- **Escopo:** `TASK-DEP-002`; lifecycle de transações recuperadas
+
+Após a correção do catálogo, o deploy passou da falha de arquivo para `502`: o processo permanecia em `Waiting for application startup` enquanto `reconcile_stuck()` processava trabalho pendente e chamava o agente OpenAI. Foi escolhido o hotfix `run_suggestions=False` exclusivamente no startup. A reconciliação ainda conclui o estado durável de transações e Incidents, mas não espera uma chamada remota antes de a API responder. O fluxo normal de batches mantém `run_suggestions=True`, portanto continua a produzir sugestões. Trade-off aceito: um Incident concluído somente durante a recuperação pode ficar sem sugestão até uma reexecução posterior; uma outbox persistida é a solução completa futura. Validação local: 52 testes focados passaram; health Railway após deploy permanece pendente.

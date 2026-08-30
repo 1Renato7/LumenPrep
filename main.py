@@ -12,7 +12,11 @@ from app.worker.transaction_worker import reconcile_stuck
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     try:
-        app.state.worker_reconciliation = {"status": "ready", "records_reconciled": reconcile_stuck()}
+        # Startup must restore durable transaction state without waiting on a
+        # remote model call. New request-driven work still generates suggestions.
+        app.state.worker_reconciliation = {
+            "status": "ready", "records_reconciled": reconcile_stuck(run_suggestions=False)
+        }
     except Exception as error:
         # Do not pretend the lifecycle is ready when the durable worker cannot recover it.
         app.state.worker_reconciliation = {"status": "unavailable", "error": type(error).__name__}

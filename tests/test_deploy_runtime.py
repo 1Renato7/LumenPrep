@@ -70,6 +70,15 @@ def test_health_is_degraded_when_startup_reconciliation_fails():
     assert response.json()["dependencies"]["worker"]["status"] == "unavailable"
 
 
+def test_startup_reconciliation_skips_remote_agent_suggestions():
+    with patch("main.reconcile_stuck", return_value=0) as reconciliation:
+        app = create_app(Settings())
+        with TestClient(app) as client:
+            assert client.get("/v1/health").status_code == 200
+
+    reconciliation.assert_called_once_with(run_suggestions=False)
+
+
 def test_existing_volume_is_migrated_before_worker_reconciliation(tmp_path):
     database_path = tmp_path / "lumen.duckdb"
     legacy = duckdb.connect(str(database_path))

@@ -175,7 +175,13 @@ def _advance_locked(con, transaction_id: str) -> list[SuggestionJob]:
     return suggestion_jobs
 
 
-def advance_transaction(transaction_id: str, *, worker_id: str | None = None, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> bool:
+def advance_transaction(
+    transaction_id: str,
+    *,
+    worker_id: str | None = None,
+    lease_seconds: int = DEFAULT_LEASE_SECONDS,
+    run_suggestions: bool = True,
+) -> bool:
     """Advance ``transaction_id`` by exactly one stage. Returns False if it is not a
     leasable PROCESSING record (already terminal, or currently leased by someone else).
 
@@ -190,12 +196,13 @@ def advance_transaction(transaction_id: str, *, worker_id: str | None = None, le
         if not _acquire_lease(con, transaction_id, worker_id, lease_seconds):
             return False
         suggestion_jobs = _advance_locked(con, transaction_id)
-    for job in suggestion_jobs:
-        # Keep older in-process worker tests/jobs compatible while every newly
-        # created job carries the RFC summary as its third value.
-        incident, decline_profile = job[0], job[1]
-        refusal_code_summaries = job[2] if len(job) > 2 else []
-        _suggest_for_persisted_incident(incident, decline_profile, refusal_code_summaries)
+    if run_suggestions:
+        for job in suggestion_jobs:
+            # Keep older in-process worker tests/jobs compatible while every newly
+            # created job carries the RFC summary as its third value.
+            incident, decline_profile = job[0], job[1]
+            refusal_code_summaries = job[2] if len(job) > 2 else []
+            _suggest_for_persisted_incident(incident, decline_profile, refusal_code_summaries)
     return True
 
 
@@ -219,7 +226,9 @@ def advance_one(*, worker_id: str | None = None, lease_seconds: int = DEFAULT_LE
     return transaction_id
 
 
-def run_to_completion(transaction_id: str, *, worker_id: str | None = None) -> None:
+def run_to_completion(
+    transaction_id: str, *, worker_id: str | None = None, run_suggestions: bool = True
+) -> None:
     """Drive one transaction through every remaining stage. Safe to call again on an
     already-terminal or already-leased transaction — it becomes a no-op."""
     for _ in range(len(STAGE_ORDER)):
@@ -229,7 +238,7 @@ def run_to_completion(transaction_id: str, *, worker_id: str | None = None) -> N
             ).fetchone()
         if row is None or row[0] != "PROCESSING":
             return
-        if not advance_transaction(transaction_id, worker_id=worker_id):
+        if not advance_transaction(transaction_id, worker_id=worker_id, run_suggestions=run_suggestions):
             return
 
 
@@ -242,7 +251,7 @@ def run_batch_to_completion(batch_id: str) -> None:
         run_to_completion(transaction_id)
 
 
-def reconcile_stuck(*, max_records: int = 1000) -> int:
+def reconcile_stuck(*, max_records: int = 1000, run_suggestions: bool = True) -> int:
     """Resume every PROCESSING record found at startup (or on demand). Records with a
     live lease from a still-running worker are simply skipped by ``advance_transaction``'s
     lease check, so calling this concurrently with an active worker is harmless."""
@@ -251,5 +260,5 @@ def reconcile_stuck(*, max_records: int = 1000) -> int:
             "SELECT transaction_id FROM transaction_records WHERE status = 'PROCESSING' LIMIT ?", [max_records]
         ).fetchall()]
     for transaction_id in ids:
-        run_to_completion(transaction_id)
+        run_to_completion(transaction_id, run_suggestions=run_suggestions)
     return len(ids)

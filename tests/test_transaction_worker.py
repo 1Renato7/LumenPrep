@@ -130,6 +130,23 @@ def test_agent_suggestion_job_runs_after_the_duckdb_lock_is_released(monkeypatch
     assert events == ["lock-enter", "advance", "lock-exit", "suggest"]
 
 
+def test_reconciliation_can_skip_agent_suggestions(monkeypatch):
+    transaction_id = _new_transaction_id(key="worker-key-startup-no-agent")
+    calls: list[bool] = []
+
+    monkeypatch.setattr(
+        worker,
+        "run_to_completion",
+        lambda _transaction_id, *, run_suggestions: calls.append(run_suggestions),
+    )
+
+    resumed = worker.reconcile_stuck(run_suggestions=False)
+
+    assert resumed >= 1
+    assert calls
+    assert calls == [False] * len(calls)
+
+
 def test_expired_lease_is_reclaimable_by_reconciliation():
     transaction_id = _new_transaction_id(key="worker-key-0005")
     con = get_connection()
