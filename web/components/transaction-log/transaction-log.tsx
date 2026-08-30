@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createPollingController, LumenApiError, pollTransactions, type LumenApiClient } from "@/lib/api/client-interface";
 import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
 import type { TransactionList, TransactionRecord, TransactionStatus } from "@/lib/api/types";
+import { formatBrasiliaDateTime } from "@/lib/format/date-time";
 
 import { normalizeFilter, transactionFilters } from "./filters";
 import { buildTransactionUrl, firstSearchValue, type SearchValues } from "./url";
@@ -122,7 +123,7 @@ export function TransactionLog({ searchValues, api: suppliedApi }: { searchValue
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
-                  <tr><th>Status</th><th>Transaction</th><th>Payment</th><th>Lifecycle</th><th>Diagnostic returned</th><th>Updated</th><th><span className={styles.visuallyHidden}>Actions</span></th></tr>
+                  <tr><th>Status</th><th>Transaction</th><th>Payment</th><th>Lifecycle</th><th>Diagnostic returned</th><th>Updated (Brasília)</th><th><span className={styles.visuallyHidden}>Actions</span></th></tr>
                 </thead>
                 <tbody>
                   {list.items.map((record) => (
@@ -138,7 +139,7 @@ export function TransactionLog({ searchValues, api: suppliedApi }: { searchValue
                         </div>
                       </td>
                       <td><DiagnosticSummary record={record} /></td>
-                      <td><time dateTime={record.updated_at}>{formatDate(record.updated_at)}</time></td>
+                      <td><time dateTime={record.updated_at}>{formatBrasiliaDateTime(record.updated_at)}</time></td>
                       <td><Link className={styles.rowLink} href={`/transactions/${encodeURIComponent(record.transaction_id)}`}>Open detail<span aria-hidden="true"> →</span></Link></td>
                     </tr>
                   ))}
@@ -192,8 +193,4 @@ function StatusBadge({ status }: { status: "PROCESSING" | "SUCCEEDED" | "FAILED"
 
 function formatMoney(amountMinor: number, currency: string): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(amountMinor / 100);
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium", timeZone: "UTC" }).format(new Date(value));
 }

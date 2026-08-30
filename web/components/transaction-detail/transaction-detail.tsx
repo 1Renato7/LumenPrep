@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPollingController, LumenApiError, pollTransaction, type LumenApiClient } from "@/lib/api/client-interface";
 import { apiErrorMessage, resolveLumenClient } from "@/lib/api/client-runtime";
 import type { TransactionIncidentDetail, TransactionRecord } from "@/lib/api/types";
+import { formatBrasiliaDateTime } from "@/lib/format/date-time";
 
 import { isRejectedIncident, selectAuthorizedIncidentLink } from "./grounding";
 import styles from "./transaction-detail.module.css";
@@ -103,7 +104,7 @@ function TransactionDetailView({ transactionId, suppliedApi }: { transactionId: 
       <section className={styles.card}><h2>Input</h2><div className={styles.grid}>
         <Value label="Merchant" value={record.input.merchant_id} /><Value label="Provider" value={record.input.provider_id} /><Value label="Issuer bank" value={record.input.issuer_bank} />
         <Value label="Amount" value={formatMoney(record.input.amount_minor, record.input.currency)} /><Value label="Country" value={record.input.country} /><Value label="Method" value={record.input.payment_method_category} />
-        <Value label="Reference" value={record.input.client_reference ?? "Not provided"} /><Value label="Occurred at" value={record.input.occurred_at ?? "Not provided"} />
+        <Value label="Reference" value={record.input.client_reference ?? "Not provided"} /><Value label="Occurred at (Brasília)" value={record.input.occurred_at ? formatBrasiliaDateTime(record.input.occurred_at) : "Not provided"} />
       </div></section>
       <section className={styles.card}><h2>Lifecycle</h2><div className={styles.grid}>
         <Value label="Public status" value={record.status} /><Value label="Stage" value={record.processing.stage} /><Value label="Progress" value={`${record.processing.progress_percent}%`} />

@@ -3782,6 +3782,68 @@ Usar `pyproject.toml` como declaração de dependências e manter `uv.lock` vers
 
 Reavaliar somente se o runtime/deploy deixar de suportar uv ou se a equipe aprovar formalmente outro gerenciador e mecanismo de lock.
 
+### FL-20260830-ANDRE-002 — Converter horários de transação para Brasília somente na apresentação
+
+- **Timestamp:** 2026-08-30T01:45:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** André (solicitante)
+- **Participantes:** André; Codex como implementador e recorder
+- **Categoria:** UX | data | integration
+- **Escopo:** listagem e detalhe live de transações no frontend Next.js
+- **Links:** `CTR-TXL-001 v1`; `web/lib/format/date-time.ts`; `web/components/transaction-log/transaction-log.tsx`; `web/components/transaction-detail/transaction-detail.tsx`
+- **Supersedes / superseded by:** não aplicável
+
+#### Contexto e pergunta
+
+A UI live exibia timestamps de transações em UTC, embora o horário operacional esperado seja o de Brasília. Era necessário corrigir a apresentação sem mudar os instantes compartilhados pela API.
+
+#### Decisão
+
+Preservar os timestamps ISO 8601/UTC recebidos do backend e convertê-los somente para exibição com a zona IANA `America/Sao_Paulo`. Lista e detalhe identificam Brasília nos rótulos e reutilizam um formatter único.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefícios | Custos/riscos | Evidência | Decisão |
+| --- | --- | --- | --- | --- |
+| Zona IANA na UI | contrato estável e regras históricas corretas | novas superfícies devem reutilizar o helper | código live forçava UTC | escolhida |
+| Converter no backend | todos recebem horário local | altera semântica contratual e outros consumidores | contratos transportam instantes ISO | rejeitada |
+| Offset fixo UTC−03 | implementação curta | falha no horário de verão histórico | Brasília já operou em UTC−02 | rejeitada |
+
+#### Evidência, hipóteses e desconhecidos
+
+- **FACT:** `updated_at` era formatado com `timeZone: "UTC"`; `occurred_at` era mostrado sem conversão.
+- **TEST:** testes, build e browser acceptance pendentes neste registro.
+- **UNKNOWN:** nenhuma no escopo; timezone por usuário exigiria nova política.
+
+#### Trade-offs aceitos
+
+- **Ganhamos:** leitura operacional correta sem quebrar ordenação ou payloads.
+- **Abrimos mão de:** mostrar UTC como padrão da interface brasileira.
+- **Risco residual:** futura tela pode ignorar o helper; teste unitário torna a regra localizável.
+
+#### Consequências e propagação
+
+- **Produto/demo:** lista e detalhe deixam explícito o horário de Brasília.
+- **Arquitetura/contratos:** nenhum schema, endpoint ou dado persistido muda.
+- **Pessoas/branches:** somente o frontend de André é alterado.
+- **Plano/Linear:** não aplicável; não há mudança de arquitetura nem de status operacional.
+- **Testes/observabilidade:** validar UTC−03 atual, UTC−02 histórico, ISO semântico, refresh e mobile.
+
+#### Validação e trial by fire
+
+- **Caminho feliz:** `2026-08-29T18:00:10Z` aparece como `15:00:10` na lista e no detalhe.
+- **Caso difícil/adverso:** janeiro de 2018 usa UTC−02 pela base IANA, sem cálculo manual.
+- **Resultado observado:** PENDING.
+- **Fallback:** reverter somente a camada de apresentação; o dado UTC permanece intacto.
+
+#### Gatilhos de revisão
+
+Mudança do público operacional, timezone configurável por usuário ou política global de localização.
+
+#### Adendos
+
+- **2026-08-30T01:55:00-03:00:** `npm test` passou com 36 testes e 1 integração live opcional marcada como `SKIP`; `npm run lint`, `npm run build` e `git diff --check` passaram. `code-review-gate`: PASS, sem achados bloqueantes. A conversão isolada já havia passado no navegador com UTC−03, detalhe, refresh, mobile e ISO semântico preservado. Na worktree da `origin/main@404c23b`, o frontend live iniciou corretamente, mas a leitura Railway em `localhost:3002` foi bloqueada pela allowlist de CORS conhecida; browser acceptance live local permanece `PASS WITH LIMITATIONS` e deve ser repetido no domínio Vercel após o deploy. `integration-contract-guardian`: READY WITH WARNINGS; nenhum contrato, env var, migration ou backend foi alterado.
+
 ### FL-20260830-ROGERIO-010 — Concentrar a recuperação live em duas lanes sem trocar os contratos públicos
 
 - **Timestamp:** 2026-08-30T00:23:00-03:00
