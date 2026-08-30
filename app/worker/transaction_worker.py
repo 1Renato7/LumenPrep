@@ -53,7 +53,13 @@ def _generate_outcome(
             str(response_code),
         ),
     )
-    payload = resolution.as_payload()
+    payload = {
+        **resolution.as_payload(),
+        # Preserve provider spelling/case for the durable event.  The resolution
+        # key is deliberately canonicalised for lookup, but it is not the raw
+        # acquisition fact auditors need to compare later.
+        "observed_response_code": str(response_code),
+    }
     result = resolution.outcome
     classification = dict(adapted.classification)
     classification.update({
@@ -63,13 +69,13 @@ def _generate_outcome(
         "refusal_resolution": payload,
     })
     outcome = dict(adapted.outcome)
-    outcome.update({"result": result, "provider_response_code": resolution.response_code,
-                    "normalized_decline_code": (f"RESPONSE_CODE_{resolution.response_code}" if result == "FAILED" else None)})
+    outcome.update({"result": result, "provider_response_code": str(response_code),
+                    "normalized_decline_code": (resolution.normalized_code if result == "FAILED" else None)})
     event = dict(adapted.event)
     event["status"] = {"SUCCEEDED": "SUCCEEDED", "FAILED": "DECLINED", "UNKNOWN": "ERROR"}[result]
     event["decline"] = None if result == "SUCCEEDED" else {
         "normalized_code": outcome["normalized_decline_code"] or "UNMAPPED_DECLINE",
-        "category": "ISSUER", "retryability": "UNKNOWN", "raw_code": resolution.response_code,
+        "category": "ISSUER", "retryability": "UNKNOWN", "raw_code": str(response_code),
         "raw_message": resolution.reason or "Unmapped provider response code",
     }
     return AdaptedTransaction(result=result, outcome=outcome, classification=classification, event=event)

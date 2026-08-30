@@ -13,6 +13,12 @@ def _input(code: str) -> dict:
     ).model_dump(mode="json")
 
 
+def _stripe_input(code: str) -> dict:
+    payload = _input(code)
+    payload.update({"provider_id": "stripe", "issuer_bank": "itau_br", "card_brand": "VISA"})
+    return payload
+
+
 def test_mapped_response_code_is_persistable_transaction_fact():
     # Opening the connection seeds the versioned local reference table.
     get_connection()
@@ -22,6 +28,8 @@ def test_mapped_response_code_is_persistable_transaction_fact():
     assert adapted.outcome["provider_response_code"] == "51"
     assert adapted.classification["reason"] == "Insufficient funds"
     assert adapted.classification["refusal_resolution"]["lookup_status"] == "MATCH_FOUND"
+    assert adapted.classification["refusal_resolution"]["normalized_code"] == "INSUFFICIENT_FUNDS"
+    assert adapted.outcome["normalized_decline_code"] == "INSUFFICIENT_FUNDS"
     assert adapted.event["decline"]["raw_message"] == "Insufficient funds"
 
 
@@ -34,6 +42,16 @@ def test_unknown_response_code_stays_unknown_without_invented_reason():
     assert adapted.classification["refusal_resolution"]["reason"] is None
 
 
+def test_stripe_lowercase_code_resolves_and_preserves_the_raw_provider_value():
+    get_connection()
+    adapted = _generate_outcome("txn_refusal_stripe", _stripe_input("do_not_honor"), "corr_refusal")
+
+    assert adapted.result == "FAILED"
+    assert adapted.outcome["normalized_decline_code"] == "DO_NOT_HONOR"
+    assert adapted.event["decline"]["raw_code"] == "do_not_honor"
+    assert adapted.classification["refusal_resolution"]["response_code"] == "DO_NOT_HONOR"
+
+
 def test_refusal_summary_is_explicit_agent_evidence_not_database_access():
     incident = Incident.model_validate({
         "incident_id": "inc_refusal", "correlation_id": "corr_refusal", "estimated_started_at": "2026-08-30T12:00:00Z",
@@ -42,10 +60,10 @@ def test_refusal_summary_is_explicit_agent_evidence_not_database_access():
         "root_cause": {"status": "INCONCLUSIVE", "category": None, "confidence": 0.0, "confidence_factors": {}, "alternatives": []},
         "state": "INCONCLUSIVE", "evidence": [], "recommendations": [], "limitations": [],
     })
-    summary = {"provider_id": "ADYEN", "card_brand": "VISA", "response_code": "51", "reason": "Insufficient funds",
+    summary = {"provider_id": "ADYEN", "issuer_bank": "NUBANK_BR", "card_brand": "VISA", "response_code": "51", "normalized_code": "INSUFFICIENT_FUNDS", "reason": "Insufficient funds",
                "source": "ADYEN_RAW_ACQUIRER", "mapping_version": "2026.08.30", "transaction_count": 17,
                "evidence_id": "evd_refusal_51"}
-    pack = build_evidence_pack(incident, decline_profile={"RESPONSE_CODE_51": 17}, refusal_code_summaries=[summary])
+    pack = build_evidence_pack(incident, decline_profile={"INSUFFICIENT_FUNDS": 17}, refusal_code_summaries=[summary])
 
     assert pack.refusal_code_summaries[0].reason == "Insufficient funds"
     assert "evd_refusal_51" in pack.authorized_evidence_ids

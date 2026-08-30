@@ -85,8 +85,8 @@
       "description": "CTR-RFC-002 scope- and window-limited mapped refusal facts.",
       "type": "array",
       "items": {"type": "object", "additionalProperties": false,
-        "required": ["provider_id", "card_brand", "response_code", "reason", "source", "mapping_version", "transaction_count", "evidence_id"],
-        "properties": {"provider_id": {"type": "string", "minLength": 1}, "card_brand": {"type": "string", "minLength": 1}, "response_code": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1}, "source": {"type": "string", "minLength": 1}, "mapping_version": {"type": "string", "minLength": 1}, "transaction_count": {"type": "integer", "minimum": 1}, "evidence_id": {"type": "string", "minLength": 1}}
+        "required": ["provider_id", "issuer_bank", "card_brand", "response_code", "normalized_code", "reason", "source", "mapping_version", "transaction_count", "evidence_id"],
+        "properties": {"provider_id": {"type": "string", "minLength": 1}, "issuer_bank": {"type": "string", "minLength": 1}, "card_brand": {"type": "string", "minLength": 1}, "response_code": {"type": "string", "minLength": 1}, "normalized_code": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1}, "source": {"type": "string", "minLength": 1}, "mapping_version": {"type": "string", "minLength": 1}, "transaction_count": {"type": "integer", "minimum": 1}, "evidence_id": {"type": "string", "minLength": 1}}
       }
     },
     "limitations": {"type": "array", "items": {"type": "string"}},

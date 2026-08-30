@@ -49,6 +49,9 @@ class Neo4jIncidentRepository:
             "providers": list(incident.scope.get("provider_id", ())),
             "countries": list(incident.scope.get("country", ())),
             "brands": list(incident.scope.get("card_brand", ())),
+            "refusal_providers": sorted({str(value).upper() for value in incident.scope.get("provider_id", ())}),
+            "refusal_brands": sorted({str(value).upper() for value in incident.scope.get("card_brand", ())}),
+            "decline_codes": sorted({str(value).upper() for value in incident.metrics.get("decline_codes", [])}),
         }
         with self.driver.session(database=self.database) as session:
             self._write(session, parameters)
@@ -115,6 +118,19 @@ FOREACH (brand_name IN $brands |
 FOREACH (evidence_id IN $evidence_ids |
   MERGE (evidence:Evidence {evidence_id: evidence_id})
   MERGE (incident)-[:HAS_EVIDENCE]->(evidence))
+WITH incident
+UNWIND $decline_codes AS observed_code
+MATCH (code:RefusalCode)
+WHERE code.provider_id IN $refusal_providers
+  AND (code.card_brand = '*' OR code.card_brand IN $refusal_brands)
+  AND (code.response_code = observed_code OR code.normalized_code = observed_code)
+MERGE (incident)-[observation:OBSERVED_REFUSAL_CODE {
+  mapping_id: code.mapping_id,
+  observed_code: observed_code
+}]->(code)
+SET observation.match_type = CASE WHEN code.response_code = observed_code THEN 'RAW_RESPONSE_CODE' ELSE 'NORMALIZED_CODE' END,
+    observation.catalog_source = code.source,
+    observation.mapping_version = code.mapping_version
 """
 
 _SELECT_CONFIRMED = """

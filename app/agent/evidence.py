@@ -51,7 +51,7 @@ def build_evidence_pack(
     code_evidence = [EvidenceItem(
         evidence_id=item.evidence_id, kind="REFUSAL_CODE_SUMMARY",
         statement=(f"{item.transaction_count} transaction(s) resolved as code {item.response_code} "
-                   f"for {item.provider_id}/{item.card_brand}: {item.reason}."),
+                   f"({item.normalized_code}) for {item.provider_id}/{item.issuer_bank}/{item.card_brand}: {item.reason}."),
         source_ref=f"refusal-catalog://{item.source}/{item.mapping_version}",
     ) for item in summaries]
     pack = EvidencePack(

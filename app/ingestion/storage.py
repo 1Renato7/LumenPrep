@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS refusal_code_catalog (
     issuer_bank VARCHAR NOT NULL,
     card_brand VARCHAR NOT NULL,
     response_code VARCHAR NOT NULL,
+    normalized_code VARCHAR,
     outcome VARCHAR NOT NULL CHECK (outcome IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')),
     reason VARCHAR NOT NULL,
     source VARCHAR NOT NULL,
@@ -128,6 +129,7 @@ CREATE TABLE IF NOT EXISTS refusal_code_catalog (
 _MIGRATION_SQL = """
 ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_owner VARCHAR;
 ALTER TABLE transaction_records ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMP;
+ALTER TABLE refusal_code_catalog ADD COLUMN IF NOT EXISTS normalized_code VARCHAR;
 """
 
 _connection: duckdb.DuckDBPyConnection | None = None

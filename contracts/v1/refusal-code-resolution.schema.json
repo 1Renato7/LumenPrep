@@ -3,10 +3,10 @@
   "$id": "https://lumen.local/contracts/v1/refusal-code-resolution.schema.json",
   "title": "CTR-RFC-001 Refusal Code Resolution v1",
   "type": "object", "additionalProperties": false,
-  "required": ["schema_version", "lookup_status", "provider_id", "issuer_bank", "card_brand", "response_code", "outcome", "reason", "source", "mapping_version"],
+  "required": ["schema_version", "lookup_status", "provider_id", "issuer_bank", "card_brand", "response_code", "outcome", "normalized_code", "reason", "source", "mapping_version"],
   "properties": {
     "schema_version": {"const": "1.0"}, "lookup_status": {"enum": ["MATCH_FOUND", "NOT_FOUND", "AMBIGUOUS"]},
     "provider_id": {"type": "string", "minLength": 1}, "issuer_bank": {"type": "string", "minLength": 1}, "card_brand": {"type": "string", "minLength": 1}, "response_code": {"type": "string", "minLength": 1},
-    "outcome": {"enum": ["SUCCEEDED", "FAILED", "UNKNOWN"]}, "reason": {"type": ["string", "null"]}, "source": {"type": ["string", "null"]}, "mapping_version": {"type": ["string", "null"]}
+    "outcome": {"enum": ["SUCCEEDED", "FAILED", "UNKNOWN"]}, "normalized_code": {"type": ["string", "null"]}, "reason": {"type": ["string", "null"]}, "source": {"type": ["string", "null"]}, "mapping_version": {"type": ["string", "null"]}
   }
 }

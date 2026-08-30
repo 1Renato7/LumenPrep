@@ -299,7 +299,7 @@ def _refusal_code_summaries(con, incident: dict[str, Any]) -> list[dict[str, Any
              AND event.event_time >= ? AND event.event_time < ?""",
         [incident["incident_id"], incident["correlation_id"], incident["estimated_started_at"], incident["detected_at"]],
     ).fetchall()
-    grouped: dict[tuple[str, str, str, str, str, str], int] = {}
+    grouped: dict[tuple[str, str, str, str, str, str, str, str], int] = {}
     for input_json, classification_json in rows:
         if not classification_json:
             continue
@@ -311,17 +311,19 @@ def _refusal_code_summaries(con, incident: dict[str, Any]) -> list[dict[str, Any
             continue
         payload = json.loads(input_json)
         key = (
-            str(payload.get("provider_id", "UNKNOWN")), str(payload.get("card_brand") or "NOT_APPLICABLE"),
+            str(payload.get("provider_id", "UNKNOWN")), str(payload.get("issuer_bank", "UNKNOWN")),
+            str(payload.get("card_brand") or "NOT_APPLICABLE"),
             str(resolution["response_code"]), str(resolution["reason"]),
+            str(resolution.get("normalized_code") or "UNMAPPED_DECLINE"),
             str(resolution.get("source") or "UNKNOWN"), str(resolution.get("mapping_version") or "UNKNOWN"),
         )
         grouped[key] = grouped.get(key, 0) + 1
     summaries: list[dict[str, Any]] = []
     for key, count in sorted(grouped.items(), key=lambda item: (-item[1], item[0])):
-        provider_id, card_brand, response_code, reason, source, mapping_version = key
+        provider_id, issuer_bank, card_brand, response_code, reason, normalized_code, source, mapping_version = key
         digest = sha256("|".join(key).encode("utf-8")).hexdigest()[:16]
-        summaries.append({"provider_id": provider_id, "card_brand": card_brand,
-                          "response_code": response_code, "reason": reason, "source": source,
+        summaries.append({"provider_id": provider_id, "issuer_bank": issuer_bank, "card_brand": card_brand,
+                          "response_code": response_code, "normalized_code": normalized_code, "reason": reason, "source": source,
                           "mapping_version": mapping_version, "transaction_count": count,
                           "evidence_id": f"evd_refusal_{digest}"})
     return summaries

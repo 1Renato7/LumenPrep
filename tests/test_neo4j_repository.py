@@ -81,8 +81,10 @@ class Neo4jIncidentRepositoryTest(unittest.TestCase):
             call for call in driver.session_instance.calls if "MERGE (incident:Incident" in call[0]
         )
         self.assertEqual(parameters["providers"], ["stripe"])
+        self.assertEqual(parameters["decline_codes"], ["DO_NOT_HONOR", "ISSUER_UNAVAILABLE"])
         self.assertIn("MERGE (provider:Provider {provider_id: provider_id})", query)
         self.assertIn("FOREACH (provider_id IN $providers", query)
+        self.assertIn("OBSERVED_REFUSAL_CODE", query)
 
 
 if __name__ == "__main__":

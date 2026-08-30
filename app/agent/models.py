@@ -80,8 +80,10 @@ class RefusalCodeSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     provider_id: str = Field(min_length=1)
+    issuer_bank: str = Field(min_length=1)
     card_brand: str = Field(min_length=1)
     response_code: str = Field(min_length=1)
+    normalized_code: str = Field(min_length=1)
     reason: str = Field(min_length=1)
     source: str = Field(min_length=1)
     mapping_version: str = Field(min_length=1)

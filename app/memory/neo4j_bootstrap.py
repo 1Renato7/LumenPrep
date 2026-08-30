@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .neo4j_repository import Neo4jIncidentRepository
+from .refusal_graph import sync_and_backfill_refusal_graph
 from .seed import seed_mastercard_d2
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -34,10 +35,11 @@ def _environment() -> tuple[str, str, str, str]:
 
 
 def bootstrap(*, driver: Any, database: str = "neo4j") -> str:
-    """Apply replay-safe constraints and upsert the required D-2 precedent."""
+    """Apply graph schema, mappings, links, and the required D-2 precedent."""
     with driver.session(database=database) as session:
         for statement in _statements():
             session.run(statement).consume()
+    sync_and_backfill_refusal_graph(driver, database=database)
     repository = Neo4jIncidentRepository(driver, database=database)
     return seed_mastercard_d2(repository).incident_id
 
