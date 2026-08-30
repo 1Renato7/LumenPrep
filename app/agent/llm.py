@@ -23,8 +23,8 @@ from .models import AgentRetrievalTrace, DiagnosticSuggestion, EvidencePack, Sug
 from .prompt import system_prompt, user_payload
 
 TEMPLATE_MODEL_VERSION = "deterministic-template-v1"
-DEFAULT_OPENAI_MODEL = "gpt-5.6-terra"
-DEFAULT_REASONING_EFFORT = "high"
+DEFAULT_OPENAI_MODEL = "gpt-5.6-sol"
+DEFAULT_REASONING_EFFORT = "medium"
 
 if TYPE_CHECKING:
     from app.config import Settings
