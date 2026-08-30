@@ -64,6 +64,7 @@ def derive_incidents_for_correlation(
                 () if root_cause.status == "SUPPORTED" else
                 ("Evidence is insufficient to name a specific cause; investigate the ranked alternatives.",)
             ),
+            decline_codes=_memory_decline_codes(window.decline_profile),
         )
         persisted = repository.upsert(incident)
         _link_matching_transactions(con, repository, persisted.model_dump(mode="json"))
@@ -164,6 +165,15 @@ def _evidence(candidates: tuple[dict[str, Any], ...], decline_profile: dict[str,
             )
         )
     return list({item.evidence_id: item for item in values}.values())
+
+
+def _memory_decline_codes(profile: dict[str, int]) -> list[str]:
+    """Expose observed normalized decline codes to structured memory retrieval."""
+    return sorted(
+        code
+        for code, count in profile.items()
+        if count > 0 and code not in {"NO_DECLINE", "UNMAPPED_DECLINE"}
+    )
 
 
 def _category_from_decline_profile(profile: dict[str, int], fallback: str | None) -> str:

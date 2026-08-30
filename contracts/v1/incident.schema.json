@@ -13,7 +13,7 @@
     "estimated_started_at": {"type": "string", "format": "date-time"},
     "title": {"type": "string", "minLength": 1},
     "scope": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
-    "metrics": {"type": "object", "additionalProperties": {"type": ["number", "integer", "string", "null"]}},
+    "metrics": {"type": "object", "additionalProperties": {"oneOf": [{"type": ["number", "string", "null"]}, {"type": "array", "items": {"type": "string"}}]}},
     "root_cause": {
       "type": "object",
       "additionalProperties": false,

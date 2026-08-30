@@ -32,7 +32,10 @@ class Neo4jSettings:
             user=values.get("NEO4J_USER", "neo4j"),
             password=password,
             database=values.get("NEO4J_DATABASE", "neo4j"),
-            include_evaluation=values.get("GRAPHRAG_EVALUATION_MODE", "false").lower() == "true",
+            include_evaluation=(
+                values.get("GRAPHRAG_EVALUATION_MODE", "false").lower() == "true"
+                or values.get("DEMO_MODE", "false").lower() == "true"
+            ),
         )
 
 
