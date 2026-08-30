@@ -132,7 +132,7 @@ Parent: [LUM2-4](https://linear.app/lumenhack/issue/LUM2-4/entregar-frontend-tra
 
 ## Recuperação 2.2 — Pessoa B
 
-- **Plano geral:** 2.2.1; **objetivo:** `OBJ-ANDRE-002`; **base integrada:** `main@23b9061` + incremento web em validação.
+- **Plano geral:** 2.2.1; **objetivo:** `OBJ-ANDRE-002`; **base integrada:** `main@23b9061` + merge A+B `9be8853` + hardening `05c61d8`.
 - **Limite:** `web/` é ownership exclusivo. Não alterar `contracts/v1/`, backend, Docker, migrations ou API em resposta a payload inesperado; abrir contract issue para Rogério.
 - **Início independente:** factory única com live quando `NEXT_PUBLIC_API_BASE_URL` existe e mock somente explícito. Corrigir CTR-TDI para `/transactions/{id}/incidents`; preservar a lista homogênea de `Incident[]` em `/incidents?transaction_id=`.
 - **Handoff recebido de Rogério:** OpenAPI, comando/API local e pipeline persistido estão integrados; `NO_INCIDENT/PARTIAL/RESOLVED` e erros continuam explícitos. Rotas live não fazem fallback automático a fixture.
