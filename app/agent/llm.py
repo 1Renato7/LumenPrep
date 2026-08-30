@@ -94,10 +94,14 @@ def _rate_clause(pack: EvidencePack) -> str:
 
 
 def _operations_summary(pack: EvidencePack, category: str) -> str:
+    refusal_clause = ""
+    if pack.refusal_code_summaries:
+        leading = max(pack.refusal_code_summaries, key=lambda item: item.transaction_count)
+        refusal_clause = f" The leading mapped response is {leading.response_code}: {leading.reason}."
     return (
         f"Investigation hypothesis for {_scope_label(pack)}: {category.replace('_', ' ').lower()} "
         f"between {pack.window.start} and {pack.window.end}, where {_rate_clause(pack)}. "
-        "This is a hypothesis to investigate, not the engine's confirmed cause."
+        "This is a hypothesis to investigate, not the engine's confirmed cause." + refusal_clause
     )
 
 
@@ -124,6 +128,10 @@ def _reasons(pack: EvidencePack, trace: AgentRetrievalTrace) -> list[SuggestionR
     for statement, evidence_ids in list(grouped.items())[:3]:
         reasons.append(SuggestionReason(statement=statement, evidence_ids=evidence_ids))
     dominant_decline = _dominant_decline(pack)
+    for item in pack.refusal_code_summaries[:3]:
+        reasons.append(SuggestionReason(
+            statement=(f"{item.transaction_count} transaction(s) in the detected scope were mapped as "
+                       f"{item.response_code}: {item.reason}."), evidence_ids=[item.evidence_id]))
     if dominant_decline is not None and decline_evidence:
         code, count = dominant_decline
         reasons.append(

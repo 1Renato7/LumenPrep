@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from app.ingestion import ingest_event
 from app.ingestion.storage import CONNECTION_LOCK, get_connection
+from app.refusal_codes import RefusalCodeLookup, resolve_refusal_code
 from app.simulation.transaction_outcomes import AdaptedTransaction, adapt_transaction
 from app.worker.incident_pipeline import SuggestionJob, _suggest_for_persisted_incident, derive_incidents_for_correlation
 
@@ -34,12 +35,44 @@ def _now() -> datetime:
 def _generate_outcome(
     transaction_id: str, transaction_input: dict[str, Any], correlation_id: str
 ) -> AdaptedTransaction:
-    """Adapt a persisted public input without consulting ground truth or storage."""
-    return adapt_transaction(
+    """Adapt a persisted input and, when present, apply its versioned response-code fact."""
+    adapted = adapt_transaction(
         transaction_input,
         transaction_id=transaction_id,
         correlation_id=correlation_id,
     )
+    response_code = transaction_input.get("provider_response_code")
+    if not response_code:
+        return adapted
+    resolution = resolve_refusal_code(
+        get_connection(),
+        RefusalCodeLookup(
+            str(transaction_input["provider_id"]),
+            str(transaction_input["issuer_bank"]),
+            str(transaction_input.get("card_brand") or "NOT_APPLICABLE"),
+            str(response_code),
+        ),
+    )
+    payload = resolution.as_payload()
+    result = resolution.outcome
+    classification = dict(adapted.classification)
+    classification.update({
+        "category": "APPROVED" if result == "SUCCEEDED" else ("ISSUER_DECLINE" if result == "FAILED" else "UNKNOWN"),
+        "reason": resolution.reason or "No unique mapping was found for this provider response code.",
+        "confidence": 1.0 if resolution.lookup_status.value == "MATCH_FOUND" else 0.35,
+        "refusal_resolution": payload,
+    })
+    outcome = dict(adapted.outcome)
+    outcome.update({"result": result, "provider_response_code": resolution.response_code,
+                    "normalized_decline_code": (f"RESPONSE_CODE_{resolution.response_code}" if result == "FAILED" else None)})
+    event = dict(adapted.event)
+    event["status"] = {"SUCCEEDED": "SUCCEEDED", "FAILED": "DECLINED", "UNKNOWN": "ERROR"}[result]
+    event["decline"] = None if result == "SUCCEEDED" else {
+        "normalized_code": outcome["normalized_decline_code"] or "UNMAPPED_DECLINE",
+        "category": "ISSUER", "retryability": "UNKNOWN", "raw_code": resolution.response_code,
+        "raw_message": resolution.reason or "Unmapped provider response code",
+    }
+    return AdaptedTransaction(result=result, outcome=outcome, classification=classification, event=event)
 
 
 def _acquire_lease(con, transaction_id: str, worker_id: str, lease_seconds: int) -> bool:
@@ -157,8 +190,12 @@ def advance_transaction(transaction_id: str, *, worker_id: str | None = None, le
         if not _acquire_lease(con, transaction_id, worker_id, lease_seconds):
             return False
         suggestion_jobs = _advance_locked(con, transaction_id)
-    for incident, decline_profile in suggestion_jobs:
-        _suggest_for_persisted_incident(incident, decline_profile)
+    for job in suggestion_jobs:
+        # Keep older in-process worker tests/jobs compatible while every newly
+        # created job carries the RFC summary as its third value.
+        incident, decline_profile = job[0], job[1]
+        refusal_code_summaries = job[2] if len(job) > 2 else []
+        _suggest_for_persisted_incident(incident, decline_profile, refusal_code_summaries)
     return True
 
 

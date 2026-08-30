@@ -22,7 +22,7 @@ from app.rca import explore_slices, rank_hypotheses
 logger = logging.getLogger(__name__)
 
 LOW_SAMPLE_ATTEMPTS = 12
-SuggestionJob: TypeAlias = tuple[Incident, dict[str, int]]
+SuggestionJob: TypeAlias = tuple[Incident, dict[str, int], list[dict[str, Any]]]
 
 
 def derive_incidents_for_correlation(
@@ -68,15 +68,18 @@ def derive_incidents_for_correlation(
         )
         persisted = repository.upsert(incident)
         _link_matching_transactions(con, repository, persisted.model_dump(mode="json"))
+        summaries = _refusal_code_summaries(con, persisted.model_dump(mode="json"))
         if suggestion_jobs is None:
-            _suggest_for_persisted_incident(persisted, window.decline_profile)
+            _suggest_for_persisted_incident(persisted, window.decline_profile, summaries)
         else:
-            suggestion_jobs.append((persisted, dict(window.decline_profile)))
+            suggestion_jobs.append((persisted, dict(window.decline_profile), summaries))
         incident_ids.append(persisted.incident_id)
     return incident_ids
 
 
-def _suggest_for_persisted_incident(incident: Incident, decline_profile: dict[str, int]) -> None:
+def _suggest_for_persisted_incident(
+    incident: Incident, decline_profile: dict[str, int], refusal_code_summaries: list[dict[str, Any]]
+) -> None:
     """Run the proactive agent on an Incident that is already durable.
 
     This call is deliberately last and deliberately swallowed. The transaction
@@ -86,7 +89,9 @@ def _suggest_for_persisted_incident(incident: Incident, decline_profile: dict[st
     that is slow, unavailable or wrong.
     """
     try:
-        DiagnosticAgentService().suggest_for_incident(incident, decline_profile=decline_profile)
+        DiagnosticAgentService().suggest_for_incident(
+            incident, decline_profile=decline_profile, refusal_code_summaries=refusal_code_summaries
+        )
     except Exception as error:
         logger.warning(
             "diagnostic agent skipped for %s: %s", incident.incident_id, type(error).__name__
@@ -237,3 +242,47 @@ def _input_matches_scope(transaction_input: dict[str, Any], scope: dict[str, lis
         if input_field is None or str(transaction_input.get(input_field)) not in allowed:
             return False
     return True
+
+
+def _refusal_code_summaries(con, incident: dict[str, Any]) -> list[dict[str, Any]]:
+    """Create CTR-RFC-002 only from persisted, already-linked transaction facts.
+
+    The join with the canonical event bounds the data to the Incident's window;
+    it prevents a later response in the same correlation from being presented as
+    evidence for an earlier spike.
+    """
+    rows = con.execute(
+        """SELECT record.input_json, record.classification_json
+           FROM transaction_incident_links link
+           JOIN transaction_records record ON record.transaction_id = link.transaction_id
+           JOIN canonical_events event ON event.event_id = 'evt_' || record.transaction_id
+           WHERE link.incident_id = ? AND link.correlation_id = ?
+             AND event.event_time >= ? AND event.event_time < ?""",
+        [incident["incident_id"], incident["correlation_id"], incident["estimated_started_at"], incident["detected_at"]],
+    ).fetchall()
+    grouped: dict[tuple[str, str, str, str, str, str], int] = {}
+    for input_json, classification_json in rows:
+        if not classification_json:
+            continue
+        classification = json.loads(classification_json)
+        resolution = classification.get("refusal_resolution")
+        if not isinstance(resolution, dict) or resolution.get("lookup_status") != "MATCH_FOUND":
+            continue
+        if resolution.get("outcome") != "FAILED" or not resolution.get("reason"):
+            continue
+        payload = json.loads(input_json)
+        key = (
+            str(payload.get("provider_id", "UNKNOWN")), str(payload.get("card_brand") or "NOT_APPLICABLE"),
+            str(resolution["response_code"]), str(resolution["reason"]),
+            str(resolution.get("source") or "UNKNOWN"), str(resolution.get("mapping_version") or "UNKNOWN"),
+        )
+        grouped[key] = grouped.get(key, 0) + 1
+    summaries: list[dict[str, Any]] = []
+    for key, count in sorted(grouped.items(), key=lambda item: (-item[1], item[0])):
+        provider_id, card_brand, response_code, reason, source, mapping_version = key
+        digest = sha256("|".join(key).encode("utf-8")).hexdigest()[:16]
+        summaries.append({"provider_id": provider_id, "card_brand": card_brand,
+                          "response_code": response_code, "reason": reason, "source": source,
+                          "mapping_version": mapping_version, "transaction_count": count,
+                          "evidence_id": f"evd_refusal_{digest}"})
+    return summaries

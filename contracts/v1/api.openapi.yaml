@@ -9,6 +9,21 @@ servers:
   - url: http://127.0.0.1:8000/v1
     description: Local development
 paths:
+  /refusal-codes/resolve:
+    get:
+      operationId: resolveRefusalCode
+      parameters:
+        - {name: provider_id, in: query, required: true, schema: {type: string, minLength: 1}}
+        - {name: issuer_bank, in: query, required: true, schema: {type: string, minLength: 1}}
+        - {name: card_brand, in: query, required: true, schema: {type: string, minLength: 1}}
+        - {name: response_code, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 32}}
+      responses:
+        "200":
+          description: Deterministic provider response-code classification
+          content:
+            application/json:
+              schema: {$ref: "refusal-code-resolution.schema.json"}
+        "422": {description: INVALID_REFUSAL_CODE_LOOKUP}
   /health:
     get:
       operationId: getHealth

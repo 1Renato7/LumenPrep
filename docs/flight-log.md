@@ -4599,3 +4599,40 @@ Falha no smoke, custo/latência incompatível com a demo, acesso negado ao model
 - **2026-08-30T03:58:09-03:00 — correção de compatibilidade da Responses API:** o primeiro smoke local com incidente sintético chegou à OpenAI e recebeu `400 BadRequestError`: `text.format=json_object` exige a palavra `json` em `input`. Mantemos a saída estruturada — removê-la enfraqueceria o contrato — e incluímos em `user_payload` a instrução explícita para retornar um objeto JSON; `PROMPT_VERSION` passa a `agent-diagnostic-v2` para não reutilizar uma sugestão produzida sob o prompt anterior. A instrução não concede autoridade, não adiciona fato ao `EvidencePack` e as ações continuam `HUMAN_ONLY`. TEST PENDING: testes focados e novo smoke local.
 - **2026-08-30T03:58:09-03:00 — reforço de grounding após trial local:** o segundo smoke local recebeu JSON do modelo, mas o validador recusou corretamente o texto por repetir `SUPPORTED`, vocabulário reservado ao motor. Mantemos a rejeição (aceitar a repetição promoveria uma hipótese) e instruímos o modelo a não reutilizar `SUPPORTED`, `INCONCLUSIVE` ou `HUMAN_CONFIRMED` em campos autorais; `PROMPT_VERSION` passa a `agent-diagnostic-v3`. TEST PENDING: testes focados e terceiro smoke local; risco residual: o modelo ainda pode infringir outro guardrail e então continuará retornando `UNAVAILABLE` sem alterar Incident ou ação de pagamento.
 - **2026-08-30T04:03:40-03:00 — validação final do smoke local:** `uv run --locked pytest -q tests/test_agent_suggestion.py tests/test_diagnostic_agent.py tests/test_agent_api.py` passou com **32 tests**; o terceiro `uv run --locked python scripts/smoke_openai_agent.py` retornou `status=SUGGESTED`, `model_version=openai:gpt-5.6-terra`, `configured_reasoning_effort=high`, quatro razões e três ações. As ações permaneceram `HUMAN_ONLY`; o script usou somente fixture sintética e `persist=False`. Não houve exposição de `OPENAI_API_KEY` nem escrita no banco.
+### FL-20260830-TEAM-032 — Classificar códigos de resposta no banco e entregar o motivo factual ao agente
+
+- **Timestamp:** 2026-08-30T04:10:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** Arquitetura | dados | contrato | agente
+- **Escopo:** `CTR-RFC-001 v1`; `CTR-RFC-002 v1`; extensão aditiva de `CTR-AGT-001 v1`
+- **Links:** `DEC-031`; `DEC-029`; `CTR-TXL-001`
+
+#### Contexto e decisão
+
+O usuário determinou que a classificação do código de resposta deve deixar de depender do GraphRAG e que a sugestão ao operador precisa explicar o código, a razão e o padrão observado — não apenas IDs de evidência e contadores. Foi escolhido um catálogo versionado no DuckDB, com lookup determinístico por PSP, emissor, bandeira e código. O worker persiste a resolução por transação e, somente depois de o detector materializar um Incident, cria um resumo factual agregado no EvidencePack.
+
+#### Alternativas consideradas
+
+| Alternativa | Benefício | Custo/risco | Decisão |
+| --- | --- | --- | --- |
+| GraphRAG para lookup unitário | texto amplo e relações livres | resposta não determinística, latência e risco de confundir fonte com fato | rejeitada |
+| agente consultar DuckDB em tempo de sugestão | implementação curta | quebra isolamento do agente e dificulta reprodução | rejeitada |
+| resolução persistida + resumo fechado por Incident | rastreável, reproduzível e útil ao agente | exige contrato e agrupamento adicionais | escolhida |
+
+#### Trade-offs, guardrails e validação prevista
+
+- Uma transação sem código continua compatível com o simulador, mas recebe limitação explícita; não será rotulada como código conhecido.
+- Poucas recusas por saldo insuficiente explicam tentativas individuais e não acionam o agente. A sugestão só é criada para Incidents que já passaram pelo baseline/detector.
+- O agente recebe somente o EvidencePack imutável e ações `HUMAN_ONLY`; não pode retry, reroute, refund, alterar causa nem consultar banco.
+- `NOT RUN` no momento deste registro: testes, revisão de diff, validação de browser e push para `main` serão registrados após a implementação.
+
+#### Adendo de implementação e gates
+
+- **Revisão de código (`code-review-gate`):** PASS; a revisão do diff não encontrou quebra de autoridade causal, acesso do agente ao banco ou ação financeira. O parser web foi ajustado para aceitar explicitamente a nova resolução, evitando descartar a resposta do backend como propriedade desconhecida.
+- **Testes focais:** `uv run --with pytest python -m pytest -q tests/test_refusal_code_flow.py tests/test_agent_suggestion.py` — **25 passed**.
+- **Contrato:** `uv run python scripts/validate_contracts.py` — **OK**, incluindo `CTR-RFC-001` e a extensão do EvidencePack.
+- **Frontend:** `npm test` — **38 passed, 1 skipped**; `npx tsc --noEmit` e `npm run lint` — **OK**.
+- **Browser acceptance:** campo incluído e build/typecheck aprovado. A sessão isolada do navegador carregou a página local, mas não recebeu o catálogo da API embora a API respondesse por `curl`; portanto a validação visual ponta a ponta é `NOT RUN` de forma honesta. Não há erro de console reportado pela página.
+- **Integration Contract Guardian (INTEGRATION):** `READY WITH LIMITATION`. O rebase sobre `origin/main@2a0530b` preservou a fila pós-commit do agente: o job agora carrega também o resumo RFC e continua executado depois de liberar o lock DuckDB. A suíte pós-rebase executou `tests/test_refusal_code_flow.py`, `tests/test_agent_suggestion.py` e `tests/test_transaction_worker.py`: **40 passed**. A limitação de browser acceptance permanece registrada acima; não bloqueia o contrato backend/worker, mas bloqueia afirmar uma prova visual E2E.

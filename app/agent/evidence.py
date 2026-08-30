@@ -20,6 +20,7 @@ from .models import (
     EvidencePack,
     ImpactSummary,
     ObservationWindow,
+    RefusalCodeSummary,
     sealed,
 )
 
@@ -30,6 +31,7 @@ def build_evidence_pack(
     incident: Incident | Mapping[str, Any],
     *,
     decline_profile: Mapping[str, int] | None = None,
+    refusal_code_summaries: list[Mapping[str, Any]] | None = None,
     engine_version: str = ENGINE_VERSION,
 ) -> EvidencePack:
     """Project one persisted Incident into the agent's only view of the world."""
@@ -45,6 +47,13 @@ def build_evidence_pack(
             "decline-based reasoning is out of scope for this suggestion."
         )
 
+    summaries = [RefusalCodeSummary.model_validate(item) for item in (refusal_code_summaries or [])]
+    code_evidence = [EvidenceItem(
+        evidence_id=item.evidence_id, kind="REFUSAL_CODE_SUMMARY",
+        statement=(f"{item.transaction_count} transaction(s) resolved as code {item.response_code} "
+                   f"for {item.provider_id}/{item.card_brand}: {item.reason}."),
+        source_ref=f"refusal-catalog://{item.source}/{item.mapping_version}",
+    ) for item in summaries]
     pack = EvidencePack(
         incident_id=str(payload["incident_id"]),
         correlation_id=str(payload["correlation_id"]),
@@ -65,16 +74,17 @@ def build_evidence_pack(
             amount_minor=int(payload["impact"]["amount_minor"]),
             currency=str(payload["impact"]["currency"]),
         ),
-        detector_evidence=evidence,
+        detector_evidence=[*evidence, *code_evidence],
         rca_alternatives=[
             CausalAlternative(category=str(item["category"]), confidence=float(item["confidence"]))
             for item in root_cause.get("alternatives", [])
         ],
         decline_profile={str(code): int(count) for code, count in (decline_profile or {}).items()},
+        refusal_code_summaries=summaries,
         limitations=limitations,
         # The agent may cite only what already exists. Retrieval widens this set
         # later with precedent evidence IDs; it never widens itself.
-        authorized_evidence_ids=sorted({item.evidence_id for item in evidence}),
+        authorized_evidence_ids=sorted({item.evidence_id for item in [*evidence, *code_evidence]}),
         root_cause=EngineRootCause(
             status=str(root_cause["status"]),
             category=root_cause.get("category"),

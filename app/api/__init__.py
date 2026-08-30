@@ -7,6 +7,7 @@ from app.api.events import router as events_router
 from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
 from app.api.metrics import router as metrics_router
+from app.api.refusal_codes import router as refusal_codes_router
 from app.api.transactions import router as transactions_router
 
 router = APIRouter()
@@ -20,3 +21,4 @@ router.include_router(incidents_router, prefix="/v1")
 router.include_router(demo_router)
 router.include_router(events_router)
 router.include_router(transactions_router)
+router.include_router(refusal_codes_router)

@@ -73,6 +73,7 @@ class TransactionInput(_StrictModel):
     card_type: Literal["CREDIT", "DEBIT", "PREPAID", "NOT_APPLICABLE"] | None = None
     provider_connection_id: str | None = Field(default=None, max_length=100)
     channel: Literal["WEB", "MOBILE", "POS", "API"] | None = None
+    provider_response_code: str | None = Field(default=None, min_length=1, max_length=32)
     scenario_effects: dict[str, float] | None = None
 
 

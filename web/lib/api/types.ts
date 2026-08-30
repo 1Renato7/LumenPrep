@@ -34,6 +34,7 @@ export interface TransactionInput {
   card_brand?: string | null;
   card_type?: CardType;
   provider_connection_id?: string | null;
+  provider_response_code?: string | null;
   channel?: TransactionChannel;
 }
 
@@ -121,6 +122,19 @@ export interface TransactionClassification {
   confidence: number;
   evidence_ids: string[];
   related_incident_ids: string[];
+  refusal_resolution?: RefusalCodeResolution;
+}
+
+export interface RefusalCodeResolution {
+  lookup_status: "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS";
+  provider_id: string;
+  issuer_bank: string;
+  card_brand: string;
+  response_code: string;
+  outcome: OutcomeResult;
+  reason: string | null;
+  source: string | null;
+  mapping_version: string | null;
 }
 
 export interface TransactionRecord {

@@ -43,7 +43,18 @@
         "reason": {"type": "string", "minLength": 1},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         "evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
-        "related_incident_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+        "related_incident_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "refusal_resolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lookup_status", "provider_id", "issuer_bank", "card_brand", "response_code", "outcome", "reason", "source", "mapping_version"],
+          "properties": {
+            "lookup_status": {"enum": ["MATCH_FOUND", "NOT_FOUND", "AMBIGUOUS"]},
+            "provider_id": {"type": "string"}, "issuer_bank": {"type": "string"}, "card_brand": {"type": "string"},
+            "response_code": {"type": "string"}, "outcome": {"enum": ["SUCCEEDED", "FAILED", "UNKNOWN"]},
+            "reason": {"type": ["string", "null"]}, "source": {"type": ["string", "null"]}, "mapping_version": {"type": ["string", "null"]}
+          }
+        }
       }
     },
     "correlation_id": {"type": "string", "minLength": 1}

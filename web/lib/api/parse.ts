@@ -133,7 +133,7 @@ export function parseTransactionInput(value: unknown): TransactionInput {
   const input = exactObject(
     value,
     ["merchant_id", "provider_id", "issuer_bank", "country", "currency", "amount_minor", "payment_method_category"],
-    ["client_reference", "occurred_at", "card_brand", "card_type", "provider_connection_id", "channel"],
+    ["client_reference", "occurred_at", "card_brand", "card_type", "provider_connection_id", "provider_response_code", "channel"],
     "TransactionInput",
   );
   const country = string(input.country, "TransactionInput.country");
@@ -156,6 +156,7 @@ export function parseTransactionInput(value: unknown): TransactionInput {
     ...(input.card_brand === undefined ? {} : { card_brand: nullableString(input.card_brand, "TransactionInput.card_brand") }),
     ...(cardType === undefined ? {} : { card_type: cardType }),
     ...(input.provider_connection_id === undefined ? {} : { provider_connection_id: nullableString(input.provider_connection_id, "TransactionInput.provider_connection_id") }),
+    ...(input.provider_response_code === undefined ? {} : { provider_response_code: nullableString(input.provider_response_code, "TransactionInput.provider_response_code") }),
     ...(channel === undefined ? {} : { channel }),
   };
 }
@@ -213,8 +214,9 @@ function parseOutcome(value: unknown): TransactionOutcome | null {
 
 function parseClassification(value: unknown): TransactionClassification | null {
   if (value === null) return null;
-  const classification = exactObject(value, ["category", "reason", "confidence", "evidence_ids", "related_incident_ids"], [], "TransactionClassification");
-  return { category: enumValue(classification.category, classificationCategories, "TransactionClassification.category"), reason: string(classification.reason, "TransactionClassification.reason"), confidence: number(classification.confidence, "TransactionClassification.confidence", 0, 1), evidence_ids: stringArray(classification.evidence_ids, "TransactionClassification.evidence_ids"), related_incident_ids: stringArray(classification.related_incident_ids, "TransactionClassification.related_incident_ids") } as TransactionClassification;
+  const classification = exactObject(value, ["category", "reason", "confidence", "evidence_ids", "related_incident_ids"], ["refusal_resolution"], "TransactionClassification");
+  const refusal = classification.refusal_resolution === undefined ? undefined : exactObject(classification.refusal_resolution, ["lookup_status", "provider_id", "issuer_bank", "card_brand", "response_code", "outcome", "reason", "source", "mapping_version"], [], "RefusalCodeResolution");
+  return { category: enumValue(classification.category, classificationCategories, "TransactionClassification.category"), reason: string(classification.reason, "TransactionClassification.reason"), confidence: number(classification.confidence, "TransactionClassification.confidence", 0, 1), evidence_ids: stringArray(classification.evidence_ids, "TransactionClassification.evidence_ids"), related_incident_ids: stringArray(classification.related_incident_ids, "TransactionClassification.related_incident_ids"), ...(refusal === undefined ? {} : { refusal_resolution: { lookup_status: enumValue(refusal.lookup_status, new Set(["MATCH_FOUND", "NOT_FOUND", "AMBIGUOUS"]), "RefusalCodeResolution.lookup_status") as "MATCH_FOUND" | "NOT_FOUND" | "AMBIGUOUS", provider_id: string(refusal.provider_id, "RefusalCodeResolution.provider_id"), issuer_bank: string(refusal.issuer_bank, "RefusalCodeResolution.issuer_bank"), card_brand: string(refusal.card_brand, "RefusalCodeResolution.card_brand"), response_code: string(refusal.response_code, "RefusalCodeResolution.response_code"), outcome: enumValue(refusal.outcome, outcomeResults, "RefusalCodeResolution.outcome"), reason: nullableString(refusal.reason, "RefusalCodeResolution.reason"), source: nullableString(refusal.source, "RefusalCodeResolution.source"), mapping_version: nullableString(refusal.mapping_version, "RefusalCodeResolution.mapping_version") } }) } as TransactionClassification;
 }
 
 export function parseTransactionRecord(value: unknown): TransactionRecord {

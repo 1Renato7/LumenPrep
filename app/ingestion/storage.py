@@ -105,6 +105,18 @@ CREATE TABLE IF NOT EXISTS transaction_incident_links (
     linked_at TIMESTAMP NOT NULL,
     PRIMARY KEY (transaction_id, incident_id)
 );
+CREATE TABLE IF NOT EXISTS refusal_code_catalog (
+    mapping_id VARCHAR PRIMARY KEY,
+    provider_id VARCHAR NOT NULL,
+    issuer_bank VARCHAR NOT NULL,
+    card_brand VARCHAR NOT NULL,
+    response_code VARCHAR NOT NULL,
+    outcome VARCHAR NOT NULL CHECK (outcome IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')),
+    reason VARCHAR NOT NULL,
+    source VARCHAR NOT NULL,
+    mapping_version VARCHAR NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE
+);
 """
 
 _MIGRATION_SQL = """
@@ -123,6 +135,10 @@ def get_connection() -> duckdb.DuckDBPyConnection:
         # Existing Railway Volumes can predate the durable-worker lease columns.
         # Upgrade them in place before the startup reconciliation reads those fields.
         _connection.execute(_MIGRATION_SQL)
+        # Mapping rows are application-owned, versioned reference data. They are
+        # seeded idempotently so an existing Railway volume can receive new codes.
+        from app.refusal_codes.seed import seed_catalog
+        seed_catalog(_connection)
     return _connection
 
 

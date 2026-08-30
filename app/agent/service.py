@@ -67,9 +67,10 @@ class DiagnosticAgentService:
         incident: Incident | Mapping[str, Any],
         *,
         decline_profile: Mapping[str, int] | None = None,
+        refusal_code_summaries: list[Mapping[str, Any]] | None = None,
         persist: bool = True,
     ) -> DiagnosticSuggestion:
-        pack = build_evidence_pack(incident, decline_profile=decline_profile)
+        pack = build_evidence_pack(incident, decline_profile=decline_profile, refusal_code_summaries=refusal_code_summaries)
         idempotency_key = suggestion_idempotency_key(
             incident_id=pack.incident_id,
             evidence_fingerprint=pack.evidence_fingerprint,

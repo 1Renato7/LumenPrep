@@ -2,7 +2,7 @@
 
 ## 1. Controle do plano
 
-- **Versão:** 2.4.4
+- **Versão:** 2.5.0
 - **Data:** 2026-08-30
 - **Estado:** `PLAN READY`
 - **Change class:** `CHANGE CONTROL`; preserva contratos públicos e ativa de forma configurável o cliente OpenAI do agente, sem alterar `CTR-API-001 v3`.
@@ -24,6 +24,7 @@
 - **Changelog 2.4.2:** torna a primeira etapa da demo reproduzível por `CTR-DEMO-001 v1`: um endpoint restrito a `DEMO_MODE` semeia janelas temporais de baseline pelo stream interno. Não recebe payload Yuno nem altera a entrada pública de transações.
 - **Changelog 2.4.3:** congela a fatia implementada do agente proativo em `CTR-AGT-001`–`003 v1`: EvidencePack imutável, recuperação somente da memória/playbooks já autorizados, sugestão `HUMAN_ONLY` separada de `CTR-INC-001` e cliente determinístico padrão. O caminho OpenAI é opt-in e não integra a demo crítica.
 - **Changelog 2.4.4:** por decisão explícita do usuário solicitante, ativa o cliente OpenAI no Railway quando `OPENAI_API_KEY` estiver configurada. O runtime usa `gpt-5.6-terra` com `reasoning.effort=high`; a ausência de chave mantém o template determinístico e indisponibilidade do provedor produz `UNAVAILABLE`, sem alterar Incident, causa ou pagamentos.
+- **Changelog 2.5.0:** adiciona uma classificação determinística de códigos de resposta por PSP, emissor e bandeira. O fato por transação é persistido antes da agregação; apenas uma anomalia já detectada produz o resumo estruturado que chega ao agente. O lookup não usa GraphRAG e não cria ação de pagamento.
 
 ## 2. Problema, usuário e critério de vitória
 
@@ -77,7 +78,7 @@ O MVP vence quando uma pessoa:
 - Uma linha inicial e controles `Add transaction`, `Duplicate` e `Remove`.
 - O catálogo vem de `GET /v1/transaction-catalog`; nenhum option ID fica hardcoded.
 - `Generate sample transactions` recebe quantidade de 1 a 100, chama `POST /v1/transaction-samples` e preenche linhas editáveis. Seed continua uma capacidade opcional da API, mas não é exposta como controle público. A resposta nunca inclui outcome, status, métricas, causa ou ground truth.
-- Campos: referência opcional, timestamp opcional, merchant, provider, banco emissor, país, moeda, valor em unidade mínima, método, bandeira/tipo quando aplicáveis e conexão opcional.
+- Campos: referência opcional, timestamp opcional, merchant, provider, banco emissor, país, moeda, valor em unidade mínima, método, bandeira/tipo quando aplicáveis, código de resposta do provedor quando disponível e conexão opcional.
 - Um `Submit batch` envia de 1 a 100 itens com `Idempotency-Key`.
 - A resposta `202` redireciona para `/transactions?batch_id=...`; erro preserva os dados digitados.
 
@@ -566,7 +567,41 @@ O endpoint aditivo `GET /v1/incidents/{incident_id}/suggestion` expõe apenas a 
 
 **Parecer do Integration Contract Guardian — CHANGE CONTROL: `PLAN READY`.** A mudança é compatível: `CTR-AGT-003 v1` já transporta `model_version` e `UNAVAILABLE`; API e UI não exigem versão de modelo fixa. `CTR-AGT-RUN-001 v1` fixa produtor, consumidor, segredo, timeout, fallback, owner, hotspot e prova. A chamada externa é pós-persistência, sem retry e sem side effect financeiro; o único checkpoint ainda externo é o smoke no Railway com a chave configurada.
 
-## 18. Recuperação de demo — janela de sete horas
+## 18. Classificação de resposta e contexto para o agente
+
+### DEC-031 — catálogo determinístico de códigos e resumo de incidentes
+
+**Estado:** `DECIDED`. **Owner:** Team. **Flight Log:** `FL-20260830-TEAM-032`.
+
+O código de resposta informado para uma transação é um fato de domínio, não texto para recuperação generativa. `CTR-RFC-001 v1` resolve o código em uma tabela DuckDB versionada, usando a precedência `provider_id` → `issuer_bank` → `card_brand` → código. O registro de transação preserva o código recebido, o resultado resolvido (`SUCCEEDED|FAILED|UNKNOWN`), a razão legível, fonte e versão do mapeamento. Quando não houver correspondência, o sistema preserva `UNKNOWN` e uma limitação explícita; nunca inventa uma recusa.
+
+O worker usa a resolução quando há código informado; os exemplos legados sem código permanecem no adaptador sintético existente. Assim, compatibilidade de demo não é confundida com uma classificação de produção. O catálogo inicial cobre os provedores reais hoje configurados (`Adyen`, `dLocal` e a forma textual de decline code do `Stripe`); a expansão de códigos é dados versionados, não alteração do agente.
+
+O agente não recebe uma conexão com DuckDB, transações individuais nem uma consulta tardia. Depois que detector e RCA já persistiram um Incident, o pipeline constrói `CTR-RFC-002 v1` `RefusalCodeSummary`: agrupamentos factuais de provider/bandeira/código/razão/fonte/versão e contagem, limitados ao `correlation_id`, janela e escopo do Incident. Esses itens viram evidências citáveis do `CTR-AGT-001` EvidencePack.
+
+```text
+input (provider, issuer, bandeira, código)
+  → CTR-RFC-001 catálogo determinístico
+  → TransactionRecord: outcome + classification + refusal_resolution
+  → evento canônico / cube: perfil de declines
+  → detector limiar + baseline
+  ├─ sem anomalia: explicação da transação, sem sugestão do agente
+  └─ Incident persistido
+       → CTR-RFC-002 resumo de códigos do escopo/janela
+       → EvidencePack imutável → agente HUMAN_ONLY → sugestão fundamentada
+```
+
+| Contrato | Produtor → consumidor | Conteúdo, limite e teste |
+| --- | --- | --- |
+| `CTR-RFC-001 v1` `RefusalCodeResolution` | catálogo/worker → `TransactionRecord` | provider, banco, bandeira, código, resultado, razão, fonte, versão e `MATCH_FOUND|NOT_FOUND|AMBIGUOUS`; lookup determinístico e teste de precedência. |
+| `CTR-RFC-002 v1` `RefusalCodeSummary` | transações persistidas/incident pipeline → `EvidencePack` | somente agregados no escopo e janela do Incident; razão original, contagem e evidência citável; teste de exclusão fora de correlação/escopo. |
+| `CTR-AGT-001 v1` (aditivo) | incident pipeline → agente | inclui `refusal_code_summaries` e IDs autorizados; agente não obtém SQL, ferramenta financeira ou autoridade causal. |
+
+**Regra operacional:** uma ou poucas recusas por saldo insuficiente explicam aquelas transações, mas não comprovam incidente. Um pico só chega ao agente depois de ultrapassar a detecção/baseline existente; a sugestão deve descrevê-lo como hipótese operacional, jamais declarar incidente de saldo ou executar retry/rerouting.
+
+**Parecer do Integration Contract Guardian — PLANNING: `PLAN READY`.** O contrato é aditivo para a entrada e para o EvidencePack, há um owner único para catálogo/worker, mock legada preservada e a fronteira do agente continua somente leitura. Dados reais de PSP exigem governança de fonte e atualização versionada do catálogo; não bloqueiam a fatia atual.
+
+## 19. Recuperação de demo — janela de sete horas
 
 ### DEC-027 — priorizar prova ao vivo do mecanismo causal sobre integrações amplas
 

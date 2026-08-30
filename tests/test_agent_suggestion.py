@@ -435,6 +435,7 @@ def test_evidence_pack_exposes_only_persisted_facts():
         "detector_evidence",
         "rca_alternatives",
         "decline_profile",
+        "refusal_code_summaries",
         "limitations",
         "authorized_evidence_ids",
         "root_cause",
