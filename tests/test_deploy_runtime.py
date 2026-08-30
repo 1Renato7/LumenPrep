@@ -14,6 +14,7 @@ def test_docker_uses_frozen_uv_lock_and_installs_neo4j_extra():
     dockerfile = (Path(__file__).resolve().parent.parent / "Dockerfile").read_text(encoding="utf-8")
     assert "COPY pyproject.toml uv.lock" in dockerfile
     assert "COPY config ./config" in dockerfile
+    assert "COPY data ./data" in dockerfile
     assert "uv sync --frozen --no-dev --extra neo4j" in dockerfile
     assert "mkdir -p /data" in dockerfile
     assert 'ENV PATH="/app/.venv/bin:$PATH"' in dockerfile

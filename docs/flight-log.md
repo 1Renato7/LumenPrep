@@ -4678,3 +4678,19 @@ O trial by fire mostrou uma categoria `ISSUER_OUTAGE` que estava somente em prec
 - **Rerun real, sintético e não persistente:** com causa atual `INCONCLUSIVE`, alternativa única `PROVIDER_DEGRADATION` e precedente `ISSUER_OUTAGE`, `gpt-5.6-terra` retornou `SUGGESTED`, categoria `PROVIDER_DEGRADATION`, três razões e três ações. `persist=False`; não houve escrita em banco. PASS: a saída ficou no conjunto atual; uma categoria exclusiva do precedente também seria recusada pelo teste determinístico.
 - **Code Review Gate:** PASS. Foram revisados o conjunto fechado de categorias, a remoção da categoria inventada pelo template e a compatibilidade do hook pós-commit; não há achado bloqueante de contrato, mutação causal, pagamento ou consumidor. `ruff` não está disponível no ambiente `uv` travado (`program not found`), portanto lint não é alegado como executado.
 - **Integration Contract Guardian (INTEGRATION):** READY WITH WARNING. Base `origin/main@244cdc0`, commits locais `dcb4888` e `bdf7221`; `CTR-AGT-003 v1` não mudou e `CTR-AGT-GRD-001 v1` está sincronizado entre plano geral, plano de Altoé, código e testes. Contratos/fixtures passaram em `scripts/validate_contracts.py`; o warning não bloqueante é somente a indisponibilidade local de `ruff`.
+
+### FL-20260830-TEAM-034 — Incluir o catálogo de códigos de resposta na imagem Railway
+
+- **Timestamp:** 2026-08-30T04:55:00-03:00
+- **Status:** ACCEPTED
+- **Decision owner:** usuário solicitante
+- **Participantes:** Team
+- **Categoria:** operação | deploy | dados de referência
+- **Escopo:** `TASK-DEP-002`; catálogo `data/refusal-code-catalog.json`
+
+O health da `main@0b6e9c8` retornou `503` com `worker=unavailable` e `FileNotFoundError`, embora o processo Railway estivesse `RUNNING`. A reconciliação abre o DuckDB e semeia o catálogo versionado, que é lido de `data/refusal-code-catalog.json`; o Dockerfile não copiava esse diretório. Foi escolhida a cópia explícita `COPY data ./data`, em vez de remover o seed ou tornar o catálogo opcional: o primeiro preserva a referência determinística necessária ao worker e o segundo esconderia um deploy incompleto. Um teste de runtime passa a exigir essa instrução.
+
+#### Adendo de validação
+
+- `uv run --locked pytest -q tests/test_deploy_runtime.py tests/test_refusal_code_flow.py tests/test_transaction_worker.py` passou com **22 testes**; `git diff --check` passou.
+- O build Docker local é `NOT RUN`: Docker Desktop não está em execução neste host. A validação pendente é o health do Railway após publicar a imagem corrigida.

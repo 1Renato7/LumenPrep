@@ -4,7 +4,7 @@ Este runbook cobre `TASK-DEPLOY-API-001` / `LUM2-60`. A API FastAPI e o lifecycl
 
 ## Arquivos versionados
 
-- `Dockerfile`: fixa Python 3.14.4, instala o `uv.lock` congelado com o extra Neo4j e o SDK OpenAI, cria `/data` para smoke sem Volume, inicia `uvicorn main:app` em `$PORT` e define `LUMEN_DATA_DIR=/data` e `DUCKDB_PATH=/data/lumen.duckdb`.
+- `Dockerfile`: fixa Python 3.14.4, instala o `uv.lock` congelado com o extra Neo4j e o SDK OpenAI, inclui o catálogo versionado em `data/`, cria `/data` para smoke sem Volume, inicia `uvicorn main:app` em `$PORT` e define `LUMEN_DATA_DIR=/data` e `DUCKDB_PATH=/data/lumen.duckdb`.
 - `railway.toml`: usa o Dockerfile, testa `GET /v1/health` durante o deploy e reinicia apenas em falha.
 - `app/api/health.py`: devolve `200` somente quando DuckDB e a reconciliação inicial do worker estão prontos; Neo4j/OpenAI são opcionais.
 

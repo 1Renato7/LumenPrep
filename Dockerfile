@@ -10,6 +10,7 @@ COPY main.py ./
 COPY app ./app
 COPY config ./config
 COPY contracts ./contracts
+COPY data ./data
 COPY graph ./graph
 
 RUN uv sync --frozen --no-dev --extra neo4j \
